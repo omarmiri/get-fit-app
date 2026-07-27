@@ -1,0 +1,25 @@
+# Render Blueprint. Import this repo under Render → Blueprints and the service
+# below is created with the right build and start commands already set.
+#
+# The app has no database, no API and no secrets: everything a user logs stays
+# in their own browser. This service only serves the built static files.
+services:
+  - type: web
+    name: rack-and-file
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    # `--include=dev` matters: Vite, TypeScript and the PWA plugin are all
+    # devDependencies, and Render's environment can otherwise skip them and
+    # fail the build.
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      # Express reads this; the build itself always runs with devDependencies.
+      - key: NODE_ENV
+        value: production

@@ -1,0 +1,212 @@
+/* Page chrome: the week strip, the content column, the rest bar and the nav. */
+
+/* ------------------------------------------------------------ week strip */
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--iron-0);
+  border-bottom: 1px solid var(--iron-2);
+}
+
+.week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  max-width: var(--content-max);
+  margin: 0 auto;
+}
+
+.weekday {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-3) 0 10px;
+  min-height: var(--tap);
+  color: var(--dimmer);
+  border-bottom: 3px solid transparent;
+  transition: color var(--transition);
+}
+
+.weekday__name {
+  font-stretch: 87%;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.weekday__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--iron-3);
+}
+
+.weekday[data-done='true'] .weekday__dot {
+  background: var(--ok);
+}
+
+/* Today is legible even when another day is selected. */
+.weekday[data-today='true'] {
+  color: var(--dim);
+}
+
+.weekday[aria-current='date'] {
+  color: var(--chalk);
+  border-bottom-color: var(--pc);
+}
+
+/* ----------------------------------------------------------- content column */
+
+.app-main {
+  padding: var(--pad);
+  max-width: var(--content-max);
+  margin: 0 auto;
+}
+
+/* Section header with a plate-coloured spine down the left edge. */
+.spine {
+  border-left: 6px solid var(--pc);
+  padding-left: var(--space-4);
+  margin: var(--space-2) 0 var(--space-5);
+}
+
+.spine h1 {
+  font-stretch: 87%;
+  font-size: 30px;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+}
+
+.spine__sub {
+  color: var(--dim);
+  font-size: 14px;
+  margin-top: var(--space-1);
+}
+
+/* ------------------------------------------------------------- rest timer */
+
+.rest {
+  position: fixed;
+  left: 0;
+  right: 0;
+  /* Sits directly on top of the nav, which is why both read the same token. */
+  bottom: calc(var(--nav-height) + var(--safe-bottom));
+  z-index: 30;
+  background: var(--iron-1);
+  border-top: 1px solid var(--iron-2);
+  padding: var(--space-3) var(--pad);
+}
+
+.rest__inner {
+  max-width: var(--content-max);
+  margin: 0 auto;
+}
+
+/* A depleting weight stack. */
+.rest__stack {
+  display: flex;
+  gap: 3px;
+  height: 16px;
+  margin-bottom: var(--space-2);
+}
+
+.rest__stack i {
+  flex: 1;
+  background: var(--iron-2);
+  border-radius: 2px;
+  transition: background var(--transition);
+}
+
+.rest__stack i.is-loaded {
+  background: var(--pc);
+}
+
+.rest__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.rest__clock {
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.rest__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.rest__actions button {
+  min-height: var(--tap);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--iron-3);
+  border-radius: var(--radius);
+  font-size: 13px;
+  color: var(--dim);
+}
+
+.rest__actions button:active {
+  background: var(--iron-2);
+  color: var(--chalk);
+}
+
+/* -------------------------------------------------------------------- nav */
+
+.app-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: var(--iron-0);
+  border-top: 1px solid var(--iron-2);
+  padding-bottom: var(--safe-bottom);
+}
+
+.app-nav button {
+  min-height: var(--nav-height);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--dimmer);
+  transition: color var(--transition);
+}
+
+.app-nav button[aria-current='page'] {
+  color: var(--chalk);
+  box-shadow: inset 0 2px 0 var(--pc);
+}
+
+/* ------------------------------------------------------------------ toast */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--space-5));
+  z-index: 60;
+  max-width: calc(100vw - var(--space-6));
+  background: var(--chalk);
+  color: var(--iron-0);
+  padding: 11px 18px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  opacity: 0;
+  transition: opacity var(--transition);
+  pointer-events: none;
+}
+
+.toast.is-visible {
+  opacity: 1;
+}

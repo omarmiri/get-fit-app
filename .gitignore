@@ -1,0 +1,15 @@
+node_modules/
+dist/
+dev-dist/
+coverage/
+*.local
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+.vscode/*
+!.vscode/extensions.json
+.idea/

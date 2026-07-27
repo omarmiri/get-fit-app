@@ -1,0 +1,65 @@
+/**
+ * Design tokens.
+ *
+ * The palette is cast iron for ground, chalk for ink, and Olympic bumper-plate
+ * colours as accents. `--pc` ("plate colour") is set from JavaScript on the root
+ * element to whichever day is on screen, and every accent in the interface
+ * derives from it — so the whole app tints itself by how heavy the day is.
+ *
+ * The `--p-*` values mirror `data/plates.ts`. Change both together.
+ */
+
+:root {
+  /* Surfaces, darkest to lightest. */
+  --iron-0: #14171a;
+  --iron-1: #1b1f24;
+  --iron-2: #252b32;
+  --iron-3: #333b44;
+
+  /* Ink. */
+  --chalk: #edede7;
+  --dim: #8a9099;
+  --dimmer: #5d656e;
+
+  /* Plate accents. */
+  --p-red: #c8102e;
+  --p-blue: #1b62a8;
+  --p-yellow: #e8b21c;
+  --p-green: #1e7a4c;
+  --p-white: #e4e1d8;
+
+  --ok: #1e7a4c;
+  --warn: #e8b21c;
+  --danger: #c8102e;
+
+  /* Current day's plate colour. Overwritten at runtime; this is the fallback. */
+  --pc: var(--p-white);
+  /* Text that sits on top of --pc. The plate colours are all mid-to-dark, so a
+     near-black foreground clears WCAG AA on every one of them. */
+  --on-pc: #0e1114;
+
+  /* Spacing scale. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 22px;
+  --space-6: 32px;
+
+  --pad: var(--space-4);
+  --radius: 4px;
+  --content-max: 640px;
+
+  /* Layout chrome. Referenced by the rest bar so the two cannot overlap. */
+  --nav-height: 60px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* The minimum comfortable touch target. Nothing tappable goes below this. */
+  --tap: 44px;
+
+  --font-sans: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Chivo Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --border: 1px solid var(--iron-2);
+  --transition: 0.18s ease;
+}
