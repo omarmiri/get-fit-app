@@ -80,6 +80,7 @@ export function renderExerciseCard(options: ExerciseCardOptions): HTMLElement {
 
   return card([
     text('exercise__name', exercise.name),
+    exercise.summary ? text('exercise__summary', exercise.summary) : null,
     text('exercise__meta', describeTarget(exercise)),
     renderStationBar(options),
     options.swapOpen

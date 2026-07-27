@@ -190,6 +190,14 @@ export interface Exercise {
   readonly name: string;
   /** Equipment-free or lighter substitute, shown as "or ..." on the card. */
   readonly alternative?: string;
+  /**
+   * One plain sentence saying what the movement actually is.
+   *
+   * Always visible, unlike the cues, which are collapsed. Exercise names are
+   * jargon — "dead bug" and "bird dog" tell a newcomer nothing — and a name you
+   * cannot picture is a movement you skip.
+   */
+  readonly summary?: string;
   /** Target working sets. Drives the set dots and the auto-advance. */
   readonly sets: number;
   /** Human-readable target, e.g. `8–12` or `20–30`. Display only. */
@@ -246,6 +254,23 @@ export interface PlanDay {
   readonly sub: string;
   /** Guidance paragraph for the "How to run it" card. */
   readonly note: string;
+  /**
+   * The session broken into ordered parts, shown at the top of the day.
+   *
+   * Exists because the logging UI shows one exercise at a time, which makes a
+   * six-movement session look like a one-movement session. The outline answers
+   * "what am I actually doing today" before any of that.
+   */
+  readonly outline: readonly string[];
+  /**
+   * How the exercises are performed as a group.
+   *
+   * `circuit` means all of them, repeated for rounds — the rail is a sequence,
+   * not a menu. `sets` means work through each one before moving on.
+   */
+  readonly exerciseFormat?: 'circuit' | 'sets';
+  /** Rounds through the circuit, e.g. `2–3`. Only meaningful for circuits. */
+  readonly rounds?: string;
   /** Whether the session's minutes count toward the weekly aerobic goal. */
   readonly aerobic: boolean;
   /** Default minutes for time-based sessions. Absent for pure strength days. */

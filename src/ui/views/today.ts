@@ -34,6 +34,7 @@ export function renderTodayView(context: ViewContext): Child[] {
     renderHeader(day),
     renderStaleBanner(context),
     renderDateNotice(dayKey),
+    renderOutline(day),
     ...renderBody(context, dayKey, day),
     card([eyebrow('How to run it'), text('prose', day.note)]),
     renderGoalsCard(context.state),
@@ -140,11 +141,32 @@ function renderBody(context: ViewContext, dayKey: DayKey, day: PlanDay): Child[]
     return [renderSummaryCard(context, finished, day)];
   }
 
-  return [
-    ...(day.exercises ? renderLogger(context, dayKey, day) : []),
-    day.type === 'strength' ? null : renderDuration(context, dayKey, day),
-    renderFinishButton(context, dayKey, day),
-  ];
+  const logger = day.exercises ? renderLogger(context, dayKey, day) : [];
+  const duration = day.type === 'strength' ? null : renderDuration(context, dayKey, day);
+
+  // Mixed days are cardio *then* core. Rendering the exercises first told the
+  // user to do them in the opposite order to the day's own instructions.
+  return day.type === 'mixed'
+    ? [duration, ...logger, renderFinishButton(context, dayKey, day)]
+    : [...logger, duration, renderFinishButton(context, dayKey, day)];
+}
+
+/**
+ * What this session actually is, in order, before any logging controls.
+ *
+ * The logger shows one exercise at a time, which makes a six-movement session
+ * look like a one-movement session and a three-move circuit look like a choice
+ * between three. This card is the answer to "wait, what am I doing today".
+ */
+function renderOutline(day: PlanDay): HTMLElement {
+  return card([
+    eyebrow("Today's session"),
+    el(
+      'ol',
+      { class: 'outline' },
+      day.outline.map((step) => el('li', { class: 'outline__step', text: step })),
+    ),
+  ]);
 }
 
 /* ------------------------------------------------------------------ logger */
@@ -161,6 +183,16 @@ function renderLogger(context: ViewContext, dayKey: DayKey, day: PlanDay): Child
 
   const active = context.store.activeFor(dayKey);
   const logged = active?.sets.filter((set) => set.exerciseId === exercise.id) ?? [];
+
+  const railHeading =
+    day.exerciseFormat === 'circuit'
+      ? `Do all ${exercises.length}, then repeat — ${day.rounds ?? '2–3'} rounds`
+      : `Work through all ${exercises.length}`;
+
+  const railHeader = div('railhead', [
+    text('railhead__text', railHeading),
+    text('railhead__hint', 'Tap a name to jump to it. Logging a set moves you on automatically.'),
+  ]);
 
   const rail = el(
     'div',
@@ -277,7 +309,7 @@ function renderLogger(context: ViewContext, dayKey: DayKey, day: PlanDay): Child
     },
   });
 
-  return [rail, cardEl];
+  return [railHeader, rail, cardEl];
 }
 
 function renderDuration(context: ViewContext, dayKey: DayKey, day: PlanDay): HTMLElement {

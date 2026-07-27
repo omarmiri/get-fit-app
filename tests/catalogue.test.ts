@@ -57,6 +57,14 @@ describe('exercise catalogue', () => {
     }
   });
 
+  it('describes every movement in plain language', () => {
+    // Exercise names are jargon. A name you cannot picture is one you skip.
+    for (const exercise of ALL_EXERCISES) {
+      expect(exercise.summary, `${exercise.id} summary`).toBeTruthy();
+      expect(exercise.summary?.length ?? 0, exercise.id).toBeGreaterThan(20);
+    }
+  });
+
   it('resolves known ids and returns undefined for retired ones', () => {
     expect(getExercise('legpress')?.name).toBe('Leg press');
     expect(getExercise('nope')).toBeUndefined();
@@ -128,6 +136,29 @@ describe('plan', () => {
       for (const exercise of PLAN[key].exercises ?? []) {
         expect(getExercise(exercise.id), `${key}/${exercise.id}`).toBeDefined();
       }
+    }
+  });
+
+  it('gives every day an outline saying what the session is', () => {
+    for (const key of DAY_KEYS) {
+      expect(PLAN[key].outline.length, `${key} outline`).toBeGreaterThan(1);
+    }
+  });
+
+  it('tells circuits how many rounds to do', () => {
+    // Without this the exercise rail reads as "pick one of these three".
+    for (const key of DAY_KEYS) {
+      const day = PLAN[key];
+      if (day.exerciseFormat !== 'circuit') continue;
+      expect(day.rounds, `${key} rounds`).toBeTruthy();
+    }
+  });
+
+  it('gives every day with exercises a stated format', () => {
+    for (const key of DAY_KEYS) {
+      const day = PLAN[key];
+      if (!day.exercises?.length) continue;
+      expect(day.exerciseFormat, `${key} format`).toBeTruthy();
     }
   });
 

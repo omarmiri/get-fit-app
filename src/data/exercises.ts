@@ -17,6 +17,7 @@ import type { Exercise } from '@/types';
 const LEG_PRESS: Exercise = {
   id: 'legpress',
   name: 'Leg press',
+  summary: 'Sit in the machine and push a weighted platform away with both legs.',
   alternative: 'Goblet squat',
   sets: 3,
   repRange: '8–12',
@@ -67,6 +68,7 @@ const LEG_PRESS: Exercise = {
 const CHEST_PRESS: Exercise = {
   id: 'chestpress',
   name: 'Chest press',
+  summary: 'Sit upright and push two handles straight out in front of your chest.',
   alternative: 'Incline push-up',
   sets: 3,
   repRange: '8–12',
@@ -104,6 +106,7 @@ const CHEST_PRESS: Exercise = {
 const SEATED_ROW: Exercise = {
   id: 'seatedrow',
   name: 'Seated row',
+  summary: 'Sit and pull a handle toward your stomach, squeezing your shoulder blades.',
   alternative: 'Chest-supported row',
   sets: 3,
   repRange: '8–12',
@@ -137,6 +140,7 @@ const SEATED_ROW: Exercise = {
 const RDL: Exercise = {
   id: 'rdl',
   name: 'Romanian deadlift',
+  summary: 'Stand holding weights and hinge at the hips, lowering them down your legs.',
   alternative: 'Dumbbell RDL',
   sets: 3,
   repRange: '8–10',
@@ -169,6 +173,7 @@ const RDL: Exercise = {
 const SHOULDER_PRESS: Exercise = {
   id: 'shoulderpress',
   name: 'Shoulder press',
+  summary: 'Sit and press two dumbbells from shoulder height to overhead.',
   alternative: 'Dumbbell, seated',
   sets: 2,
   repRange: '8–12',
@@ -200,6 +205,7 @@ const SHOULDER_PRESS: Exercise = {
 const LAT_PULLDOWN: Exercise = {
   id: 'latpulldown',
   name: 'Lat pulldown',
+  summary: 'Sit and pull a bar down from above to your collarbone.',
   sets: 3,
   repRange: '8–12',
   repMin: 8,
@@ -235,6 +241,7 @@ const LAT_PULLDOWN: Exercise = {
 const SPLIT_SQUAT: Exercise = {
   id: 'splitsquat',
   name: 'Split squat',
+  summary: 'Stand in a long stride and lower your back knee toward the floor.',
   alternative: 'Step-up',
   sets: 3,
   repRange: '8–10 / leg',
@@ -268,6 +275,7 @@ const SPLIT_SQUAT: Exercise = {
 const INCLINE_PRESS: Exercise = {
   id: 'inclinepress',
   name: 'Incline dumbbell press',
+  summary: 'Lie back on a slightly angled bench and press two dumbbells up.',
   sets: 3,
   repRange: '8–12',
   repMin: 8,
@@ -298,6 +306,7 @@ const INCLINE_PRESS: Exercise = {
 const CABLE_ROW: Exercise = {
   id: 'cablerow',
   name: 'Cable row',
+  summary: 'Sit at the cable and pull the handle to your belly button.',
   sets: 3,
   repRange: '8–12',
   repMin: 8,
@@ -324,6 +333,7 @@ const CABLE_ROW: Exercise = {
 const GLUTE_BRIDGE: Exercise = {
   id: 'glutebridge',
   name: 'Glute bridge',
+  summary: 'Lie on your back, feet flat, and lift your hips until level.',
   alternative: 'Hamstring curl',
   sets: 3,
   repRange: '10–12',
@@ -353,6 +363,7 @@ const GLUTE_BRIDGE: Exercise = {
 const LATERAL_RAISE: Exercise = {
   id: 'lateralraise',
   name: 'Lateral raise',
+  summary: 'Stand and lift light dumbbells out to your sides to shoulder height.',
   sets: 2,
   repRange: '10–15',
   repMin: 10,
@@ -382,6 +393,7 @@ const LATERAL_RAISE: Exercise = {
 const FARMER_CARRY: Exercise = {
   id: 'farmercarry',
   name: 'Farmer carry',
+  summary: 'Pick up a heavy dumbbell in each hand and walk.',
   sets: 3,
   repRange: '20–30 sec',
   repMin: 20,
@@ -413,6 +425,7 @@ const FARMER_CARRY: Exercise = {
 const PLANK: Exercise = {
   id: 'plank',
   name: 'Plank',
+  summary: 'Hold yourself in a straight line on your forearms and toes.',
   sets: 3,
   repRange: '20–30 sec',
   repMin: 20,
@@ -437,6 +450,7 @@ const PLANK: Exercise = {
 const DEAD_BUG: Exercise = {
   id: 'deadbug',
   name: 'Dead bug',
+  summary: 'Lie on your back, arms and knees up, and slowly lower one arm and the opposite leg.',
   sets: 3,
   repRange: '8–10 / side',
   repMin: 8,
@@ -457,6 +471,7 @@ const DEAD_BUG: Exercise = {
 const BIRD_DOG: Exercise = {
   id: 'birddog',
   name: 'Bird dog',
+  summary: 'On hands and knees, extend one arm and the opposite leg straight out and hold.',
   sets: 3,
   repRange: '8–10 / side',
   repMin: 8,

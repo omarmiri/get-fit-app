@@ -1193,3 +1193,72 @@
   color: var(--dimmer);
   line-height: 1.55;
 }
+
+/* --------------------------------------------------------------- outline */
+
+/* What the session is, before any controls. The logger shows one movement at
+   a time, so without this a six-movement day reads as a one-movement day. */
+.outline {
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: outline;
+}
+
+.outline__step {
+  counter-increment: outline;
+  position: relative;
+  padding: var(--space-2) 0 var(--space-2) var(--space-6);
+  font-size: 14px;
+  line-height: 1.5;
+  border-bottom: 1px solid var(--iron-2);
+}
+
+.outline__step:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.outline__step::before {
+  content: counter(outline);
+  position: absolute;
+  left: 0;
+  top: var(--space-2);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--pc);
+  color: var(--on-pc);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ------------------------------------------------------------ rail header */
+
+.railhead {
+  margin-bottom: var(--space-2);
+}
+
+.railhead__text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--chalk);
+}
+
+.railhead__hint {
+  font-size: 11px;
+  color: var(--dimmer);
+  margin-top: 2px;
+}
+
+/* Plain-language description of the movement, always visible. */
+.exercise__summary {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--chalk);
+  margin-top: var(--space-2);
+  opacity: 0.85;
+}

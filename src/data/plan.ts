@@ -22,6 +22,13 @@ export const PLAN: Readonly<Record<DayKey, PlanDay>> = {
     modalityStations: ['treadmill', 'elliptical', 'arctrainer', 'recumbentbike', 'cardiocinema'],
     mobilityStations: ['stretcharea', 'foamroller', 'mat'],
     exercises: CORE,
+    outline: [
+      'Steady cardio — 35 to 45 minutes, conversational pace',
+      'Core circuit — all 3 movements, 2 to 3 times through',
+      'Stretch — 5 minutes on whatever felt tight',
+    ],
+    exerciseFormat: 'circuit',
+    rounds: '2–3',
     note: 'Keep the cardio at a pace where you could still hold a conversation. Core work comes after, 2–3 rounds.',
   },
   tue: {
@@ -33,6 +40,12 @@ export const PLAN: Readonly<Record<DayKey, PlanDay>> = {
     sub: 'Full body · 45–60 min',
     aerobic: false,
     exercises: STRENGTH_A,
+    outline: [
+      'Six strength movements, 2 to 3 sets each',
+      'Rest 60 to 90 seconds between sets',
+      'Stretch — 5 minutes at the end',
+    ],
+    exerciseFormat: 'sets',
     note: 'Rest 60–90 seconds between sets. Stop each set one or two reps before your form breaks down.',
   },
   wed: {
@@ -46,6 +59,10 @@ export const PLAN: Readonly<Record<DayKey, PlanDay>> = {
     aerobic: true,
     modalityStations: ['poollaps', 'poolwalk', 'spa'],
     mobilityStations: ['stretcharea', 'foamroller', 'sauna'],
+    outline: [
+      'Easy water work — 30 to 40 minutes',
+      'Mobility — 10 minutes on calves, hamstrings, hips, chest, upper back',
+    ],
     note: 'Easy effort only. Finish with 10 minutes of mobility for calves, hamstrings, hips, chest and upper back.',
   },
   thu: {
@@ -59,6 +76,11 @@ export const PLAN: Readonly<Record<DayKey, PlanDay>> = {
     aerobic: true,
     modalityStations: ['uprightbike', 'stairmill', 'rower', 'treadmill', 'racquetball'],
     mobilityStations: ['stretcharea', 'foamroller'],
+    outline: [
+      '5 minute easy warm-up',
+      '6 to 8 rounds: 1–2 min moderately hard, then 2–3 min easy',
+      '5 minute cooldown, then stretch',
+    ],
     note: '5 min easy warm-up. Then 1–2 min moderately hard, 2–3 min easy, repeated. 5 min cooldown. Controlled effort, not all-out.',
   },
   fri: {
@@ -70,6 +92,12 @@ export const PLAN: Readonly<Record<DayKey, PlanDay>> = {
     sub: 'Full body · 45–60 min',
     aerobic: false,
     exercises: STRENGTH_B,
+    outline: [
+      'Six strength movements, 2 to 3 sets each',
+      'Rest 60 to 90 seconds between sets',
+      'Stretch — 5 minutes at the end',
+    ],
+    exerciseFormat: 'sets',
     note: 'Same rules as Strength A. Different exercise selection to spread the load around.',
   },
   sat: {
@@ -83,6 +111,11 @@ export const PLAN: Readonly<Record<DayKey, PlanDay>> = {
     aerobic: true,
     modalityStations: ['cardiocinema', 'treadmill', 'recumbentbike', 'elliptical', 'basketball'],
     mobilityStations: ['stretcharea', 'foamroller', 'mat'],
+    outline: [
+      'One long steady session — 45 to 60 minutes',
+      'Keep it low impact and conversational',
+      'Stretch — 5 to 10 minutes after',
+    ],
     note: 'The long steady session. This is the one that does most of the work toward your weekly aerobic minutes.',
   },
   sun: {
@@ -96,6 +129,11 @@ export const PLAN: Readonly<Record<DayKey, PlanDay>> = {
     aerobic: true,
     modalityStations: ['treadmill', 'poolwalk', 'stretcharea', 'recumbentbike'],
     mobilityStations: ['foamroller', 'mat', 'sauna', 'spa'],
+    outline: [
+      'Easy movement — 20 to 30 minutes, nothing strenuous',
+      'Mobility and stretching',
+      'Sauna afterwards if it feels good',
+    ],
     note: 'Keep it light. Sauna afterwards is fine if it feels comfortable — hydrate first, and it does not replace the session.',
   },
 };
