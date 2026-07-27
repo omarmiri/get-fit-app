@@ -2,7 +2,10 @@ import type { Child } from '../dom';
 import type { DayKey, PlanDay, Session } from '@/types';
 import { DAY_NAMES, PLAN } from '@/data/plan';
 import { stationName } from '@/data/equipment';
-import { defaultStationId } from '@/domain/substitutions';
+import { defaultStationId, resolveOptions } from '@/domain/substitutions';
+import { recommend } from '@/domain/progression';
+import { startingWeight } from '@/domain/startingWeights';
+import { performanceHistory } from '@/state/selectors';
 import { formatShortDate, formatWithWeekday, todayDayKey, todayIso } from '@/domain/dates';
 import { sessionVolume } from '@/domain/metrics';
 import { formatVolume } from '@/domain/units';
@@ -13,12 +16,19 @@ import { toast } from '../toast';
 import { renderDurationCard } from '../components/durationCard';
 import { renderExerciseCard } from '../components/exerciseCard';
 import { renderGoalsCard } from '../components/goalsCard';
+import { renderOnboarding } from '../components/onboarding';
 import type { ViewContext } from './context';
 
 /** The Today tab: the session for the selected plan day, and the controls to log it. */
 export function renderTodayView(context: ViewContext): Child[] {
   const dayKey = context.ui.viewDay ?? todayDayKey();
   const day = PLAN[dayKey];
+
+  // Setup comes first and replaces the session, so it is answered once rather
+  // than nagging alongside the workout.
+  if (!context.state.prefs.onboarded) {
+    return [renderHeader(day), renderOnboardingCard(context)];
+  }
 
   return [
     renderHeader(day),
@@ -28,6 +38,21 @@ export function renderTodayView(context: ViewContext): Child[] {
     card([eyebrow('How to run it'), text('prose', day.note)]),
     renderGoalsCard(context.state),
   ];
+}
+
+function renderOnboardingCard(context: ViewContext): HTMLElement {
+  return renderOnboarding({
+    unit: context.state.prefs.unit,
+    onSave: (profile) => {
+      context.store.setProfile(profile);
+      toast('Starting weights set — adjust any of them as you go');
+      context.render();
+    },
+    onSkip: () => {
+      context.store.setOnboarded(true);
+      context.render();
+    },
+  });
 }
 
 function renderHeader(day: PlanDay): HTMLElement {
@@ -169,6 +194,22 @@ function renderLogger(context: ViewContext, dayKey: DayKey, day: PlanDay): Child
   const stationId =
     context.ui.stationByExercise[exercise.id] ?? defaultStationId(exercise, context.state.prefs);
 
+  // Progression runs on this exercise's history at *this* station: loads are
+  // not comparable across machines.
+  const blocks = performanceHistory(context.state, exercise.id, stationId);
+  const stationOption = resolveOptions(exercise, context.state.prefs, null, context.state.prefs.unit).find(
+    (entry) => entry.station.id === stationId,
+  )?.option;
+
+  const opening = startingWeight(
+    exercise,
+    context.state.prefs.profile,
+    context.state.prefs.unit,
+    stationOption,
+  );
+
+  const recommendation = recommend(exercise, blocks, context.state.prefs.unit, opening);
+
   const cardEl = renderExerciseCard({
     exercise,
     logged,
@@ -177,6 +218,27 @@ function renderLogger(context: ViewContext, dayKey: DayKey, day: PlanDay): Child
     prefs: context.state.prefs,
     stationId,
     swapOpen: context.ui.swapOpenFor === exercise.id,
+    recommendation,
+    effort: context.ui.effortByExercise[exercise.id],
+    onEffortChange: (effort) => {
+      context.ui.effortByExercise[exercise.id] = effort;
+      context.render();
+    },
+    onLogWithEffort: (weight, reps, effort) => {
+      context.store.logSet(dayKey, exercise.id, weight, reps, context.state.prefs.unit, stationId, effort);
+      context.rest.start(exercise.restSeconds);
+      // The set is recorded, so the next one seeds from it rather than from the
+      // stale draft, and the effort question starts fresh.
+      delete context.ui.draftByExercise[exercise.id];
+      delete context.ui.effortByExercise[exercise.id];
+
+      const nowLogged =
+        context.store.activeFor(dayKey)?.sets.filter((set) => set.exerciseId === exercise.id).length ?? 0;
+      if (nowLogged >= exercise.sets && index < exercises.length - 1) {
+        context.ui.exerciseIndex = index + 1;
+      }
+      context.render();
+    },
     draft: context.ui.draftByExercise[exercise.id],
     onDraftChange: (draft) => {
       // Deliberately no re-render: this fires on every keystroke, and the
@@ -206,22 +268,6 @@ function renderLogger(context: ViewContext, dayKey: DayKey, day: PlanDay): Child
     onToggleMissingStation: (id, missing) => {
       context.store.setStationMissing(id, missing);
       toast(missing ? `${stationName(id)} marked as not at your club` : `${stationName(id)} restored`);
-      context.render();
-    },
-    onLog: (weight, reps) => {
-      context.store.logSet(dayKey, exercise.id, weight, reps, context.state.prefs.unit, stationId);
-      context.rest.start(exercise.restSeconds);
-      // The set is recorded, so the next one should seed from it, not from the
-      // stale draft.
-      delete context.ui.draftByExercise[exercise.id];
-
-      // Advance once this exercise's target is met, so the common path is
-      // "log, log, log" without ever touching the rail.
-      const nowLogged =
-        context.store.activeFor(dayKey)?.sets.filter((set) => set.exerciseId === exercise.id).length ?? 0;
-      if (nowLogged >= exercise.sets && index < exercises.length - 1) {
-        context.ui.exerciseIndex = index + 1;
-      }
       context.render();
     },
     onUndo: () => {

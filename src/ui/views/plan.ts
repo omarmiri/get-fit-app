@@ -1,11 +1,11 @@
 import type { Child } from '../dom';
-import type { WeightUnit } from '@/types';
+import type { FitnessLevel, WeightUnit } from '@/types';
 import { DAY_NAMES, PLAN, PLAN_ORDER } from '@/data/plan';
 import { CLUB, daysSinceVerified } from '@/data/club';
 import { ALL_STATIONS, ZONE_LABEL } from '@/data/equipment';
 import { PLATE_LEGEND } from '@/data/plates';
-import { todayIso } from '@/domain/dates';
-import { UNIT_LABEL } from '@/domain/units';
+import { daysBetween, todayIso } from '@/domain/dates';
+import { UNIT_LABEL, formatWeight } from '@/domain/units';
 import { parseStateJson, serializeState } from '@/state/schema';
 import { card, div, el, eyebrow, text } from '../dom';
 import { toast } from '../toast';
@@ -19,6 +19,7 @@ export function renderPlanView(context: ViewContext): Child[] {
     renderRotation(context),
     renderClubCard(),
     renderEquipmentCard(context),
+    renderProfileCard(context),
     renderSettings(context),
     renderColourKey(),
     renderDataCard(context),
@@ -56,6 +57,87 @@ function renderRotation(context: ViewContext): HTMLElement {
     }),
     'card--flush',
   );
+}
+
+/* ---------------------------------------------------------------- profile */
+
+const LEVEL_LABEL: Readonly<Record<FitnessLevel, string>> = {
+  new: 'New to this',
+  returning: 'Returning',
+  experienced: 'Experienced',
+};
+
+/**
+ * The onboarding profile, and a way to redo it.
+ *
+ * Bodyweight drifts, and the starting estimates are only meaningful against a
+ * current one — so the card shows how old the figure is rather than presenting
+ * it as fact.
+ */
+function renderProfileCard(context: ViewContext): HTMLElement {
+  const profile = context.state.prefs.profile;
+
+  if (!profile) {
+    return card([
+      eyebrow('Your details'),
+      text(
+        'prose',
+        'No profile set. The app opens every new movement at zero and you pick your own weights, which works fine — a profile just gives a safer first guess.',
+      ),
+      el('button', {
+        class: 'button button--ghost',
+        text: 'Set up starting weights',
+        attrs: { type: 'button' },
+        on: {
+          click: () => {
+            context.store.setOnboarded(false);
+            context.ui.tab = 'today';
+            context.render();
+          },
+        },
+      }),
+    ]);
+  }
+
+  const age = daysBetween(profile.recordedOn, todayIso());
+
+  return card([
+    eyebrow('Your details'),
+    div('setting', [
+      div('setting__text', [text('setting__label', 'Age'), text('setting__hint', `${profile.age} years`)]),
+    ]),
+    div('setting', [
+      div('setting__text', [
+        text('setting__label', 'Bodyweight'),
+        text(
+          'setting__hint',
+          `${formatWeight(profile.bodyweight, profile.bodyweightUnit)}${age > 60 ? ` · recorded ${age} days ago` : ''}`,
+        ),
+      ]),
+    ]),
+    div('setting', [
+      div('setting__text', [
+        text('setting__label', 'Experience'),
+        text('setting__hint', LEVEL_LABEL[profile.level]),
+      ]),
+    ]),
+    text(
+      'club__hint',
+      'Used only to suggest an opening weight the first time you do a movement. Once there is a logged set, your own history takes over.',
+    ),
+    el('button', {
+      class: 'button button--ghost',
+      text: 'Update details',
+      attrs: { type: 'button' },
+      on: {
+        click: () => {
+          context.store.setOnboarded(false);
+          context.ui.tab = 'today';
+          context.render();
+        },
+      },
+    }),
+  ]);
 }
 
 /* --------------------------------------------------------------- settings */

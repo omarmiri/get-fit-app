@@ -37,6 +37,37 @@ export type SessionType = 'strength' | 'duration' | 'intervals' | 'mixed';
 /** Subjective exertion, kept coarse on purpose — a 1-10 RPE scale invites false precision. */
 export type Effort = 'Easy' | 'Moderate' | 'Hard';
 
+/**
+ * How a single working set felt.
+ *
+ * Deliberately three options rather than a reps-in-reserve count. Judging "I
+ * had two left" accurately is a trained skill; "that was easy" is not. Three
+ * buttons also survive being tapped one-handed while out of breath.
+ *
+ * Distinct from `Effort`, which describes a whole cardio session.
+ */
+export type SetEffort = 'easy' | 'right' | 'hard';
+
+/** Training experience, used only to pick a safe first weight. */
+export type FitnessLevel = 'new' | 'returning' | 'experienced';
+
+/**
+ * Optional profile, collected once, used to estimate opening weights.
+ *
+ * Nothing here leaves the device, and the app works without it — an absent
+ * profile just means the first set of each movement opens at zero and you dial
+ * it in yourself.
+ */
+export interface UserProfile {
+  /** Years. Used to taper the starting estimate slightly with age. */
+  readonly age: number;
+  readonly bodyweight: number;
+  readonly bodyweightUnit: WeightUnit;
+  readonly level: FitnessLevel;
+  /** When the profile was captured, so stale bodyweights can be spotted. */
+  readonly recordedOn: IsoDate;
+}
+
 /* -------------------------------------------------------------- equipment */
 
 /** Where in the club a station lives, so the app can say where to walk. */
@@ -163,6 +194,15 @@ export interface Exercise {
   readonly sets: number;
   /** Human-readable target, e.g. `8–12` or `20–30`. Display only. */
   readonly repRange: string;
+  /**
+   * The rep range as numbers, which is what progression actually runs on.
+   *
+   * Held separately from `repRange` rather than parsed out of it: that string
+   * is display copy and carries things like `8–10 / leg`, and a progression
+   * engine that depends on parsing prose is one copy edit from breaking.
+   */
+  readonly repMin: number;
+  readonly repMax: number;
   /** Seed value for the reps stepper when there is no history. */
   readonly defaultReps: number;
   readonly repMetric: RepMetric;
@@ -181,6 +221,14 @@ export interface Exercise {
    * the default is occupied — the whole point of the swap sheet.
    */
   readonly stations?: readonly StationOption[];
+  /**
+   * Opening load as a fraction of bodyweight, for someone new to lifting.
+   *
+   * Used once, to answer "what do I even put on this thing" on the first
+   * session. Absent for bodyweight movements. These are deliberately timid —
+   * see `domain/startingWeights.ts` for why they should stay that way.
+   */
+  readonly bodyweightFactor?: number;
   /** Roadmap: illustration or demo clip. */
   readonly media?: ExerciseMedia;
 }
@@ -229,6 +277,8 @@ export interface LoggedSet {
   readonly reps: number;
   /** Epoch milliseconds, used for ordering and undo. */
   readonly loggedAt: number;
+  /** How the set felt. Absent when the user did not say. */
+  readonly effort?: SetEffort;
   /**
    * Which station the set was actually performed on.
    *
@@ -287,6 +337,10 @@ export interface Preferences {
    * app should keep offering that one first instead of reverting.
    */
   readonly preferredStations?: Readonly<Record<string, string>>;
+  /** Set during onboarding. Absent until then, and the app works without it. */
+  readonly profile?: UserProfile;
+  /** True once onboarding has been shown, so it is not offered again. */
+  readonly onboarded?: boolean;
 }
 
 /** Weekly targets shown on the goals card. */

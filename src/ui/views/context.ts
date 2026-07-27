@@ -1,4 +1,4 @@
-import type { AppState, DayKey, Tab } from '@/types';
+import type { AppState, DayKey, SetEffort, Tab } from '@/types';
 import type { AppStore } from '@/state/store';
 import type { RestTimer } from '../restTimer';
 
@@ -28,6 +28,8 @@ export interface UiState {
    * Cleared once the set is logged, so the next set re-seeds from history.
    */
   draftByExercise: Record<string, { weight: number; reps: number }>;
+  /** Effort chosen for the set about to be logged, by exercise id. */
+  effortByExercise: Record<string, SetEffort | undefined>;
 }
 
 /** Everything a view needs to render itself and to request a re-render. */

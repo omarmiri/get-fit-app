@@ -1,5 +1,7 @@
 # Rack & File
 
+**Live: https://get-fit-app.onrender.com**
+
 A personal training log built around one seven-day plan. Mobile-first, installable to the home screen, works offline in the gym.
 
 All data lives in the browser on the device you use it on. There is no database, no account, and nothing leaves the phone. **Export a backup from the Plan tab now and then** — clearing browser data erases everything.
@@ -35,6 +37,9 @@ Then open http://localhost:5173.
 - **Progress charts** — estimated one-rep max per movement, aerobic minutes per week against the 150-minute target
 - **Guided cues** — setup, execution and the common mistake for every movement
 - **Weekly goals** — aerobic minutes, strength sessions, and a streak count
+- **Guided progression** — rate each set Easy / Just right / Hard, and the next session opens at the weight and reps you've earned, with the reasoning shown
+- **Stagnation detection** — three sessions stuck at the same numbers triggers a deload suggestion instead of letting you grind
+- **Safe starting weights** — optional one-time profile (age, bodyweight, experience) picks a deliberately conservative opening weight for movements you've never done
 - **Equipment-aware** — every movement is tied to real stations at your club, with the zone to walk to
 - **Busy machine? Swap it** — tap "Taken?" for ranked alternatives, each with where to find it and a converted starting load
 - **Units** — pounds or kilograms, switchable at any time without rewriting history
@@ -60,6 +65,23 @@ src/
 The dependency rule is one-directional: `ui` may import from `state`, `domain` and `data`; `state` may import from `domain` and `data`; `domain` and `data` import from nothing but `types`. Nothing in `domain/` or `state/` touches the DOM, which is why they can be tested without a browser.
 
 ### Key decisions
+
+**Progression is arithmetic, not a language model.** `domain/progression.ts`
+implements double progression — hold the weight and add reps to the top of the
+range, then add load and reset — gated on reported effort, so a set that hit the
+target but felt maximal does not earn an increase. It is deterministic, runs
+offline, costs nothing, and is covered by tests that pin every branch. An LLM
+would give different answers to identical history and occasionally suggest a
+40 lb jump; this is the wrong shape of problem for that tool.
+
+**Progression is scoped per exercise _and_ station.** A hack squat is not a leg
+press. Swapping machines starts a separate progression rather than inheriting
+numbers that mean something different.
+
+**Starting weights err light on purpose.** `domain/startingWeights.ts` rounds
+_down_, always. The failure modes are not symmetric: too light costs one set,
+too heavy on an unfamiliar movement costs weeks. The estimate stops mattering
+the moment there is one real logged set.
 
 **Equipment data is split by confidence, and the user can correct it.** LA Fitness
 publishes club amenities but not machine inventories, and no third party does
@@ -158,7 +180,7 @@ Data written by v0.1 is migrated automatically on first launch, including the ex
 
 ## Testing
 
-193 tests over the domain logic, the store, schema migration, the equipment catalogue and the substitution logic:
+229 tests over the domain logic, the store, schema migration, the equipment catalogue, substitution and progression logic:
 
 ```bash
 npm test
@@ -168,6 +190,17 @@ npm run test:coverage
 The UI layer is verified by hand — the logic worth protecting from regressions lives below it, and that part runs without a DOM.
 
 ---
+
+## Roadmap notes
+
+**Gemini belongs in plan restructuring, not progression.** Rewriting the plan in
+response to "my shoulder hurts, swap the pressing" is open-ended language over a
+structured document, and there is no reasonable way to write rules for it. That
+is where an LLM earns its place. Deciding whether to add 10 lb is not.
+
+If you add it: the API key must live server-side in `server.js` — never in a
+`VITE_`-prefixed variable, which Vite inlines into the client bundle at build
+time and would ship your key to every browser.
 
 ## Not yet built
 

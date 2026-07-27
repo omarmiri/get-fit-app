@@ -1,4 +1,13 @@
-import type { AppState, DayKey, Effort, LoggedSet, Session, WeightUnit } from '@/types';
+import type {
+  AppState,
+  DayKey,
+  Effort,
+  LoggedSet,
+  Session,
+  SetEffort,
+  UserProfile,
+  WeightUnit,
+} from '@/types';
 import { todayIso } from '@/domain/dates';
 import { clampMinutes, clampReps, clampWeight } from '@/domain/limits';
 import { type KeyValueStore, type SaveFailure, debounce, saveState } from './storage';
@@ -82,6 +91,19 @@ export class AppStore {
 
   setUnit(unit: WeightUnit): void {
     this.#commit({ ...this.#state, prefs: { ...this.#state.prefs, unit } });
+  }
+
+  /** Save the onboarding profile used to estimate opening weights. */
+  setProfile(profile: UserProfile): void {
+    this.#commit({
+      ...this.#state,
+      prefs: { ...this.#state.prefs, profile, onboarded: true },
+    });
+  }
+
+  /** Record that onboarding has been offered, whether or not it was filled in. */
+  setOnboarded(onboarded: boolean): void {
+    this.#commit({ ...this.#state, prefs: { ...this.#state.prefs, onboarded } });
   }
 
   setRestVibrate(enabled: boolean): void {
@@ -204,6 +226,7 @@ export class AppStore {
     reps: number,
     unit: WeightUnit,
     stationId?: string,
+    effort?: SetEffort,
   ): void {
     const set: LoggedSet = {
       exerciseId,
@@ -213,6 +236,8 @@ export class AppStore {
       loggedAt: this.#now(),
       // Recorded so history and trends can tell a leg press from a hack squat.
       ...(stationId === undefined ? {} : { stationId }),
+      // Drives progression. Absent when the user chose not to say.
+      ...(effort === undefined ? {} : { effort }),
     };
     this.#updateActive(dayKey, (session) => ({ ...session, sets: [...session.sets, set] }));
   }

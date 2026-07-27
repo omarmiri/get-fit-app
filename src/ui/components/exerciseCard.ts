@@ -1,4 +1,5 @@
-import type { Exercise, LoggedSet, Preferences, WeightUnit } from '@/types';
+import type { Exercise, LoggedSet, Preferences, SetEffort, WeightUnit } from '@/types';
+import type { Recommendation } from '@/domain/progression';
 import { ZONE_LABEL, getStation } from '@/data/equipment';
 import { formatShortDate } from '@/domain/dates';
 import { clampReps, clampWeight } from '@/domain/limits';
@@ -29,7 +30,12 @@ export interface ExerciseCardOptions {
   /** Stepper values typed but not yet logged, preserved across re-renders. */
   readonly draft: { weight: number; reps: number } | undefined;
   readonly onDraftChange: (draft: { weight: number; reps: number }) => void;
-  readonly onLog: (weight: number, reps: number) => void;
+  /** What the progression engine suggests, or null when it has nothing to say. */
+  readonly recommendation: Recommendation | null;
+  /** Effort selected for the set about to be logged. */
+  readonly effort: SetEffort | undefined;
+  readonly onEffortChange: (effort: SetEffort | undefined) => void;
+  readonly onLogWithEffort: (weight: number, reps: number, effort: SetEffort | undefined) => void;
   readonly onUndo: () => void;
   readonly onToggleSwap: () => void;
   /** Chose a different station, optionally with a converted starting load. */
@@ -68,7 +74,7 @@ export function renderExerciseCard(options: ExerciseCardOptions): HTMLElement {
     text: `Log set ${logged.length + 1}`,
     attrs: { type: 'button' },
     on: {
-      click: () => options.onLog(weightStepper.getValue(), repsStepper.getValue()),
+      click: () => options.onLogWithEffort(weightStepper.getValue(), repsStepper.getValue(), options.effort),
     },
   });
 
@@ -97,6 +103,9 @@ export function renderExerciseCard(options: ExerciseCardOptions): HTMLElement {
     renderSetDots(exercise, logged.length),
 
     div('steppers', [weightStepper.element, text('steppers__times mono', '×'), repsStepper.element]),
+
+    renderRecommendation(options),
+    exercise.repMetric === 'seconds' ? null : renderEffortPicker(options),
 
     exercise.loaded
       ? null
@@ -132,6 +141,11 @@ function seedValues(options: ExerciseCardOptions): { weight: number; reps: numbe
 
   // A value the user is part-way through entering always wins.
   if (options.draft) return options.draft;
+
+  // Before the first set of the session, open on what progression suggests.
+  if (logged.length === 0 && options.recommendation) {
+    return { weight: options.recommendation.weight, reps: options.recommendation.reps };
+  }
 
   const source = logged.at(-1) ?? previous?.sets.at(-1) ?? null;
   if (!source) return { weight: 0, reps: exercise.defaultReps };
@@ -174,6 +188,71 @@ function renderStationBar(options: ExerciseCardOptions): HTMLElement | null {
           on: { click: options.onToggleSwap },
         })
       : null,
+  ]);
+}
+
+/**
+ * The progression suggestion and why it was made.
+ *
+ * Shown only when it differs from what the steppers already hold — repeating
+ * the number that is on screen adds noise without adding information.
+ */
+function renderRecommendation(options: ExerciseCardOptions): HTMLElement | null {
+  const recommendation = options.recommendation;
+  if (!recommendation) return null;
+  // Once the first set of the session is logged, the suggestion has been acted
+  // on; showing it against later sets would argue with what you just did.
+  if (options.logged.length > 0) return null;
+
+  return div(`reco reco--${recommendation.kind}`, [
+    el('span', { class: 'reco__icon', text: iconFor(recommendation.kind), attrs: { 'aria-hidden': 'true' } }),
+    text('reco__text', recommendation.reason),
+  ]);
+}
+
+function iconFor(kind: Recommendation['kind']): string {
+  switch (kind) {
+    case 'add-weight':
+      return '▲';
+    case 'deload':
+      return '▼';
+    case 'add-reps':
+      return '+';
+    case 'repeat':
+      return '=';
+    case 'opening':
+      return '★';
+  }
+}
+
+/** How did that set feel? Three options, no default, one tap. */
+function renderEffortPicker(options: ExerciseCardOptions): HTMLElement {
+  const choices: readonly { value: SetEffort; label: string }[] = [
+    { value: 'easy', label: 'Easy' },
+    { value: 'right', label: 'Just right' },
+    { value: 'hard', label: 'Hard' },
+  ];
+
+  return div('effort', [
+    div('effort__label', [
+      el('span', { class: 'eyebrow', text: 'How did that set feel' }),
+      el('span', { class: 'effort__optional', text: 'optional' }),
+    ]),
+    el(
+      'div',
+      { class: 'choices__row', attrs: { role: 'group', 'aria-label': 'How did that set feel' } },
+      choices.map((choice) =>
+        el('button', {
+          class: 'choices__button effort__button',
+          text: choice.label,
+          attrs: { type: 'button', 'aria-pressed': options.effort === choice.value },
+          // Tapping the selected option again clears it.
+          on: {
+            click: () => options.onEffortChange(options.effort === choice.value ? undefined : choice.value),
+          },
+        }),
+      ),
+    ),
   ]);
 }
 

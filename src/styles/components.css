@@ -1022,3 +1022,174 @@
   text-decoration: line-through;
   opacity: 0.6;
 }
+
+/* --------------------------------------------------------- recommendation */
+
+/* The progression suggestion. Quiet by default — it is advice, not an alert —
+   with only the two directional cases picking up colour. */
+.reco {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-left: 2px solid var(--iron-3);
+  background: var(--iron-2);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.reco__icon {
+  flex: 0 0 auto;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--dim);
+}
+
+.reco__text {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dim);
+}
+
+.reco--add-weight {
+  border-left-color: var(--ok);
+}
+
+.reco--add-weight .reco__icon {
+  color: var(--ok);
+}
+
+.reco--deload {
+  border-left-color: var(--warn);
+}
+
+.reco--deload .reco__icon {
+  color: var(--warn);
+}
+
+.reco--opening {
+  border-left-color: var(--pc);
+}
+
+.reco--opening .reco__icon {
+  color: var(--pc);
+}
+
+/* ------------------------------------------------------------- set effort */
+
+.effort {
+  margin-top: var(--space-4);
+}
+
+.effort__label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.effort__optional {
+  font-size: 10px;
+  color: var(--dimmer);
+  text-transform: lowercase;
+  letter-spacing: 0;
+}
+
+.effort__button {
+  flex: 1;
+  min-width: 0;
+}
+
+/* -------------------------------------------------------------- onboarding */
+
+.onboard {
+  border-color: var(--iron-3);
+}
+
+.onboard__title {
+  font-stretch: 87%;
+  font-size: 22px;
+  line-height: 1.15;
+  margin-top: var(--space-2);
+}
+
+.onboard__group {
+  margin-top: var(--space-5);
+}
+
+.onboard__field {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.onboard__input {
+  flex: 1;
+  min-width: 0;
+  font-size: 40px;
+  font-weight: 700;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--iron-3);
+  color: var(--chalk);
+  padding: 4px 0;
+}
+
+.onboard__input:focus {
+  outline: none;
+  border-bottom-color: var(--pc);
+}
+
+.onboard__input::placeholder {
+  color: var(--iron-3);
+}
+
+.onboard__suffix {
+  flex: 0 0 auto;
+  font-size: 14px;
+  color: var(--dim);
+}
+
+.levelgrid {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.levelcard {
+  text-align: left;
+  padding: var(--space-3);
+  border: var(--border);
+  border-radius: var(--radius);
+  min-height: var(--tap);
+}
+
+.levelcard[aria-pressed='true'] {
+  border-color: var(--pc);
+  background: var(--iron-2);
+}
+
+.levelcard__label {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.levelcard__hint {
+  font-size: 12px;
+  color: var(--dim);
+  margin-top: 2px;
+}
+
+.onboard .button--primary[aria-disabled='true'] {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.onboard__disclaimer {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--iron-2);
+  font-size: 11px;
+  color: var(--dimmer);
+  line-height: 1.55;
+}

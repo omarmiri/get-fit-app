@@ -35,6 +35,7 @@ export class App {
     swapOpenFor: null,
     stationByExercise: {},
     draftByExercise: {},
+    effortByExercise: {},
   };
 
   readonly #weekStrip = requireElement('#week');

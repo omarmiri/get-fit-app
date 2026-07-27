@@ -3,6 +3,7 @@ import { GOALS, getPlanDay } from '@/data/plan';
 import { ALL_EXERCISES, isTrendable } from '@/data/exercises';
 import { addDays, parseIsoDate, startOfWeek, toIsoDate } from '@/domain/dates';
 import { bestOneRepMax } from '@/domain/metrics';
+import { type PerformanceBlock, toPerformanceBlocks } from '@/domain/progression';
 
 /**
  * Derived reads over `AppState`.
@@ -150,4 +151,35 @@ export function currentStreak(state: AppState, now: Date = new Date()): number {
     cursor = addDays(cursor, -1);
   }
   return streak;
+}
+
+/**
+ * A movement's history at one station, oldest first, for the progression engine.
+ *
+ * Scoped to the station because loads are not comparable across machines: a
+ * hack squat and a leg press train the same thing but with entirely different
+ * numbers, and progressing one from the other's history would be nonsense.
+ *
+ * A `stationId` of `undefined` matches sets logged before stations existed, so
+ * old history still drives recommendations for the default station.
+ */
+export function performanceHistory(
+  state: AppState,
+  exerciseId: string,
+  stationId: string | undefined,
+): PerformanceBlock[] {
+  const matched: { date: IsoDate; set: LoggedSet }[] = [];
+
+  for (const session of state.sessions) {
+    for (const set of session.sets) {
+      if (set.exerciseId !== exerciseId) continue;
+      if (set.weight <= 0) continue;
+      // Sets from before stations were tracked count toward whichever station
+      // is currently selected, rather than being stranded.
+      if (set.stationId !== undefined && set.stationId !== stationId) continue;
+      matched.push({ date: session.date, set });
+    }
+  }
+
+  return toPerformanceBlocks(matched);
 }

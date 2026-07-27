@@ -1,7 +1,17 @@
-import type { AppState, Effort, LoggedSet, Preferences, Session, WeightUnit } from '@/types';
+import type {
+  AppState,
+  Effort,
+  FitnessLevel,
+  LoggedSet,
+  Preferences,
+  Session,
+  SetEffort,
+  UserProfile,
+  WeightUnit,
+} from '@/types';
 import { isDayKey } from '@/data/plan';
 import { isValidIsoDate } from '@/domain/dates';
-import { clampMinutes, clampReps, clampWeight } from '@/domain/limits';
+import { clampMinutes, clampNumber, clampReps, clampWeight } from '@/domain/limits';
 import { isWeightUnit } from '@/domain/units';
 
 /**
@@ -16,7 +26,7 @@ import { isWeightUnit } from '@/domain/units';
  *   add a step whenever a persisted shape changes.
  */
 
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_SCHEMA_VERSION = 4;
 
 /** Storage key for the current schema. */
 export const STORAGE_KEY = 'rackfile:state';
@@ -36,6 +46,8 @@ const EXERCISE_ID_ALIASES: Readonly<Record<string, string>> = {
 };
 
 const EFFORTS: readonly Effort[] = ['Easy', 'Moderate', 'Hard'];
+const SET_EFFORTS: readonly SetEffort[] = ['easy', 'right', 'hard'];
+const LEVELS: readonly FitnessLevel[] = ['new', 'returning', 'experienced'];
 
 export const DEFAULT_PREFERENCES: Preferences = {
   unit: 'lb',
@@ -95,6 +107,8 @@ function parseSet(raw: unknown): LoggedSet | null {
   const rawStation = raw['stationId'];
   const stationId = typeof rawStation === 'string' && rawStation.length > 0 ? rawStation : undefined;
 
+  const effort = SET_EFFORTS.find((value) => value === raw['effort']);
+
   return {
     exerciseId: canonicalExerciseId(rawId),
     weight,
@@ -105,6 +119,7 @@ function parseSet(raw: unknown): LoggedSet | null {
     // rather than back-filled — guessing where a past set happened would put
     // invented data into the history.
     ...(stationId === undefined ? {} : { stationId }),
+    ...(effort === undefined ? {} : { effort }),
   };
 }
 
@@ -154,6 +169,34 @@ function parseSession(raw: unknown): Session | null {
   return session;
 }
 
+/**
+ * Parse the onboarding profile.
+ *
+ * Returns `undefined` for anything incomplete rather than filling in defaults —
+ * a fabricated bodyweight would silently produce wrong starting weights, and
+ * the app is perfectly usable with no profile at all.
+ */
+function parseProfile(raw: unknown): UserProfile | undefined {
+  if (!isRecord(raw)) return undefined;
+
+  const age = clampNumber(raw['age'], { min: 10, max: 100 }, 0);
+  const bodyweight = clampNumber(raw['bodyweight'], { min: 0, max: 1000 }, 0);
+  if (age <= 0 || bodyweight <= 0) return undefined;
+
+  const level = LEVELS.find((value) => value === raw['level']);
+  if (!level) return undefined;
+
+  const rawDate = raw['recordedOn'];
+
+  return {
+    age: Math.round(age),
+    bodyweight,
+    bodyweightUnit: isWeightUnit(raw['bodyweightUnit']) ? raw['bodyweightUnit'] : 'lb',
+    level,
+    recordedOn: isValidIsoDate(rawDate) ? rawDate : '1970-01-01',
+  };
+}
+
 function parsePreferences(raw: unknown): Preferences {
   if (!isRecord(raw)) return DEFAULT_PREFERENCES;
 
@@ -165,6 +208,8 @@ function parsePreferences(raw: unknown): Preferences {
   const missingStations = Array.isArray(rawMissing)
     ? rawMissing.filter((id): id is string => typeof id === 'string' && id.length > 0)
     : [];
+
+  const profile = parseProfile(raw['profile']);
 
   const rawPreferred = raw['preferredStations'];
   const preferredStations: Record<string, string> = {};
@@ -183,6 +228,8 @@ function parsePreferences(raw: unknown): Preferences {
     ...(trendExerciseId === undefined ? {} : { trendExerciseId: canonicalExerciseId(trendExerciseId) }),
     ...(missingStations.length === 0 ? {} : { missingStations }),
     ...(Object.keys(preferredStations).length === 0 ? {} : { preferredStations }),
+    ...(profile === undefined ? {} : { profile }),
+    ...(raw['onboarded'] === true || profile !== undefined ? { onboarded: true } : {}),
   };
 }
 
