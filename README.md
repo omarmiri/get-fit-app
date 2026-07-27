@@ -35,6 +35,8 @@ Then open http://localhost:5173.
 - **Progress charts** — estimated one-rep max per movement, aerobic minutes per week against the 150-minute target
 - **Guided cues** — setup, execution and the common mistake for every movement
 - **Weekly goals** — aerobic minutes, strength sessions, and a streak count
+- **Equipment-aware** — every movement is tied to real stations at your club, with the zone to walk to
+- **Busy machine? Swap it** — tap "Taken?" for ranked alternatives, each with where to find it and a converted starting load
 - **Units** — pounds or kilograms, switchable at any time without rewriting history
 - **Export / import** — JSON backup, with validation on the way back in
 - **Offline** — self-hosted fonts and a precached shell; no third-party requests at runtime
@@ -59,6 +61,18 @@ The dependency rule is one-directional: `ui` may import from `state`, `domain` a
 
 ### Key decisions
 
+**Equipment data is split by confidence, and the user can correct it.** LA Fitness
+publishes club amenities but not machine inventories, and no third party does
+either. So `data/equipment.ts` marks each station `club-confirmed` (traceable to
+the club's published amenities) or `chain-standard` (the chain's usual lineup,
+_not_ verified for this location). Unconfirmed stations are labelled as such in
+the UI, and anything you mark missing stops being suggested. A test enforces the
+split: a station cannot claim `club-confirmed` unless the club profile backs it.
+
+**Sets record which station they were performed on.** 180 on the leg press and
+180 on the hack squat are not the same lift. Storing `stationId` keeps history
+honest about what actually happened.
+
 **Sets record their own unit.** A set logged as `45 lb` is stored as `{ weight: 45, unit: 'lb' }`, not normalised to a canonical unit. Switching the app to kilograms and back leaves the stored number untouched, instead of drifting to `44.9` through repeated conversion.
 
 **Persisted state is versioned and validated.** Everything loaded from storage or an imported file goes through `state/schema.ts`, which never throws — unreadable records are dropped and counted rather than failing the whole load. There is no server to repair bad data, so the app has to cope with it.
@@ -75,9 +89,24 @@ The dependency rule is one-directional: `ui` may import from `state`, `domain` a
 
 Everything is in `src/data/`.
 
-- `exercises.ts` — the exercise catalogue
+- `exercises.ts` — the exercise catalogue, including each movement's stations
 - `plan.ts` — which exercises belong to which day, and each day's guidance
+- `equipment.ts` — the station catalogue: what it is, where it is, how sure we are
+- `club.ts` — the home club's address, hours, amenities and classes
 - `plates.ts` — the accent colours
+
+### Pointing the app at a different gym
+
+Replace `club.ts` and adjust `equipment.ts`. Nothing else references the address,
+hours or class list. Station ids are referenced by `exercises.ts` and `plan.ts`,
+and a test fails loudly if any reference dangles.
+
+### Adding a substitution
+
+Add an entry to an exercise's `stations` array. The first is the default; the
+rest are offered when it is taken. `loadFactor` seeds the converted weight
+(`0.35` means start at 35% of the primary load) and `perHand` marks dumbbell-style
+loading. These are starting points, not equivalences, and the UI says so.
 
 `Exercise.id` is a permanent key: logged sets reference it forever. Renaming an exercise's `name` is free; changing its `id` orphans history unless you add an entry to `EXERCISE_ID_ALIASES` in `src/state/schema.ts`.
 
@@ -129,7 +158,7 @@ Data written by v0.1 is migrated automatically on first launch, including the ex
 
 ## Testing
 
-150 tests over the domain logic, the store, schema migration and the content catalogue:
+193 tests over the domain logic, the store, schema migration, the equipment catalogue and the substitution logic:
 
 ```bash
 npm test

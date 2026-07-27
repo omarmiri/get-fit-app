@@ -9,6 +9,25 @@ export interface UiState {
   viewDay: DayKey | null;
   /** Index into the current day's exercise list. */
   exerciseIndex: number;
+  /** Exercise id whose swap sheet is open, or null when none is. */
+  swapOpenFor: string | null;
+  /**
+   * Station chosen for an exercise during this session, by exercise id.
+   *
+   * Transient on purpose. The durable version of this is
+   * `Preferences.preferredStations`; this layer only holds "the bench was busy
+   * five minutes ago", which should not outlive the session.
+   */
+  stationByExercise: Record<string, string>;
+  /**
+   * Uncommitted stepper values, by exercise id.
+   *
+   * The exercise card is rebuilt from scratch on every render, so without this
+   * a weight typed in but not yet logged would be thrown away by any unrelated
+   * re-render — opening the swap sheet, flagging a machine, switching tabs.
+   * Cleared once the set is logged, so the next set re-seeds from history.
+   */
+  draftByExercise: Record<string, { weight: number; reps: number }>;
 }
 
 /** Everything a view needs to render itself and to request a re-render. */

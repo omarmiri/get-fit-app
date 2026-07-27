@@ -28,7 +28,14 @@ const NEUTRAL_ACCENT = PLATE.white;
 export class App {
   readonly #store: AppStore;
   readonly #rest: RestTimer;
-  readonly #ui: UiState = { tab: 'today', viewDay: null, exerciseIndex: 0 };
+  readonly #ui: UiState = {
+    tab: 'today',
+    viewDay: null,
+    exerciseIndex: 0,
+    swapOpenFor: null,
+    stationByExercise: {},
+    draftByExercise: {},
+  };
 
   readonly #weekStrip = requireElement('#week');
   readonly #view = requireElement('#view');
@@ -120,6 +127,7 @@ export class App {
         this.#ui.viewDay = day;
         this.#ui.tab = 'today';
         this.#ui.exerciseIndex = 0;
+        this.#ui.swapOpenFor = null;
         this.#scrollToTop = true;
         this.#paint();
       },
@@ -133,6 +141,7 @@ export class App {
       if (!isTab(tab)) return;
 
       this.#ui.tab = tab;
+      this.#ui.swapOpenFor = null;
       // Returning to Today should follow the real day again, not whichever day
       // was last browsed from the week strip.
       if (tab === 'today') this.#ui.viewDay = null;

@@ -1,4 +1,5 @@
-import type { Exercise, LoggedSet, WeightUnit } from '@/types';
+import type { Exercise, LoggedSet, Preferences, WeightUnit } from '@/types';
+import { ZONE_LABEL, getStation } from '@/data/equipment';
 import { formatShortDate } from '@/domain/dates';
 import { clampReps, clampWeight } from '@/domain/limits';
 import { STEP_BY_UNIT, UNIT_LABEL, formatWeightValue, setWeightIn } from '@/domain/units';
@@ -6,6 +7,7 @@ import type { PreviousPerformance } from '@/state/selectors';
 import { card, div, el, eyebrow, text } from '../dom';
 import { createStepper } from './stepper';
 import { renderExerciseMedia } from './exerciseMedia';
+import { renderStationSwap } from './stationSwap';
 
 /**
  * The set-logging card: one exercise, its cues, and the controls to record a
@@ -19,8 +21,20 @@ export interface ExerciseCardOptions {
   /** The last time this exercise was performed, used to prefill the steppers. */
   readonly previous: PreviousPerformance | null;
   readonly unit: WeightUnit;
+  readonly prefs: Preferences;
+  /** The station currently chosen for this exercise. */
+  readonly stationId: string | undefined;
+  /** Whether the swap sheet is open. Held by the view so a re-render keeps it. */
+  readonly swapOpen: boolean;
+  /** Stepper values typed but not yet logged, preserved across re-renders. */
+  readonly draft: { weight: number; reps: number } | undefined;
+  readonly onDraftChange: (draft: { weight: number; reps: number }) => void;
   readonly onLog: (weight: number, reps: number) => void;
   readonly onUndo: () => void;
+  readonly onToggleSwap: () => void;
+  /** Chose a different station, optionally with a converted starting load. */
+  readonly onChooseStation: (stationId: string, suggestedWeight: number | null) => void;
+  readonly onToggleMissingStation: (stationId: string, missing: boolean) => void;
 }
 
 export function renderExerciseCard(options: ExerciseCardOptions): HTMLElement {
@@ -29,11 +43,16 @@ export function renderExerciseCard(options: ExerciseCardOptions): HTMLElement {
 
   const seed = seedValues(options);
 
+  // Report every change upward so the value survives the next render.
+  const publishDraft = (): void =>
+    options.onDraftChange({ weight: weightStepper.getValue(), reps: repsStepper.getValue() });
+
   const weightStepper = createStepper({
     label: `Weight (${UNIT_LABEL[unit]})`,
     initial: seed.weight,
     step: STEP_BY_UNIT[unit],
     clamp: clampWeight,
+    onChange: () => publishDraft(),
   });
 
   const repsStepper = createStepper({
@@ -41,6 +60,7 @@ export function renderExerciseCard(options: ExerciseCardOptions): HTMLElement {
     initial: seed.reps,
     step: timed ? 5 : 1,
     clamp: clampReps,
+    onChange: () => publishDraft(),
   });
 
   const logButton = el('button', {
@@ -55,6 +75,24 @@ export function renderExerciseCard(options: ExerciseCardOptions): HTMLElement {
   return card([
     text('exercise__name', exercise.name),
     text('exercise__meta', describeTarget(exercise)),
+    renderStationBar(options),
+    options.swapOpen
+      ? renderStationSwap({
+          exercise,
+          prefs: options.prefs,
+          unit,
+          // Convert from what is in the stepper right now, not from history —
+          // the user may have already adjusted it for today.
+          currentWeight: weightStepper.getValue(),
+          selectedStationId: options.stationId,
+          onChoose: (stationId, suggested) => {
+            if (suggested !== null) weightStepper.setValue(suggested);
+            options.onChooseStation(stationId, suggested);
+          },
+          onToggleMissing: options.onToggleMissingStation,
+          onClose: options.onToggleSwap,
+        })
+      : null,
     renderExerciseMedia(exercise),
     renderSetDots(exercise, logged.length),
 
@@ -92,6 +130,9 @@ export function renderExerciseCard(options: ExerciseCardOptions): HTMLElement {
 function seedValues(options: ExerciseCardOptions): { weight: number; reps: number } {
   const { exercise, logged, previous, unit } = options;
 
+  // A value the user is part-way through entering always wins.
+  if (options.draft) return options.draft;
+
   const source = logged.at(-1) ?? previous?.sets.at(-1) ?? null;
   if (!source) return { weight: 0, reps: exercise.defaultReps };
 
@@ -99,6 +140,41 @@ function seedValues(options: ExerciseCardOptions): { weight: number; reps: numbe
     weight: setWeightIn(source, unit),
     reps: source.reps > 0 ? source.reps : exercise.defaultReps,
   };
+}
+
+/**
+ * The station line: where you are doing this, and the way out when it is taken.
+ *
+ * Renders nothing for movements with no station options, so bodyweight work
+ * does not carry a pointless "swap" affordance.
+ */
+function renderStationBar(options: ExerciseCardOptions): HTMLElement | null {
+  if (!options.exercise.stations || options.exercise.stations.length === 0) return null;
+
+  const station = options.stationId === undefined ? undefined : getStation(options.stationId);
+  const alternatives = options.exercise.stations.length - 1;
+
+  return div('stationbar', [
+    div('stationbar__at', [
+      el('span', { class: 'stationbar__label', text: 'At' }),
+      el('span', { class: 'stationbar__name', text: station?.name ?? 'Any station' }),
+      station ? el('span', { class: 'stationbar__zone', text: ZONE_LABEL[station.zone] }) : null,
+    ]),
+    alternatives > 0
+      ? el('button', {
+          class: options.swapOpen ? 'stationbar__swap is-open' : 'stationbar__swap',
+          text: options.swapOpen ? 'Close' : 'Taken?',
+          attrs: {
+            type: 'button',
+            'aria-expanded': options.swapOpen,
+            'aria-label': options.swapOpen
+              ? 'Close alternative stations'
+              : `Show ${alternatives} alternative stations`,
+          },
+          on: { click: options.onToggleSwap },
+        })
+      : null,
+  ]);
 }
 
 function describeTarget(exercise: Exercise): string {

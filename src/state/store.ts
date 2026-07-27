@@ -92,6 +92,34 @@ export class AppStore {
     this.#commit({ ...this.#state, prefs: { ...this.#state.prefs, trendExerciseId: exerciseId } });
   }
 
+  /**
+   * Remember which station this exercise should open on next time.
+   *
+   * Swapping is not a one-off correction — if the machine circuit is always
+   * packed at your hour, the alternative is your real default.
+   */
+  setPreferredStation(exerciseId: string, stationId: string): void {
+    const preferredStations = { ...this.#state.prefs.preferredStations, [exerciseId]: stationId };
+    this.#commit({ ...this.#state, prefs: { ...this.#state.prefs, preferredStations } });
+  }
+
+  /**
+   * Mark a station as present or absent at the user's club.
+   *
+   * The equipment catalogue is partly inferred from the chain's usual lineup,
+   * so this is how the floor corrects it.
+   */
+  setStationMissing(stationId: string, missing: boolean): void {
+    const current = new Set(this.#state.prefs.missingStations ?? []);
+    if (missing) current.add(stationId);
+    else current.delete(stationId);
+
+    this.#commit({
+      ...this.#state,
+      prefs: { ...this.#state.prefs, missingStations: [...current].sort() },
+    });
+  }
+
   /* ------------------------------------------------------ active sessions */
 
   /**
@@ -169,13 +197,22 @@ export class AppStore {
   /* -------------------------------------------------------------- logging */
 
   /** Record one working set. Inputs are clamped before they reach the state. */
-  logSet(dayKey: DayKey, exerciseId: string, weight: number, reps: number, unit: WeightUnit): void {
+  logSet(
+    dayKey: DayKey,
+    exerciseId: string,
+    weight: number,
+    reps: number,
+    unit: WeightUnit,
+    stationId?: string,
+  ): void {
     const set: LoggedSet = {
       exerciseId,
       weight: clampWeight(weight),
       reps: clampReps(reps),
       unit,
       loggedAt: this.#now(),
+      // Recorded so history and trends can tell a leg press from a hack squat.
+      ...(stationId === undefined ? {} : { stationId }),
     };
     this.#updateActive(dayKey, (session) => ({ ...session, sets: [...session.sets, set] }));
   }

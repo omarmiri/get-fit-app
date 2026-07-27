@@ -104,7 +104,7 @@ describe('plan', () => {
       const day = PLAN[key];
       if (day.type === 'strength') continue;
       expect(day.minutes, `${key} minutes`).toBeGreaterThan(0);
-      expect(day.modalities?.length, `${key} modalities`).toBeGreaterThan(0);
+      expect(day.modalityStations?.length, `${key} modality stations`).toBeGreaterThan(0);
     }
   });
 

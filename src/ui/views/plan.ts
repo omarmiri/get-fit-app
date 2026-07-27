@@ -1,6 +1,8 @@
 import type { Child } from '../dom';
 import type { WeightUnit } from '@/types';
 import { DAY_NAMES, PLAN, PLAN_ORDER } from '@/data/plan';
+import { CLUB, daysSinceVerified } from '@/data/club';
+import { ALL_STATIONS, ZONE_LABEL } from '@/data/equipment';
 import { PLATE_LEGEND } from '@/data/plates';
 import { todayIso } from '@/domain/dates';
 import { UNIT_LABEL } from '@/domain/units';
@@ -15,6 +17,8 @@ export function renderPlanView(context: ViewContext): Child[] {
   return [
     div('spine', [eyebrow('Seven-day rotation'), el('h1', { text: 'The plan' })]),
     renderRotation(context),
+    renderClubCard(),
+    renderEquipmentCard(context),
     renderSettings(context),
     renderColourKey(),
     renderDataCard(context),
@@ -236,6 +240,121 @@ function eraseAll(context: ViewContext): void {
   });
   toast('All data erased');
   context.render();
+}
+
+/* ------------------------------------------------------------------- club */
+
+function renderClubCard(): HTMLElement {
+  const age = daysSinceVerified();
+
+  return card([
+    eyebrow('Your club'),
+    text('club__name', CLUB.name),
+    text('club__line', CLUB.address),
+    text('club__line', CLUB.phone),
+
+    div(
+      'club__hours',
+      CLUB.hours.map((h) => text('club__hoursrow', `${h.days} · ${h.open} – ${h.close}`)),
+    ),
+
+    div('club__group', [
+      eyebrow('Amenities'),
+      el(
+        'ul',
+        { class: 'club__list' },
+        CLUB.amenities.map((a) => el('li', { text: a })),
+      ),
+    ]),
+
+    div('club__group', [
+      eyebrow('Classes'),
+      text('club__line', CLUB.classes.join(' · ')),
+      text('club__hint', 'Times change week to week — check the LA Fitness app for the current schedule.'),
+    ]),
+
+    div('club__group', [eyebrow('Not at this club'), text('club__line', CLUB.notAvailable.join(' · '))]),
+
+    text(
+      'club__hint',
+      `Club listing checked ${age === 0 ? 'today' : age === 1 ? 'yesterday' : `${age} days ago`}. Hours and classes change — treat this as a starting point.`,
+    ),
+  ]);
+}
+
+/**
+ * Equipment the app believes is on the floor, split by how confident it is.
+ *
+ * The unconfirmed list is the honest part: LA Fitness publishes amenities but
+ * not machine inventories, so those entries are the chain's usual lineup rather
+ * than a verified fact. Marking one missing removes it from every suggestion.
+ */
+function renderEquipmentCard(context: ViewContext): HTMLElement {
+  const missing = new Set(context.state.prefs.missingStations ?? []);
+  const confirmed = ALL_STATIONS.filter((s) => s.confidence === 'club-confirmed');
+  const assumed = ALL_STATIONS.filter((s) => s.confidence === 'chain-standard');
+
+  return card([
+    eyebrow('Equipment'),
+    text(
+      'prose',
+      'Confirmed items come from the club’s published amenities. The rest is LA Fitness’s usual lineup and is not verified for this location — correct it as you go and the app stops suggesting what is not there.',
+    ),
+
+    div('club__group', [
+      eyebrow(`Confirmed at this club (${confirmed.length})`),
+      el(
+        'ul',
+        { class: 'club__list' },
+        confirmed.map((s) => el('li', { text: `${s.name} — ${ZONE_LABEL[s.zone]}` })),
+      ),
+    ]),
+
+    div('club__group', [
+      eyebrow(`Assumed present (${assumed.length})`),
+      el(
+        'div',
+        { class: 'stationtags' },
+        assumed.map((station) =>
+          el('button', {
+            class: missing.has(station.id) ? 'stationtag is-missing' : 'stationtag',
+            text: station.name,
+            attrs: {
+              type: 'button',
+              'aria-pressed': missing.has(station.id),
+              'aria-label': missing.has(station.id)
+                ? `${station.name} is marked as not at your club. Tap to restore.`
+                : `${station.name}. Tap to mark as not at your club.`,
+            },
+            on: {
+              click: () => {
+                const nowMissing = !missing.has(station.id);
+                context.store.setStationMissing(station.id, nowMissing);
+                toast(nowMissing ? `${station.name} hidden` : `${station.name} restored`);
+                context.render();
+              },
+            },
+          }),
+        ),
+      ),
+      text('club__hint', 'Tap anything your club does not have. Tap again to bring it back.'),
+    ]),
+
+    missing.size > 0
+      ? el('button', {
+          class: 'button button--ghost',
+          text: `Restore all ${missing.size} hidden`,
+          attrs: { type: 'button' },
+          on: {
+            click: () => {
+              for (const id of missing) context.store.setStationMissing(id, false);
+              toast('All equipment restored');
+              context.render();
+            },
+          },
+        })
+      : null,
+  ]);
 }
 
 function renderSafetyCard(): HTMLElement {

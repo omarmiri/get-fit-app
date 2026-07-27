@@ -180,6 +180,73 @@ describe('parseState — robustness', () => {
   });
 });
 
+describe('parseState — stations (v3)', () => {
+  it('keeps the station a set was performed on', () => {
+    const { state } = parseState({
+      sessions: [
+        {
+          date: '2025-03-04',
+          dayKey: 'tue',
+          sets: [{ exerciseId: 'legpress', weight: 200, reps: 8, unit: 'lb', stationId: 'hacksquat' }],
+        },
+      ],
+    });
+
+    expect(state.sessions[0]?.sets[0]?.stationId).toBe('hacksquat');
+  });
+
+  it('leaves pre-station sets without one rather than inventing it', () => {
+    // Back-filling would put fabricated data into the user's history.
+    const { state } = parseState({
+      sessions: [{ date: '2025-03-04', dayKey: 'tue', sets: [{ ex: 'legpress', w: 200, r: 8 }] }],
+    });
+
+    expect(state.sessions[0]?.sets[0]?.stationId).toBeUndefined();
+  });
+
+  it('round-trips the missing-equipment list', () => {
+    const { state } = parseState({
+      sessions: [],
+      prefs: { missingStations: ['hacksquat', 'rower'] },
+    });
+
+    expect(state.prefs.missingStations).toEqual(['hacksquat', 'rower']);
+  });
+
+  it('drops non-string entries from the missing list', () => {
+    const { state } = parseState({
+      sessions: [],
+      prefs: { missingStations: ['hacksquat', 42, null, ''] },
+    });
+
+    expect(state.prefs.missingStations).toEqual(['hacksquat']);
+  });
+
+  it('round-trips per-exercise station preferences', () => {
+    const { state } = parseState({
+      sessions: [],
+      prefs: { preferredStations: { legpress: 'smithmachine' } },
+    });
+
+    expect(state.prefs.preferredStations).toEqual({ legpress: 'smithmachine' });
+  });
+
+  it('applies the exercise id rename to station preferences too', () => {
+    const { state } = parseState({
+      sessions: [],
+      prefs: { preferredStations: { hamstring: 'lyinglegcurl' } },
+    });
+
+    expect(state.prefs.preferredStations).toEqual({ glutebridge: 'lyinglegcurl' });
+  });
+
+  it('omits the station keys entirely when there is nothing to store', () => {
+    const { state } = parseState({ sessions: [] });
+    expect(state.prefs.missingStations).toBeUndefined();
+    expect(state.prefs.preferredStations).toBeUndefined();
+  });
+});
+
 describe('parseStateJson', () => {
   it('treats malformed JSON as unrecognised instead of throwing', () => {
     const result = parseStateJson('{ not json');

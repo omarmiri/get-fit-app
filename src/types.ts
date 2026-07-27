@@ -37,6 +37,87 @@ export type SessionType = 'strength' | 'duration' | 'intervals' | 'mixed';
 /** Subjective exertion, kept coarse on purpose — a 1-10 RPE scale invites false precision. */
 export type Effort = 'Easy' | 'Moderate' | 'Hard';
 
+/* -------------------------------------------------------------- equipment */
+
+/** Where in the club a station lives, so the app can say where to walk. */
+export type Zone =
+  | 'cardio-floor'
+  | 'cardio-cinema'
+  | 'strength-machines'
+  | 'free-weights'
+  | 'cable-area'
+  | 'turf'
+  | 'stretch-area'
+  | 'pool'
+  | 'courts'
+  | 'studio'
+  | 'locker-room';
+
+/** How a station is loaded, which decides whether loads carry across a swap. */
+export type StationKind =
+  | 'cardio'
+  | 'selectorized'
+  | 'plate-loaded'
+  | 'free-weight'
+  | 'cable'
+  | 'bodyweight'
+  | 'bench'
+  | 'rack'
+  | 'open-space'
+  | 'water'
+  | 'court';
+
+/**
+ * How sure the app is that a station exists at this specific club.
+ *
+ * This distinction is the honest core of the equipment data. LA Fitness
+ * publishes club amenities but not machine inventories, and no third party
+ * does either. Anything marked `chain-standard` is an informed guess from the
+ * chain's usual lineup and must be presented as such — the user confirms or
+ * corrects it on their first visit.
+ */
+export type StationConfidence = 'club-confirmed' | 'chain-standard';
+
+/** A piece of equipment or a space in the club. */
+export interface Station {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: StationKind;
+  readonly zone: Zone;
+  readonly confidence: StationConfidence;
+  /** Manufacturer, where the chain's standard lineup makes it predictable. */
+  readonly brand?: string;
+  /** Short note on finding or setting it up. */
+  readonly note?: string;
+  /** Roadmap: photo or clip of the station itself. */
+  readonly media?: ExerciseMedia;
+  /** Roadmap: step-by-step setup instructions for this machine. */
+  readonly instructions?: readonly string[];
+}
+
+/**
+ * One way to perform an exercise, tied to a specific station.
+ *
+ * The first option in an exercise's list is the default. The rest are what the
+ * app offers when that station is taken.
+ */
+export interface StationOption {
+  readonly stationId: string;
+  /** Why this substitution works, shown in the swap sheet. */
+  readonly note?: string;
+  /**
+   * Rough load conversion from the primary station, as a multiplier.
+   *
+   * A machine chest press and a pair of dumbbells do not move the same number
+   * for the same effort. `1` means loads carry across unchanged; `0.4` means
+   * start around 40% of the primary station's load. Deliberately approximate —
+   * it seeds the stepper, it does not claim to be equivalent.
+   */
+  readonly loadFactor?: number;
+  /** True when the load is per hand rather than total, e.g. dumbbells. */
+  readonly perHand?: boolean;
+}
+
 /* ----------------------------------------------------------------- content */
 
 /**
@@ -93,8 +174,13 @@ export interface Exercise {
   readonly tips?: readonly string[];
   /** Roadmap: primary muscles worked, for filtering and future substitutions. */
   readonly muscles?: readonly string[];
-  /** Roadmap: equipment needed, for a future "what's free right now" filter. */
-  readonly equipment?: readonly string[];
+  /**
+   * Stations this movement can be performed on, best first.
+   *
+   * The head of the list is the default. The tail is what the app offers when
+   * the default is occupied — the whole point of the swap sheet.
+   */
+  readonly stations?: readonly StationOption[];
   /** Roadmap: illustration or demo clip. */
   readonly media?: ExerciseMedia;
 }
@@ -116,10 +202,18 @@ export interface PlanDay {
   readonly aerobic: boolean;
   /** Default minutes for time-based sessions. Absent for pure strength days. */
   readonly minutes?: number;
-  /** Cardio machine or activity choices. Absent for pure strength days. */
-  readonly modalities?: readonly string[];
+  /**
+   * Station ids offering this day's cardio or activity, best first.
+   *
+   * Referencing stations rather than free strings means the club's real
+   * equipment drives the choices, and a busy treadmill can offer the same
+   * swap flow as a busy bench.
+   */
+  readonly modalityStations?: readonly string[];
   /** Movements to log. Absent for pure duration days. */
   readonly exercises?: readonly Exercise[];
+  /** Stations suggested for the mobility or cooldown portion. */
+  readonly mobilityStations?: readonly string[];
 }
 
 /* -------------------------------------------------------------- persistence */
@@ -135,6 +229,15 @@ export interface LoggedSet {
   readonly reps: number;
   /** Epoch milliseconds, used for ordering and undo. */
   readonly loggedAt: number;
+  /**
+   * Which station the set was actually performed on.
+   *
+   * Absent on sets logged before stations existed, and on movements that have
+   * no station options. Recorded because a swap changes what the number means:
+   * 180 on the leg press and 180 on the hack squat are not the same lift, and
+   * a trend chart that silently mixes them is lying.
+   */
+  readonly stationId?: string;
 }
 
 /**
@@ -168,6 +271,22 @@ export interface Preferences {
   readonly trendExerciseId?: string;
   /** Whether the rest timer vibrates on completion, where supported. */
   readonly restVibrate: boolean;
+  /**
+   * Stations the user has marked as not present at their club.
+   *
+   * The equipment catalogue is partly inferred from the chain's usual lineup
+   * rather than from a published inventory, so it will be wrong in places.
+   * Rather than pretend otherwise, the app lets the floor correct the data:
+   * anything marked missing here stops being suggested.
+   */
+  readonly missingStations?: readonly string[];
+  /**
+   * Per-exercise station preference, remembered across sessions.
+   *
+   * Once you have swapped an exercise to the machine you actually like, the
+   * app should keep offering that one first instead of reverting.
+   */
+  readonly preferredStations?: Readonly<Record<string, string>>;
 }
 
 /** Weekly targets shown on the goals card. */

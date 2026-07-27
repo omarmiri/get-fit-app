@@ -16,7 +16,7 @@ import { isWeightUnit } from '@/domain/units';
  *   add a step whenever a persisted shape changes.
  */
 
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 /** Storage key for the current schema. */
 export const STORAGE_KEY = 'rackfile:state';
@@ -92,12 +92,19 @@ function parseSet(raw: unknown): LoggedSet | null {
   const weight = clampWeight(raw['weight'] ?? raw['w'] ?? 0);
   const reps = clampReps(raw['reps'] ?? raw['r'] ?? 0);
 
+  const rawStation = raw['stationId'];
+  const stationId = typeof rawStation === 'string' && rawStation.length > 0 ? rawStation : undefined;
+
   return {
     exerciseId: canonicalExerciseId(rawId),
     weight,
     unit,
     reps,
     loggedAt: finiteOr(raw['loggedAt'] ?? raw['ts'], 0),
+    // Absent on everything logged before stations existed. Left undefined
+    // rather than back-filled — guessing where a past set happened would put
+    // invented data into the history.
+    ...(stationId === undefined ? {} : { stationId }),
   };
 }
 
@@ -154,11 +161,28 @@ function parsePreferences(raw: unknown): Preferences {
   const rawTrend = raw['trendExerciseId'] ?? raw['trend'];
   const trendExerciseId = typeof rawTrend === 'string' && rawTrend.length > 0 ? rawTrend : undefined;
 
+  const rawMissing = raw['missingStations'];
+  const missingStations = Array.isArray(rawMissing)
+    ? rawMissing.filter((id): id is string => typeof id === 'string' && id.length > 0)
+    : [];
+
+  const rawPreferred = raw['preferredStations'];
+  const preferredStations: Record<string, string> = {};
+  if (isRecord(rawPreferred)) {
+    for (const [exerciseId, stationId] of Object.entries(rawPreferred)) {
+      if (typeof stationId === 'string' && stationId.length > 0) {
+        preferredStations[canonicalExerciseId(exerciseId)] = stationId;
+      }
+    }
+  }
+
   return {
     unit: isWeightUnit(raw['unit']) ? raw['unit'] : DEFAULT_PREFERENCES.unit,
     restVibrate:
       typeof raw['restVibrate'] === 'boolean' ? raw['restVibrate'] : DEFAULT_PREFERENCES.restVibrate,
     ...(trendExerciseId === undefined ? {} : { trendExerciseId: canonicalExerciseId(trendExerciseId) }),
+    ...(missingStations.length === 0 ? {} : { missingStations }),
+    ...(Object.keys(preferredStations).length === 0 ? {} : { preferredStations }),
   };
 }
 

@@ -1,6 +1,8 @@
 import type { Child } from '../dom';
 import type { DayKey, PlanDay, Session } from '@/types';
 import { DAY_NAMES, PLAN } from '@/data/plan';
+import { stationName } from '@/data/equipment';
+import { defaultStationId } from '@/domain/substitutions';
 import { formatShortDate, formatWithWeekday, todayDayKey, todayIso } from '@/domain/dates';
 import { sessionVolume } from '@/domain/metrics';
 import { formatVolume } from '@/domain/units';
@@ -154,6 +156,7 @@ function renderLogger(context: ViewContext, dayKey: DayKey, day: PlanDay): Child
         on: {
           click: () => {
             context.ui.exerciseIndex = itemIndex;
+            context.ui.swapOpenFor = null;
             context.render();
           },
         },
@@ -161,14 +164,56 @@ function renderLogger(context: ViewContext, dayKey: DayKey, day: PlanDay): Child
     }),
   );
 
+  // The chosen station is per-exercise transient state: an explicit pick this
+  // session wins, otherwise fall back to the remembered or default station.
+  const stationId =
+    context.ui.stationByExercise[exercise.id] ?? defaultStationId(exercise, context.state.prefs);
+
   const cardEl = renderExerciseCard({
     exercise,
     logged,
     previous: lastPerformance(context.state, exercise.id),
     unit: context.state.prefs.unit,
+    prefs: context.state.prefs,
+    stationId,
+    swapOpen: context.ui.swapOpenFor === exercise.id,
+    draft: context.ui.draftByExercise[exercise.id],
+    onDraftChange: (draft) => {
+      // Deliberately no re-render: this fires on every keystroke, and the
+      // value is only needed the next time something else triggers one.
+      context.ui.draftByExercise[exercise.id] = draft;
+    },
+    onToggleSwap: () => {
+      context.ui.swapOpenFor = context.ui.swapOpenFor === exercise.id ? null : exercise.id;
+      context.render();
+    },
+    onChooseStation: (chosenId, suggestedWeight) => {
+      context.ui.stationByExercise[exercise.id] = chosenId;
+      context.ui.swapOpenFor = null;
+      // Carry the converted load into the steppers for the coming render.
+      if (suggestedWeight !== null) {
+        const current = context.ui.draftByExercise[exercise.id];
+        context.ui.draftByExercise[exercise.id] = {
+          weight: suggestedWeight,
+          reps: current?.reps ?? exercise.defaultReps,
+        };
+      }
+      // Remember it, so a station you keep swapping to becomes the default.
+      context.store.setPreferredStation(exercise.id, chosenId);
+      toast(`Switched to ${stationName(chosenId)}`);
+      context.render();
+    },
+    onToggleMissingStation: (id, missing) => {
+      context.store.setStationMissing(id, missing);
+      toast(missing ? `${stationName(id)} marked as not at your club` : `${stationName(id)} restored`);
+      context.render();
+    },
     onLog: (weight, reps) => {
-      context.store.logSet(dayKey, exercise.id, weight, reps, context.state.prefs.unit);
+      context.store.logSet(dayKey, exercise.id, weight, reps, context.state.prefs.unit, stationId);
       context.rest.start(exercise.restSeconds);
+      // The set is recorded, so the next one should seed from it, not from the
+      // stale draft.
+      delete context.ui.draftByExercise[exercise.id];
 
       // Advance once this exercise's target is met, so the common path is
       // "log, log, log" without ever touching the rail.
@@ -181,6 +226,7 @@ function renderLogger(context: ViewContext, dayKey: DayKey, day: PlanDay): Child
     },
     onUndo: () => {
       context.store.undoLastSet(dayKey, exercise.id);
+      delete context.ui.draftByExercise[exercise.id];
       context.render();
     },
   });
@@ -194,6 +240,7 @@ function renderDuration(context: ViewContext, dayKey: DayKey, day: PlanDay): HTM
   return renderDurationCard({
     day,
     active: context.store.activeFor(dayKey),
+    prefs: context.state.prefs,
     onMinutes: (minutes) => context.store.setMinutes(dayKey, minutes),
     onModality: (modality) => {
       context.store.toggleModality(dayKey, modality, fallbackMinutes);
