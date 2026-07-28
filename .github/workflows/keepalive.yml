@@ -1,0 +1,83 @@
+name: Keep alive
+
+# Render spins a free web service down after ~15 minutes idle, and the next
+# request then waits ~50 seconds for a cold start. The app itself opens fine
+# from the service worker cache, but /api/plan/generate has to reach the server,
+# so plan generation is where a cold start actually bites.
+#
+# This is the half of the keep-alive that matters: the in-process self-ping in
+# keepalive.js can hold a warm instance warm, but it cannot wake a sleeping one,
+# because the process doing the pinging is the process that is asleep. Only an
+# external request can do that.
+#
+# Cost: this repo is public, so Actions minutes are free and unlimited. The
+# Render side costs ~395 instance hours a month against the 750 free allowance,
+# which is why the window is 8am-8pm rather than around the clock.
+
+on:
+  schedule:
+    # GitHub cron is UTC only and has no timezone support, so the schedule
+    # covers the union of the target window across both US Eastern offsets:
+    #   EDT (UTC-4): 8am-8:59pm NY = 12:00-00:59 UTC
+    #   EST (UTC-5): 8am-8:59pm NY = 13:00-01:59 UTC
+    # The job then trims the edges by checking the real New York hour, so the
+    # extra hour at whichever end is currently wrong simply exits early.
+    - cron: '*/10 12-23,0-1 * * *'
+  # So the ping can be fired by hand when testing.
+  workflow_dispatch:
+
+concurrency:
+  group: keepalive
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    name: Ping /health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check the New York clock
+        id: window
+        run: |
+          hour=$(TZ='America/New_York' date +%-H)
+          echo "New York hour: $hour"
+
+          # Inclusive of hour 20, so a session starting at 8pm finds the
+          # service warm rather than cold-starting mid-workout.
+          if [ "$hour" -ge 8 ] && [ "$hour" -le 20 ]; then
+            echo "awake=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "awake=false" >> "$GITHUB_OUTPUT"
+            echo "Outside the 8am-8pm window — letting it sleep."
+          fi
+
+      - name: Wake the service
+        if: steps.window.outputs.awake == 'true'
+        env:
+          # Override with a repository variable if the URL ever changes.
+          TARGET: ${{ vars.KEEPALIVE_URL || 'https://get-fit-app.onrender.com/health' }}
+        run: |
+          echo "Pinging $TARGET"
+
+          # A cold start can take the better part of a minute, so allow for it
+          # rather than reporting a timeout as a failure. Retries cover the
+          # case where the first request lands mid-spin-up.
+          status=$(curl --silent --show-error --location \
+            --max-time 90 \
+            --retry 3 --retry-delay 15 --retry-all-errors \
+            --write-out '%{http_code}' \
+            --output /tmp/health.json \
+            "$TARGET") || true
+
+          echo "HTTP $status"
+          cat /tmp/health.json 2>/dev/null || true
+          echo
+
+          if [ "$status" != "200" ]; then
+            echo "::warning::Health check returned $status"
+            exit 1
+          fi

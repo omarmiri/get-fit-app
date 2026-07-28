@@ -180,7 +180,7 @@ Data written by v0.1 is migrated automatically on first launch, including the ex
 
 ## Testing
 
-250 tests over the domain logic, the store, schema migration, the equipment catalogue, substitution, progression and plan-validation logic:
+260 tests over the domain logic, the store, schema migration, the equipment catalogue, substitution, progression and plan-validation logic:
 
 ```bash
 npm test
@@ -190,6 +190,35 @@ npm run test:coverage
 The UI layer is verified by hand — the logic worth protecting from regressions lives below it, and that part runs without a DOM.
 
 ---
+
+## Keeping the free instance awake
+
+Render spins a free web service down after ~15 minutes idle, and the next
+request waits ~50 seconds for a cold start. The app itself opens fine from the
+service worker cache, so the only thing that really suffers is plan generation,
+which has to reach the server.
+
+Two layers, because neither is sufficient alone:
+
+| Layer                             | What it does                                    | What it cannot do                                                               |
+| --------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------- |
+| `keepalive.js`                    | Self-pings `/health` every 10 min while running | Wake a service that is already asleep — the pinging process is the sleeping one |
+| `.github/workflows/keepalive.yml` | External cron every 10 min                      | Nothing; this is the one that matters                                           |
+
+**The window is 8am–8pm New York time**, not around the clock. Free instance
+hours are capped at 750/month against a ~730-hour month, so staying up
+permanently would consume the entire allowance and leave nothing for a second
+service. The window costs roughly 395 hours.
+
+GitHub cron is UTC-only, so the schedule covers the union of the target window
+across both US Eastern offsets (12:00–01:59 UTC) and the job then checks the
+real New York hour and exits early outside it. `keepalive.js` reads the hour
+through `Intl` rather than applying a fixed offset — a hardcoded `-5` would
+silently shift the window by an hour for the eight months New York is on
+daylight time. `tests/keepalive.test.ts` pins both offsets and the boundaries.
+
+Set `KEEP_ALIVE=false` to disable the self-ping, and disable the workflow in the
+Actions tab, if you move to a paid instance where none of this is needed.
 
 ## Plan generation (Gemini)
 

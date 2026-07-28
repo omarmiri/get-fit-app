@@ -14,6 +14,7 @@ import express from 'express';
 import helmet from 'helmet';
 
 import { GeminiError, generatePlan } from './gemini.js';
+import { startKeepAlive } from './keepalive.js';
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(rootDir, 'dist');
@@ -177,10 +178,15 @@ const server = app.listen(port, () => {
   console.log(`Rack & File listening on :${port}`);
 });
 
+// Keeps a warm instance warm during waking hours. Cannot wake a cold one — the
+// external cron in .github/workflows/keepalive.yml does that.
+const stopKeepAlive = startKeepAlive();
+
 // Render sends SIGTERM on deploy and on scale-down; closing cleanly avoids
 // dropping in-flight responses.
 for (const signal of ['SIGTERM', 'SIGINT']) {
   process.on(signal, () => {
+    stopKeepAlive?.();
     server.close(() => process.exit(0));
   });
 }
