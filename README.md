@@ -39,6 +39,8 @@ Then open http://localhost:5173.
 - **Guided cues** — setup, execution and the common mistake for every movement
 - **Weekly goals** — aerobic minutes, strength sessions, and a streak count
 - **Guided progression** — rate each set Easy / Just right / Hard, and the next session opens at the weight and reps you've earned, with the reasoning shown
+- **Ramps within a session too** — an easy set adds load for the next one straight away, sized to the movement (a leg press moves in bigger jumps than a lateral raise); a hard set ends the ramp
+- **Session clock** — start the workout when you walk in and the finished session records how long it took, kept separate from aerobic minutes
 - **Stagnation detection** — three sessions stuck at the same numbers triggers a deload suggestion instead of letting you grind
 - **Safe starting weights** — optional one-time profile (age, bodyweight, experience) picks a deliberately conservative opening weight for movements you've never done
 - **Equipment-aware** — every movement is tied to real stations at your club, with the zone to walk to
@@ -78,6 +80,14 @@ would give different answers to identical history and occasionally suggest a
 **Progression is scoped per exercise _and_ station.** A hack squat is not a leg
 press. Swapping machines starts a separate progression rather than inheriting
 numbers that mean something different.
+
+**Within-session ramping is a separate rule from double progression.** Double
+progression answers "where should today start" from past sessions and says
+nothing once the first set is logged, which left early feeler sets repeating a
+weight that already felt easy. `adjustAfterSet` fills that gap with larger,
+movement-sized jumps — ramping to a working weight inside one session is a
+different move from a week-over-week increase. Both are gated on the same
+reported effort, and a hard set ends the ramp.
 
 **Starting weights err light on purpose.** `domain/startingWeights.ts` rounds
 _down_, always. The failure modes are not symmetric: too light costs one set,

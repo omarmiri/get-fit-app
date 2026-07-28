@@ -337,6 +337,18 @@ export interface Session {
   /** Epoch milliseconds when the session was finished. Absent while active. */
   readonly finishedAt?: number;
   /**
+   * Wall-clock length of the session in minutes, start to finish.
+   *
+   * Deliberately *not* `minutes`. That field is aerobic work time and feeds the
+   * weekly cardio goal; this one is how long you were in the building. Folding
+   * a 70-minute strength session into `minutes` would report 70 minutes of
+   * cardio that never happened.
+   *
+   * Absent when the session was never explicitly finished — an overnight
+   * session's elapsed time is the time the app was closed, not time trained.
+   */
+  readonly durationMinutes?: number;
+  /**
    * The plan day's label as it read when the session was logged.
    *
    * History renders this rather than looking the label up. Once plans can be

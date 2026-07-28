@@ -101,3 +101,30 @@ export function formatClock(totalSeconds: number): string {
   const seconds = safe % 60;
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
+
+/**
+ * Format a running duration as `M:SS`, rolling over to `H:MM:SS` past an hour.
+ *
+ * `formatClock` is for the rest and cardio timers, which never run past an
+ * hour; a session clock routinely does, and `74:12` reads as a bug.
+ */
+export function formatElapsed(totalSeconds: number): string {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  if (safe < 3600) return formatClock(safe);
+
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  return `${hours}:${String(minutes).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
+}
+
+/** Human duration in whole minutes, e.g. `48 min` or `1h 14m`. */
+export function formatDuration(minutes: number): string {
+  const safe = Math.max(0, Math.round(minutes));
+  if (safe < 60) return `${safe} min`;
+  return `${Math.floor(safe / 60)}h ${String(safe % 60).padStart(2, '0')}m`;
+}
+
+/** Clock time of an epoch timestamp, e.g. `6:42 PM`. Follows the device locale. */
+export function formatTimeOfDay(epochMs: number): string {
+  return new Date(epochMs).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}

@@ -5,9 +5,12 @@ import { getExercise } from '@/data/exercises';
 import {
   type PerformanceBlock,
   STAGNATION_SESSIONS,
+  adjustAfterSet,
   hardestEffort,
   increaseFrom,
   isStalled,
+  loadClassFor,
+  rampJump,
   recommend,
   toPerformanceBlocks,
 } from '@/domain/progression';
@@ -294,5 +297,105 @@ describe('floorToIncrement', () => {
 
   it('never goes negative', () => {
     expect(floorToIncrement(-10, 'lb')).toBe(0);
+  });
+});
+
+describe('loadClassFor', () => {
+  it('treats big lower-body lifts as the largest jump', () => {
+    expect(loadClassFor(LEG_PRESS)).toBe('lower');
+    expect(loadClassFor(exercise('rdl'))).toBe('lower');
+    expect(loadClassFor(exercise('splitsquat'))).toBe('lower');
+  });
+
+  it('treats compound upper-body presses and pulls as the middle jump', () => {
+    expect(loadClassFor(exercise('chestpress'))).toBe('upper');
+    expect(loadClassFor(exercise('seatedrow'))).toBe('upper');
+    expect(loadClassFor(exercise('shoulderpress'))).toBe('upper');
+  });
+
+  it('only calls a movement small when every muscle it lists is small', () => {
+    expect(loadClassFor(exercise('lateralraise'))).toBe('small');
+    // A row lists biceps, but it is not an isolation movement.
+    expect(loadClassFor(exercise('latpulldown'))).toBe('upper');
+  });
+
+  it('falls back to the middle tier when an exercise lists no muscles', () => {
+    const { muscles: _muscles, ...bare } = LEG_PRESS;
+    expect(loadClassFor(bare)).toBe('upper');
+  });
+});
+
+describe('rampJump', () => {
+  it('gives a set that felt easy the full jump for its class', () => {
+    expect(rampJump(LEG_PRESS, 'easy', 'lb')).toBe(20);
+    expect(rampJump(exercise('seatedrow'), 'easy', 'lb')).toBe(10);
+    expect(rampJump(exercise('lateralraise'), 'easy', 'lb')).toBe(5);
+  });
+
+  it('gives a set that was on target half the jump', () => {
+    expect(rampJump(LEG_PRESS, 'right', 'lb')).toBe(10);
+    expect(rampJump(exercise('seatedrow'), 'right', 'lb')).toBe(5);
+  });
+
+  it('never goes below one loadable increment', () => {
+    expect(rampJump(exercise('lateralraise'), 'right', 'lb')).toBe(5);
+    expect(rampJump(exercise('lateralraise'), 'right', 'kg')).toBe(2.5);
+  });
+
+  it('gives a hard set nothing', () => {
+    expect(rampJump(LEG_PRESS, 'hard', 'lb')).toBe(0);
+  });
+
+  it('uses metric jumps in kilograms', () => {
+    expect(rampJump(LEG_PRESS, 'easy', 'kg')).toBe(10);
+    expect(rampJump(exercise('seatedrow'), 'easy', 'kg')).toBe(5);
+  });
+});
+
+describe('adjustAfterSet — ramping inside a session', () => {
+  it('adds the full jump after an easy set', () => {
+    const result = adjustAfterSet(LEG_PRESS, 180, 'easy', 'lb');
+
+    expect(result?.kind).toBe('add-weight');
+    expect(result?.weight).toBe(200);
+    expect(result?.delta).toBe(20);
+  });
+
+  it('adds half the jump after a set that was on target', () => {
+    const result = adjustAfterSet(LEG_PRESS, 180, 'right', 'lb');
+
+    expect(result?.kind).toBe('add-weight');
+    expect(result?.weight).toBe(190);
+  });
+
+  it('holds the weight after a hard set', () => {
+    const result = adjustAfterSet(LEG_PRESS, 180, 'hard', 'lb');
+
+    expect(result?.kind).toBe('repeat');
+    expect(result?.weight).toBe(180);
+    expect(result?.delta).toBe(0);
+  });
+
+  it('says nothing when the set was logged without an effort report', () => {
+    expect(adjustAfterSet(LEG_PRESS, 180, undefined, 'lb')).toBeNull();
+  });
+
+  it('says nothing for a timed hold', () => {
+    expect(adjustAfterSet(exercise('plank'), 0, 'easy', 'lb')).toBeNull();
+  });
+
+  it('says nothing when there is no load to scale from', () => {
+    expect(adjustAfterSet(LEG_PRESS, 0, 'easy', 'lb')).toBeNull();
+  });
+
+  it('holds rather than pretending to add at the top of the clamp', () => {
+    const result = adjustAfterSet(LEG_PRESS, 2000, 'easy', 'lb');
+
+    expect(result?.kind).toBe('repeat');
+    expect(result?.weight).toBe(2000);
+  });
+
+  it('names the new weight in the reason, so the card explains itself', () => {
+    expect(adjustAfterSet(LEG_PRESS, 180, 'easy', 'lb')?.reason).toContain('200 lb');
   });
 });

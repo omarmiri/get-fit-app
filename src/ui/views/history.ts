@@ -2,7 +2,7 @@ import type { Child } from '../dom';
 import type { Session } from '@/types';
 import { GOALS, getPlanDay } from '@/data/plan';
 import { PLATE } from '@/data/plates';
-import { formatShortDate } from '@/domain/dates';
+import { formatDuration, formatShortDate } from '@/domain/dates';
 import { sessionVolume } from '@/domain/metrics';
 import { formatVolume } from '@/domain/units';
 import { minutesByWeek, trendPoints, trendableExercises } from '@/state/selectors';
@@ -139,6 +139,9 @@ function describe(session: Session, context: ViewContext): string {
   if (session.minutes) parts.push(`${session.minutes} min`);
   if (session.modality) parts.push(session.modality);
   if (session.effort) parts.push(session.effort);
+  // Suffixed, because `45 min` of cardio and a 45-minute session are different
+  // claims and the row has no room to spell out which is which.
+  if (session.durationMinutes) parts.push(`${formatDuration(session.durationMinutes)} total`);
 
   return parts.join(' · ');
 }

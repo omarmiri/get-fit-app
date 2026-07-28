@@ -1,4 +1,5 @@
 import type { Exercise, LoggedSet, SetEffort, WeightUnit } from '@/types';
+import { clampWeight } from './limits';
 import { convertWeight, roundForDisplay } from './units';
 import { roundToUsableIncrement } from './substitutions';
 
@@ -251,4 +252,167 @@ function format(weight: number, unit: WeightUnit): string {
   const rounded = roundForDisplay(weight, unit);
   const text = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
   return `${text} ${unit}`;
+}
+
+/* ------------------------------------------------ within-session ramping */
+
+/**
+ * Ramping the load *within* a session, set to set.
+ *
+ * `recommend` above answers "where should today start", from what happened in
+ * past sessions. It deliberately says nothing once the first set is logged.
+ * That leaves a real gap: early sets are often feelers, and a set that felt
+ * easy should not be repeated at the same load three more times just because
+ * last week's history has not changed.
+ *
+ * The gate is the same one the cross-session engine uses — the honest report of
+ * how the set felt — but the jumps are larger, because ramping up to a working
+ * weight inside one session is a different move from a week-over-week increase.
+ * `hard` ends the ramp; that is what stops it walking you into a failed set.
+ *
+ * Every number produced here is a seed for the stepper, never a commitment. The
+ * user can always overrule it before logging.
+ */
+
+/**
+ * How big a load jump a movement can absorb, by the size of what it works.
+ *
+ * A leg press moves in plates; a lateral raise moves in the smallest dumbbell
+ * on the rack. Applying one increment to both would either stall the legs or
+ * wreck the shoulders.
+ */
+export type LoadClass = 'lower' | 'upper' | 'small';
+
+/**
+ * Muscles that mark a movement as a big lower-body lift.
+ *
+ * Calves are deliberately absent: a calf raise is a small-muscle isolation
+ * movement that happens to be below the waist.
+ */
+const LOWER_BODY_MUSCLES: ReadonlySet<string> = new Set([
+  'quads',
+  'glutes',
+  'hamstrings',
+  'adductors',
+  'abductors',
+]);
+
+/** Muscles small enough that a movement working *only* these gets the smallest jump. */
+const SMALL_MUSCLES: ReadonlySet<string> = new Set([
+  'side delts',
+  'rear delts',
+  'front delts',
+  'biceps',
+  'triceps',
+  'forearms',
+  'grip',
+  'calves',
+  'core',
+  'obliques',
+  'abs',
+  'traps',
+]);
+
+/** The jump applied to a set that felt easy, by class and unit. */
+const FULL_JUMP: Readonly<Record<LoadClass, Readonly<Record<WeightUnit, number>>>> = {
+  lower: { lb: 20, kg: 10 },
+  upper: { lb: 10, kg: 5 },
+  small: { lb: 5, kg: 2.5 },
+};
+
+/**
+ * Classify a movement from the muscles it lists.
+ *
+ * Falls back to `upper` — the middle tier — when an exercise carries no muscle
+ * list, which is the safe direction to be wrong in: too small a jump costs one
+ * extra tap, too large a jump costs a failed set.
+ */
+export function loadClassFor(exercise: Exercise): LoadClass {
+  const muscles = exercise.muscles?.map((muscle) => muscle.toLowerCase()) ?? [];
+  if (muscles.length === 0) return 'upper';
+
+  // Checked first: "biceps" appears alongside "lats" on a row, and a row is not
+  // an isolation movement. Only an all-small list earns the small jump.
+  if (muscles.every((muscle) => SMALL_MUSCLES.has(muscle))) return 'small';
+  if (muscles.some((muscle) => LOWER_BODY_MUSCLES.has(muscle))) return 'lower';
+  return 'upper';
+}
+
+/**
+ * The load increase earned by a set that felt `effort`.
+ *
+ * `easy` takes the full jump. `right` takes half of it, floored at one loadable
+ * increment: the set was at the intended difficulty, so it earns a nudge rather
+ * than a leap. `hard` earns nothing.
+ */
+export function rampJump(exercise: Exercise, effort: SetEffort, unit: WeightUnit): number {
+  if (effort === 'hard') return 0;
+
+  const full = FULL_JUMP[loadClassFor(exercise)][unit];
+  if (effort === 'easy') return full;
+
+  const smallest = unit === 'lb' ? 5 : 2.5;
+  return Math.max(smallest, roundToUsableIncrement(full / 2, unit));
+}
+
+/** What to put in the stepper for the next set, and why. */
+export interface SetAdjustment {
+  readonly weight: number;
+  /** Change from the set just logged. Zero when holding. */
+  readonly delta: number;
+  readonly reason: string;
+  readonly kind: 'add-weight' | 'repeat';
+}
+
+/**
+ * Adjust the load for the next set from how the last one felt.
+ *
+ * Returns `null` whenever there is nothing honest to say — a timed hold, an
+ * unloaded movement, a bodyweight set at zero, or a set logged without an
+ * effort report. In every one of those cases the caller should simply repeat
+ * the last weight.
+ */
+export function adjustAfterSet(
+  exercise: Exercise,
+  lastWeight: number,
+  effort: SetEffort | undefined,
+  unit: WeightUnit,
+): SetAdjustment | null {
+  if (exercise.repMetric === 'seconds' || !exercise.loaded) return null;
+  if (effort === undefined) return null;
+  // Nothing to scale from. A bodyweight set logged at zero has no load to add
+  // a percentage of, and jumping straight to 20 lb would be a guess.
+  if (lastWeight <= 0) return null;
+
+  if (effort === 'hard') {
+    return {
+      weight: lastWeight,
+      delta: 0,
+      kind: 'repeat',
+      reason: `That set felt hard — holding at ${format(lastWeight, unit)}.`,
+    };
+  }
+
+  const delta = rampJump(exercise, effort, unit);
+  const weight = clampWeight(lastWeight + delta);
+
+  // The clamp can swallow the increase at the top of the range.
+  if (weight <= lastWeight) {
+    return {
+      weight: lastWeight,
+      delta: 0,
+      kind: 'repeat',
+      reason: `Staying at ${format(lastWeight, unit)}.`,
+    };
+  }
+
+  return {
+    weight,
+    delta: weight - lastWeight,
+    kind: 'add-weight',
+    reason:
+      effort === 'easy'
+        ? `Last set felt easy — up ${format(weight - lastWeight, unit)} to ${format(weight, unit)}.`
+        : `Last set was on target — nudged up to ${format(weight, unit)}. Dial it back if that is too much.`,
+  };
 }

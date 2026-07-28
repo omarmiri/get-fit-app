@@ -27,7 +27,7 @@ import { isWeightUnit } from '@/domain/units';
  *   add a step whenever a persisted shape changes.
  */
 
-export const CURRENT_SCHEMA_VERSION = 5;
+export const CURRENT_SCHEMA_VERSION = 6;
 
 /** Storage key for the current schema. */
 export const STORAGE_KEY = 'rackfile:state';
@@ -154,6 +154,7 @@ function parseSession(raw: unknown): Session | null {
   const rawId = raw['id'];
   const startedAt = finiteOr(raw['startedAt'] ?? raw['started'], 0);
   const rawFinishedAt = raw['finishedAt'];
+  const rawDuration = raw['durationMinutes'];
 
   const session: Session = {
     id: typeof rawId === 'string' && rawId.length > 0 ? rawId : makeSessionId(),
@@ -166,6 +167,13 @@ function parseSession(raw: unknown): Session | null {
     startedAt,
     ...(typeof rawFinishedAt === 'number' && Number.isFinite(rawFinishedAt)
       ? { finishedAt: rawFinishedAt }
+      : {}),
+    // Absent on every session logged before the session clock existed. Left
+    // undefined rather than derived from `startedAt` — those timestamps mark
+    // the first logged set, not the start of the workout, so a back-filled
+    // duration would understate every one of them.
+    ...(typeof rawDuration === 'number' && Number.isFinite(rawDuration) && rawDuration > 0
+      ? { durationMinutes: clampMinutes(rawDuration) }
       : {}),
     // Absent on sessions logged before plans could change. History falls back
     // to a lookup for those.

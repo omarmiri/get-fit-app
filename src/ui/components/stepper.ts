@@ -40,9 +40,36 @@ export function createStepper(options: StepperOptions): StepperHandle {
       // accidental changes when the page is scrolled with a finger on the field.
       inputmode: 'decimal',
       autocomplete: 'off',
+      // Four characters covers `1000` and `22.5`; anything wider is clamped
+      // away anyway. Keeps the field from claiming space it cannot use on a
+      // phone, where two of these sit side by side.
+      maxlength: '4',
+      enterkeyhint: 'done',
       'aria-label': options.label,
       value: String(value),
     },
+  });
+
+  /*
+   * Focusing selects the whole value, so the first digit typed replaces the
+   * load instead of appending to it.
+   *
+   * Without this, changing 180 to 95 meant placing a caret by touch and
+   * backspacing three times — on a small field, mid-set, with one hand. Typing
+   * over a selection is the fast path, and a second tap in the focused field
+   * still drops a caret for anyone who wants to edit a single digit.
+   */
+  const selectAll = (): void => {
+    // Deferred: iOS Safari collapses the selection made during `focus` when it
+    // places its own caret immediately afterwards.
+    setTimeout(() => input.setSelectionRange(0, input.value.length), 0);
+  };
+  input.addEventListener('focus', selectAll);
+
+  // Enter dismisses the keyboard rather than doing nothing, which is what the
+  // `done` key on the numeric pad promises.
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') input.blur();
   });
 
   // Accepts raw field text as well as computed numbers; `clamp` coerces both.

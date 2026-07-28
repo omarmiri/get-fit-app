@@ -4,6 +4,8 @@ import {
   addDays,
   daysBetween,
   formatClock,
+  formatDuration,
+  formatElapsed,
   isValidIsoDate,
   parseIsoDate,
   startOfWeek,
@@ -118,5 +120,39 @@ describe('formatClock', () => {
 
   it('floors at zero rather than showing negative time', () => {
     expect(formatClock(-5)).toBe('0:00');
+  });
+});
+
+describe('formatElapsed', () => {
+  it('reads as M:SS below an hour, like the other timers', () => {
+    expect(formatElapsed(0)).toBe('0:00');
+    expect(formatElapsed(65)).toBe('1:05');
+    expect(formatElapsed(3599)).toBe('59:59');
+  });
+
+  it('rolls over to H:MM:SS rather than showing 74:12', () => {
+    expect(formatElapsed(3600)).toBe('1:00:00');
+    expect(formatElapsed(4452)).toBe('1:14:12');
+  });
+
+  it('never goes negative', () => {
+    expect(formatElapsed(-90)).toBe('0:00');
+  });
+});
+
+describe('formatDuration', () => {
+  it('reads in minutes under an hour', () => {
+    expect(formatDuration(48)).toBe('48 min');
+    expect(formatDuration(0)).toBe('0 min');
+  });
+
+  it('splits into hours and padded minutes past an hour', () => {
+    expect(formatDuration(60)).toBe('1h 00m');
+    expect(formatDuration(74)).toBe('1h 14m');
+    expect(formatDuration(125)).toBe('2h 05m');
+  });
+
+  it('never goes negative', () => {
+    expect(formatDuration(-5)).toBe('0 min');
   });
 });

@@ -1,5 +1,6 @@
 import type { Exercise, LoggedSet, Preferences, SetEffort, WeightUnit } from '@/types';
-import type { Recommendation } from '@/domain/progression';
+import type { Recommendation, SetAdjustment } from '@/domain/progression';
+import { adjustAfterSet } from '@/domain/progression';
 import { ZONE_LABEL, getStation } from '@/data/equipment';
 import { formatShortDate } from '@/domain/dates';
 import { clampReps, clampWeight } from '@/domain/limits';
@@ -51,7 +52,17 @@ export function renderExerciseCard(options: ExerciseCardOptions): HTMLElement {
   const { exercise, logged, previous, unit } = options;
   const timed = exercise.repMetric === 'seconds';
 
-  const seed = seedValues(options);
+  /*
+   * How the last set of *this* session felt, turned into a load for the next
+   * one. Computed here rather than inside `seedValues` because it is both the
+   * seed and the note explaining the seed, and the two must not disagree.
+   */
+  const lastToday = logged.at(-1) ?? null;
+  const ramp = lastToday
+    ? adjustAfterSet(exercise, setWeightIn(lastToday, unit), lastToday.effort, unit)
+    : null;
+
+  const seed = seedValues(options, ramp);
 
   // Report every change upward so the value survives the next render.
   const publishDraft = (): void =>
@@ -113,6 +124,7 @@ export function renderExerciseCard(options: ExerciseCardOptions): HTMLElement {
     div('steppers', [weightStepper.element, text('steppers__times mono', '×'), repsStepper.element]),
 
     renderRecommendation(options),
+    renderRamp(options, ramp),
     exercise.repMetric === 'seconds' ? null : renderEffortPicker(options),
 
     options.targetMet
@@ -146,12 +158,15 @@ export function renderExerciseCard(options: ExerciseCardOptions): HTMLElement {
 /**
  * Choose the values the steppers open on.
  *
- * Preference order is: what was logged a moment ago in this session, then what
- * was logged last time, then the exercise's own defaults. Repeating the
- * previous load is the overwhelmingly common case, so this saves most of the
- * tapping in a session.
+ * Preference order is: what was logged a moment ago in this session — adjusted
+ * for how it felt — then what was logged last time, then the exercise's own
+ * defaults. Carrying the previous set forward is the overwhelmingly common
+ * case, so this saves most of the tapping in a session.
  */
-function seedValues(options: ExerciseCardOptions): { weight: number; reps: number } {
+function seedValues(
+  options: ExerciseCardOptions,
+  ramp: SetAdjustment | null,
+): { weight: number; reps: number } {
   const { exercise, logged, previous, unit } = options;
 
   // A value the user is part-way through entering always wins.
@@ -166,7 +181,9 @@ function seedValues(options: ExerciseCardOptions): { weight: number; reps: numbe
   if (!source) return { weight: 0, reps: exercise.defaultReps };
 
   return {
-    weight: setWeightIn(source, unit),
+    // The ramp is only ever derived from a set logged in this session, so it is
+    // never applied on top of last week's numbers.
+    weight: ramp?.weight ?? setWeightIn(source, unit),
     reps: source.reps > 0 ? source.reps : exercise.defaultReps,
   };
 }
@@ -222,6 +239,27 @@ function renderRecommendation(options: ExerciseCardOptions): HTMLElement | null 
   return div(`reco reco--${recommendation.kind}`, [
     el('span', { class: 'reco__icon', text: iconFor(recommendation.kind), attrs: { 'aria-hidden': 'true' } }),
     text('reco__text', recommendation.reason),
+  ]);
+}
+
+/**
+ * What the load just did, and why.
+ *
+ * Suppressed once the user has touched a stepper: at that point the number on
+ * screen is theirs, and a line claiming the app moved it would be false. The
+ * adjustment is a seed, not a rule.
+ */
+function renderRamp(options: ExerciseCardOptions, ramp: SetAdjustment | null): HTMLElement | null {
+  if (!ramp || options.draft) return null;
+  if (ramp.delta === 0 && ramp.kind === 'repeat' && options.targetMet) return null;
+
+  return div(`reco reco--${ramp.kind}`, [
+    el('span', {
+      class: 'reco__icon',
+      text: ramp.kind === 'add-weight' ? '▲' : '=',
+      attrs: { 'aria-hidden': 'true' },
+    }),
+    text('reco__text', ramp.reason),
   ]);
 }
 

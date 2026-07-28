@@ -6,7 +6,7 @@ import { defaultStationId, resolveOptions } from '@/domain/substitutions';
 import { recommend } from '@/domain/progression';
 import { startingWeight } from '@/domain/startingWeights';
 import { performanceHistory } from '@/state/selectors';
-import { formatShortDate, formatWithWeekday, todayDayKey, todayIso } from '@/domain/dates';
+import { formatDuration, formatShortDate, formatWithWeekday, todayDayKey, todayIso } from '@/domain/dates';
 import { sessionVolume } from '@/domain/metrics';
 import { formatVolume } from '@/domain/units';
 import { lastPerformance, todaysSession } from '@/state/selectors';
@@ -18,6 +18,7 @@ import { renderExerciseCard } from '../components/exerciseCard';
 import { renderGoalsCard } from '../components/goalsCard';
 import { renderOnboarding } from '../components/onboarding';
 import { elapsedMs, resetCardioTicker } from '../components/cardioTimer';
+import { elapsedSessionMinutes, renderSessionClock, resetSessionTicker } from '../components/sessionClock';
 import type { ViewContext } from './context';
 
 /** The Today tab: the session for the selected plan day, and the controls to log it. */
@@ -139,17 +140,39 @@ function renderBody(context: ViewContext, dayKey: DayKey, day: PlanDay): Child[]
   // A finished session for this day takes over the view, unless the user has
   // reopened it and is adding to it.
   if (finished && !context.store.activeFor(dayKey)) {
+    resetSessionTicker();
     return [renderSummaryCard(context, finished, day)];
   }
 
+  const clock = renderSessionClockCard(context, dayKey);
   const logger = day.exercises ? renderLogger(context, dayKey, day) : [];
   const duration = day.type === 'strength' ? null : renderDuration(context, dayKey, day);
 
   // Mixed days are cardio *then* core. Rendering the exercises first told the
   // user to do them in the opposite order to the day's own instructions.
   return day.type === 'mixed'
-    ? [duration, ...logger, renderFinishButton(context, dayKey, day)]
-    : [...logger, duration, renderFinishButton(context, dayKey, day)];
+    ? [clock, duration, ...logger, renderFinishButton(context, dayKey, day)]
+    : [clock, ...logger, duration, renderFinishButton(context, dayKey, day)];
+}
+
+/**
+ * The start button, or the running clock once the session is open.
+ *
+ * Starting is optional: logging a set opens the session too, and someone who
+ * forgets to tap start still gets a duration measured from their first set
+ * rather than nothing at all.
+ */
+function renderSessionClockCard(context: ViewContext, dayKey: DayKey): HTMLElement {
+  const active = context.store.activeFor(dayKey);
+
+  return renderSessionClock({
+    startedAt: active?.startedAt ?? null,
+    onStart: () => {
+      context.store.startSession(dayKey);
+      toast('Workout started — the clock is running');
+      context.render();
+    },
+  });
 }
 
 /**
@@ -422,6 +445,10 @@ function renderFinishButton(context: ViewContext, dayKey: DayKey, day: PlanDay):
         // Pure strength days have no default duration to fall back on.
         const defaultMinutes = day.type === 'strength' ? null : (day.minutes ?? null);
 
+        // Read the start stamp before finishing clears the active session, so
+        // the confirmation can report how long it took.
+        const startedAt = context.store.activeFor(dayKey)?.startedAt ?? null;
+
         if (!context.store.finishActive(dayKey, defaultMinutes)) {
           toast('Log a set or some minutes first');
           return;
@@ -429,7 +456,12 @@ function renderFinishButton(context: ViewContext, dayKey: DayKey, day: PlanDay):
 
         context.ui.exerciseIndex = 0;
         context.rest.stop();
-        toast('Session saved');
+        resetSessionTicker();
+        toast(
+          startedAt === null || startedAt <= 0
+            ? 'Session saved'
+            : `Session saved — ${formatDuration(elapsedSessionMinutes(startedAt))}`,
+        );
         context.render();
       },
     },
@@ -477,6 +509,12 @@ function describeLines(session: Session, context: ViewContext): string[] {
   if (session.minutes) {
     const parts = [`${session.minutes} minutes`, session.modality, session.effort].filter(Boolean);
     lines.push(parts.join(' · '));
+  }
+
+  // Last, and phrased differently from the aerobic minutes above it, because
+  // the two are easy to confuse and only one of them counts toward the goal.
+  if (session.durationMinutes) {
+    lines.push(`${formatDuration(session.durationMinutes)} start to finish`);
   }
 
   return lines;

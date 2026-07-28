@@ -130,17 +130,22 @@
 
 /* --------------------------------------------------------------- steppers */
 
+/*
+ * Two steppers side by side have to survive a 390px phone. Everything in here
+ * is sized so that a four-digit load — a plate-loaded leg press in pounds —
+ * still fits between the buttons rather than being clipped at the third digit.
+ */
 .steppers {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: end;
-  gap: var(--space-3);
+  gap: var(--space-2);
   margin-top: var(--space-4);
 }
 
 .steppers__times {
   color: var(--dimmer);
-  font-size: 20px;
+  font-size: 16px;
   padding-bottom: var(--space-3);
 }
 
@@ -160,21 +165,25 @@
 .stepper__row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   margin-top: 6px;
 }
 
 .stepper__value {
   flex: 1;
   min-width: 0;
-  font-size: 32px;
+  /* Scales with the viewport so the value never outgrows the space between the
+     buttons. The ceiling is what it used to be fixed at, for wide screens. */
+  font-size: clamp(20px, 6vw, 32px);
   font-weight: 700;
   background: none;
   border: none;
   border-bottom: 1px solid var(--iron-3);
   color: var(--chalk);
   text-align: center;
-  padding: 6px 0;
+  padding: 6px 2px;
+  /* Digits keep a fixed width, so the value does not jitter as it is typed. */
+  font-variant-numeric: tabular-nums;
 }
 
 .stepper__value:focus {
@@ -182,9 +191,17 @@
   border-bottom-color: var(--pc);
 }
 
+/* The selection made on focus, so it is obvious the next digit replaces it. */
+.stepper__value::selection {
+  background: var(--pc);
+  color: var(--iron-0);
+}
+
 .stepper__button {
   flex: 0 0 auto;
-  width: var(--tap);
+  /* Narrower than tall: the row is horizontally cramped and the height alone
+     keeps the target comfortable. */
+  width: 40px;
   height: var(--tap);
   border: 1px solid var(--iron-3);
   border-radius: var(--radius);
@@ -1450,6 +1467,59 @@
   margin-top: var(--space-2);
   font-size: 11px;
   color: var(--dimmer);
+}
+
+/* ----------------------------------------------------------- session clock */
+
+/* Sits above the logger, so it stays deliberately quieter than the run clock —
+   this is a stamp on the session, not something you watch. */
+.sessclock {
+  padding: var(--space-3) var(--pad);
+  border: 1px solid var(--iron-2);
+  border-radius: var(--radius);
+  background: var(--iron-1);
+  margin-bottom: var(--space-4);
+}
+
+.sessclock.is-running {
+  border-color: var(--iron-3);
+}
+
+.sessclock__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.sessclock__status {
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.sessclock.is-running .sessclock__status {
+  color: var(--ok);
+}
+
+.sessclock__hint {
+  font-size: 12px;
+  color: var(--dimmer);
+  margin: var(--space-2) 0 var(--space-3);
+  line-height: 1.5;
+}
+
+.sessclock__time {
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.1;
+  margin-top: var(--space-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.sessclock__since {
+  font-size: 12px;
+  color: var(--dimmer);
+  margin-top: var(--space-1);
 }
 
 /* --------------------------------------------------------- done indicator */

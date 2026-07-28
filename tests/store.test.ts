@@ -392,3 +392,93 @@ describe('preferences', () => {
     expect(store.activeFor('tue')?.sets[0]).toMatchObject({ weight: 180, unit: 'lb' });
   });
 });
+
+describe('session duration', () => {
+  /** A store whose clock advances by `stepMs` on every read. */
+  function clockedStore(startMs: number, stepMs: number): AppStore {
+    let now = startMs - stepMs;
+    return new AppStore({
+      initialState: defaultState(),
+      store: createMemoryStore(),
+      saveDelayMs: 0,
+      now: () => (now += stepMs),
+    });
+  }
+
+  it('opens a session before anything is logged', () => {
+    const store = makeStore();
+    expect(store.activeFor('tue')).toBeNull();
+
+    store.startSession('tue');
+
+    expect(store.activeFor('tue')?.startedAt).toBe(1_700_000_000_000);
+    expect(store.activeFor('tue')?.sets).toEqual([]);
+  });
+
+  it('does not restart a session that is already open', () => {
+    const store = clockedStore(1_700_000_000_000, 60_000);
+    store.startSession('tue');
+    const startedAt = store.activeFor('tue')?.startedAt;
+
+    store.startSession('tue');
+
+    expect(store.activeFor('tue')?.startedAt).toBe(startedAt);
+  });
+
+  it('records the wall-clock length from start to finish', () => {
+    // Each clock read advances five minutes: start, log, finish.
+    const store = clockedStore(1_700_000_000_000, 5 * 60_000);
+    store.startSession('tue');
+    store.logSet('tue', 'legpress', 180, 10, 'lb');
+
+    store.finishActive('tue', null);
+
+    expect(store.getState().sessions.at(-1)?.durationMinutes).toBe(10);
+  });
+
+  it('leaves the aerobic minutes alone — a strength session is not cardio', () => {
+    const store = clockedStore(1_700_000_000_000, 5 * 60_000);
+    store.startSession('tue');
+    store.logSet('tue', 'legpress', 180, 10, 'lb');
+
+    store.finishActive('tue', null);
+
+    expect(store.getState().sessions.at(-1)?.minutes).toBeNull();
+  });
+
+  it('records no duration when the start stamp was never captured', () => {
+    const store = makeStore();
+    store.logSet('tue', 'legpress', 180, 10, 'lb');
+
+    store.finishActive('tue', null);
+
+    // The fixed clock makes start and finish identical, so there is no
+    // duration to claim rather than a zero.
+    expect(store.getState().sessions.at(-1)?.durationMinutes).toBeUndefined();
+  });
+
+  it('clears the duration when a session is reopened, and re-measures on finish', () => {
+    const store = clockedStore(1_700_000_000_000, 60_000);
+    store.startSession('tue');
+    store.logSet('tue', 'legpress', 180, 10, 'lb');
+    store.finishActive('tue', null);
+
+    const id = store.getState().sessions.at(-1)?.id ?? '';
+    expect(store.reopenSession(id)).toBe(true);
+    expect(store.getState().active?.durationMinutes).toBeUndefined();
+
+    // Still measured from the original start, so the whole session is covered.
+    store.finishActive('tue', null);
+    expect(store.getState().sessions.at(-1)?.durationMinutes).toBe(3);
+  });
+
+  it('records no duration on a session carried over from another day', () => {
+    const store = makeStore({
+      ...defaultState(),
+      active: session({ date: '2020-01-01', sets: [], minutes: 30 }),
+    });
+
+    expect(store.keepStaleActive()).toBe(true);
+    expect(store.getState().sessions.at(-1)?.durationMinutes).toBeUndefined();
+  });
+});

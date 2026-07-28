@@ -240,6 +240,23 @@ export class AppStore {
     this.#commit({ ...this.#state, sessions, active: change(base) });
   }
 
+  /**
+   * Open a session for `dayKey` now, before anything has been logged.
+   *
+   * Sessions were created lazily by the first logged set, which meant
+   * `startedAt` recorded the first working set rather than the start of the
+   * workout — the warm-up, the walk to a machine and the wait for it all fell
+   * outside. Starting explicitly is what makes the recorded duration mean "how
+   * long I trained".
+   *
+   * A no-op when the day's session is already open, so it can be called
+   * defensively without resetting the clock.
+   */
+  startSession(dayKey: DayKey): void {
+    if (this.activeFor(dayKey)) return;
+    this.#updateActive(dayKey, (session) => session);
+  }
+
   /* -------------------------------------------------------------- logging */
 
   /** Record one working set. Inputs are clamped before they reach the state. */
@@ -316,7 +333,19 @@ export class AppStore {
     const active = this.activeFor(dayKey) ?? this.#newSession(dayKey);
 
     const minutes = active.minutes ?? (defaultMinutes === null ? null : clampMinutes(defaultMinutes));
-    const candidate: Session = { ...active, minutes, finishedAt: this.#now() };
+    const finishedAt = this.#now();
+    const candidate: Session = {
+      ...active,
+      minutes,
+      finishedAt,
+      // Measured start to finish, so it covers the whole workout rather than
+      // just the logged work. `startedAt` is zero on sessions restored from
+      // storage written before it was recorded; those get no duration rather
+      // than a fifty-year one.
+      ...(active.startedAt > 0 && finishedAt > active.startedAt
+        ? { durationMinutes: clampMinutes(Math.round((finishedAt - active.startedAt) / 60_000)) }
+        : {}),
+    };
 
     if (AppStore.isEmptySession(candidate)) {
       // Still commit the displacement, or the preserved session would be lost.
@@ -365,7 +394,11 @@ export class AppStore {
     const session = this.#state.sessions.find((s) => s.id === id);
     if (!session) return false;
 
-    const { finishedAt: _finishedAt, ...reopened } = session;
+    // The duration goes back with the finish stamp. Keeping a duration on a
+    // session that is running again would show a stopped clock; it is
+    // re-measured from the original `startedAt` when the session is finished
+    // for good.
+    const { finishedAt: _finishedAt, durationMinutes: _durationMinutes, ...reopened } = session;
     this.#commit({
       ...this.#state,
       sessions: this.#state.sessions.filter((s) => s.id !== id),
