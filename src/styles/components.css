@@ -1262,3 +1262,108 @@
   margin-top: var(--space-2);
   opacity: 0.85;
 }
+
+/* ---------------------------------------------------------- plan generator */
+
+.gen__group {
+  margin-top: var(--space-4);
+}
+
+.gen__input {
+  width: 100%;
+  min-height: var(--tap);
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--iron-0);
+  border: var(--border);
+  border-radius: var(--radius);
+  color: var(--chalk);
+  font: inherit;
+  font-size: 14px;
+}
+
+.gen__input:focus {
+  outline: none;
+  border-color: var(--pc);
+}
+
+.gen__input::placeholder {
+  color: var(--dimmer);
+}
+
+/* The proposed week, before it is accepted. Visually set apart from the plan
+   currently in force so the two are never confused. */
+.gen__candidate {
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid var(--iron-3);
+  border-radius: var(--radius);
+  background: var(--iron-0);
+}
+
+.gen__stats {
+  margin-top: var(--space-2);
+  font-size: 13px;
+  color: var(--dim);
+}
+
+.gen__days {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+}
+
+.gen__day {
+  display: flex;
+  gap: var(--space-3);
+  align-items: baseline;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--iron-2);
+}
+
+.gen__day:last-child {
+  border-bottom: none;
+}
+
+.gen__daykey {
+  flex: 0 0 34px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--dimmer);
+}
+
+.gen__daylabel {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.gen__daysub {
+  font-size: 12px;
+  color: var(--dim);
+  margin-top: 1px;
+}
+
+.gen__issues {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--iron-2);
+}
+
+.gen__issues ul {
+  margin: var(--space-2) 0 0;
+  padding-left: 1.1em;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--dim);
+}
+
+.gen__issues--error ul {
+  color: var(--danger);
+}
+
+.button[aria-busy='true'],
+.button[disabled] {
+  opacity: 0.5;
+  pointer-events: none;
+}

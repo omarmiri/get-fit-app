@@ -1,6 +1,7 @@
 import type {
   AppState,
   Effort,
+  GeneratedPlan,
   FitnessLevel,
   LoggedSet,
   Preferences,
@@ -26,7 +27,7 @@ import { isWeightUnit } from '@/domain/units';
  *   add a step whenever a persisted shape changes.
  */
 
-export const CURRENT_SCHEMA_VERSION = 4;
+export const CURRENT_SCHEMA_VERSION = 5;
 
 /** Storage key for the current schema. */
 export const STORAGE_KEY = 'rackfile:state';
@@ -60,6 +61,7 @@ export function defaultState(): AppState {
     sessions: [],
     active: null,
     prefs: DEFAULT_PREFERENCES,
+    plan: null,
   };
 }
 
@@ -165,6 +167,11 @@ function parseSession(raw: unknown): Session | null {
     ...(typeof rawFinishedAt === 'number' && Number.isFinite(rawFinishedAt)
       ? { finishedAt: rawFinishedAt }
       : {}),
+    // Absent on sessions logged before plans could change. History falls back
+    // to a lookup for those.
+    ...(typeof raw['planLabel'] === 'string' && raw['planLabel'].length > 0
+      ? { planLabel: raw['planLabel'] }
+      : {}),
   };
   return session;
 }
@@ -211,6 +218,11 @@ function parsePreferences(raw: unknown): Preferences {
 
   const profile = parseProfile(raw['profile']);
 
+  const rawConditions = raw['conditions'];
+  const conditions = Array.isArray(rawConditions)
+    ? rawConditions.filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
+    : [];
+
   const rawPreferred = raw['preferredStations'];
   const preferredStations: Record<string, string> = {};
   if (isRecord(rawPreferred)) {
@@ -229,7 +241,33 @@ function parsePreferences(raw: unknown): Preferences {
     ...(missingStations.length === 0 ? {} : { missingStations }),
     ...(Object.keys(preferredStations).length === 0 ? {} : { preferredStations }),
     ...(profile === undefined ? {} : { profile }),
+    ...(conditions.length === 0 ? {} : { conditions }),
     ...(raw['onboarded'] === true || profile !== undefined ? { onboarded: true } : {}),
+  };
+}
+
+/**
+ * Parse a stored generated plan.
+ *
+ * Shape only. Whether the plan is sensible is decided by `validatePlan`, which
+ * runs before it is ever adopted; anything already stored has been through it.
+ */
+function parsePlan(raw: unknown): GeneratedPlan | null {
+  if (!isRecord(raw) || !Array.isArray(raw['days'])) return null;
+
+  const days = raw['days']
+    .filter(isRecord)
+    .filter((day) => isDayKey(day['dayKey']))
+    .map((day) => day as unknown as GeneratedPlan['days'][number]);
+
+  if (days.length === 0) return null;
+
+  return {
+    id: typeof raw['id'] === 'string' ? raw['id'] : `plan-${Date.now().toString(36)}`,
+    summary: typeof raw['summary'] === 'string' ? raw['summary'] : '',
+    days,
+    generatedAt: finiteOr(raw['generatedAt'], 0),
+    model: typeof raw['model'] === 'string' ? raw['model'] : 'unknown',
   };
 }
 
@@ -264,6 +302,7 @@ export function parseState(raw: unknown): ParseResult {
       sessions: ordered,
       active,
       prefs: parsePreferences(raw['prefs']),
+      plan: parsePlan(raw['plan']),
     },
     dropped,
     recognised: true,

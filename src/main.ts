@@ -8,7 +8,7 @@ import '@fontsource/chivo-mono/latin-700.css';
 import './styles/index.css';
 
 import { App, createSaveErrorReporter } from './app';
-import { getPlanDay } from './data/plan';
+import { resolvePlan } from './data/activePlan';
 import { AppStore } from './state/store';
 import { loadState, resolveBrowserStore } from './state/storage';
 import { toast } from './ui/toast';
@@ -26,13 +26,16 @@ function boot(): void {
   const { store: keyValueStore, persistent } = resolveBrowserStore();
   const { state, migratedFromLegacy, dropped } = loadState(keyValueStore);
 
-  const store = new AppStore({
+  const store: AppStore = new AppStore({
     initialState: state,
     store: keyValueStore,
     onSaveError: createSaveErrorReporter(),
     onSessionFiled: (filed) => {
-      toast(`${getPlanDay(filed.dayKey)?.label ?? 'Previous'} session saved to history`);
+      toast(`${filed.planLabel ?? 'Previous'} session saved to history`);
     },
+    // Sessions snapshot their label at creation so regenerating the plan never
+    // renames anything already logged.
+    planLabel: (dayKey) => resolvePlan(store.getState().plan)[dayKey].label,
   });
 
   new App(store).start();

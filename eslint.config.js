@@ -54,6 +54,8 @@ export default tseslint.config(
     },
     rules: {
       'no-console': 'off',
+      // Return-type annotations are a TypeScript feature; these files are not.
+      '@typescript-eslint/explicit-function-return-type': 'off',
     },
   },
 

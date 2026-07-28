@@ -1,5 +1,5 @@
 import type { AppState, Tab } from '@/types';
-import { PLAN } from '@/data/plan';
+import { resolvePlan } from '@/data/activePlan';
 import { PLATE } from '@/data/plates';
 import { todayDayKey } from '@/domain/dates';
 import type { AppStore } from '@/state/store';
@@ -75,6 +75,7 @@ export class App {
     return {
       store: this.#store,
       state,
+      plan: resolvePlan(state.plan),
       rest: this.#rest,
       ui: this.#ui,
       render: () => {
@@ -116,13 +117,15 @@ export class App {
    * than inheriting whichever day happened to be open last.
    */
   #applyAccent(): void {
-    const accent = this.#ui.tab === 'today' ? PLAN[this.#ui.viewDay ?? todayDayKey()].color : NEUTRAL_ACCENT;
+    const plan = resolvePlan(this.#store.getState().plan);
+    const accent = this.#ui.tab === 'today' ? plan[this.#ui.viewDay ?? todayDayKey()].color : NEUTRAL_ACCENT;
     document.documentElement.style.setProperty('--pc', accent);
   }
 
   #paintWeekStrip(context: ViewContext): void {
     renderWeekStrip(this.#weekStrip, {
       state: context.state,
+      plan: context.plan,
       selected: this.#ui.viewDay ?? todayDayKey(),
       onSelect: (day) => {
         this.#ui.viewDay = day;

@@ -1,6 +1,6 @@
 import type { Child } from '../dom';
 import type { FitnessLevel, WeightUnit } from '@/types';
-import { DAY_NAMES, PLAN, PLAN_ORDER } from '@/data/plan';
+import { DAY_NAMES, PLAN_ORDER } from '@/data/plan';
 import { CLUB, daysSinceVerified } from '@/data/club';
 import { ALL_STATIONS, ZONE_LABEL } from '@/data/equipment';
 import { PLATE_LEGEND } from '@/data/plates';
@@ -10,6 +10,7 @@ import { parseStateJson, serializeState } from '@/state/schema';
 import { card, div, el, eyebrow, text } from '../dom';
 import { toast } from '../toast';
 import { renderLegend } from '../components/charts';
+import { renderPlanGenerator } from '../components/planGenerator';
 import type { ViewContext } from './context';
 
 /** The Plan tab: the rotation, settings, and data management. */
@@ -19,6 +20,7 @@ export function renderPlanView(context: ViewContext): Child[] {
     renderRotation(context),
     renderClubCard(),
     renderEquipmentCard(context),
+    renderPlanGenerator(context),
     renderProfileCard(context),
     renderSettings(context),
     renderColourKey(),
@@ -30,7 +32,7 @@ export function renderPlanView(context: ViewContext): Child[] {
 function renderRotation(context: ViewContext): HTMLElement {
   return card(
     PLAN_ORDER.map((key) => {
-      const day = PLAN[key];
+      const day = context.plan[key];
       return div('logrow', [
         div('logrow__main', [
           el('div', {
@@ -319,6 +321,8 @@ function eraseAll(context: ViewContext): void {
     sessions: [],
     active: null,
     prefs: context.state.prefs,
+    // Erasing training history does not throw away the plan you are following.
+    plan: context.state.plan,
   });
   toast('All data erased');
   context.render();

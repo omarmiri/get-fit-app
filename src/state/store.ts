@@ -2,6 +2,7 @@ import type {
   AppState,
   DayKey,
   Effort,
+  GeneratedPlan,
   LoggedSet,
   Session,
   SetEffort,
@@ -41,6 +42,8 @@ export interface StoreOptions {
   readonly onSaveError?: SaveErrorHandler;
   /** Called when starting one day's session auto-files another. */
   readonly onSessionFiled?: SessionFiledHandler;
+  /** Supplies the current label for a plan day, snapshotted onto new sessions. */
+  readonly planLabel?: (dayKey: DayKey) => string;
   /** Clock seam so tests can produce deterministic timestamps. */
   readonly now?: () => number;
 }
@@ -51,11 +54,14 @@ export class AppStore {
   readonly #persist: ((state: AppState) => void) & { flush(): void };
   readonly #now: () => number;
   readonly #onSessionFiled: SessionFiledHandler | undefined;
+  /** Resolves a day's current label, for snapshotting onto new sessions. */
+  readonly #planLabel: ((dayKey: DayKey) => string) | undefined;
 
   constructor(options: StoreOptions) {
     this.#state = options.initialState;
     this.#now = options.now ?? (() => Date.now());
     this.#onSessionFiled = options.onSessionFiled;
+    this.#planLabel = options.planLabel;
 
     const write = (state: AppState): void => {
       const failure = saveState(options.store, state);
@@ -91,6 +97,21 @@ export class AppStore {
 
   setUnit(unit: WeightUnit): void {
     this.#commit({ ...this.#state, prefs: { ...this.#state.prefs, unit } });
+  }
+
+  /**
+   * Adopt a generated plan, or revert to the built-in one with `null`.
+   *
+   * The built-in plan is never overwritten, so there is always a known-good
+   * week to fall back to when a generated one turns out badly.
+   */
+  setPlan(plan: GeneratedPlan | null): void {
+    this.#commit({ ...this.#state, plan });
+  }
+
+  /** Health context, remembered so it does not have to be retyped each time. */
+  setConditions(conditions: readonly string[]): void {
+    this.#commit({ ...this.#state, prefs: { ...this.#state.prefs, conditions } });
   }
 
   /** Save the onboarding profile used to estimate opening weights. */
@@ -184,6 +205,9 @@ export class AppStore {
       modality: null,
       effort: null,
       startedAt: this.#now(),
+      // Snapshot the label now. Looking it up later would retroactively rename
+      // past sessions every time the plan is regenerated.
+      ...(this.#planLabel ? { planLabel: this.#planLabel(dayKey) } : {}),
     };
   }
 

@@ -1,4 +1,4 @@
-import type { AppState, DayKey, SetEffort, Tab } from '@/types';
+import type { AppState, DayKey, PlanDay, SetEffort, Tab } from '@/types';
 import type { AppStore } from '@/state/store';
 import type { RestTimer } from '../restTimer';
 
@@ -36,6 +36,12 @@ export interface UiState {
 export interface ViewContext {
   readonly store: AppStore;
   readonly state: AppState;
+  /**
+   * The plan in force, generated or built-in, already resolved to real
+   * catalogue objects. Views read this rather than importing `PLAN`, so a
+   * generated plan takes effect everywhere at once.
+   */
+  readonly plan: Readonly<Record<DayKey, PlanDay>>;
   readonly rest: RestTimer;
   readonly ui: UiState;
   /** Re-render the current view from current state. */

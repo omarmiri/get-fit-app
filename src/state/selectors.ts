@@ -1,5 +1,5 @@
-import type { AppState, IsoDate, LoggedSet, Session, WeightUnit } from '@/types';
-import { GOALS, getPlanDay } from '@/data/plan';
+import type { AppState, DayKey, IsoDate, LoggedSet, PlanDay, Session, WeightUnit } from '@/types';
+import { GOALS, PLAN, getPlanDay } from '@/data/plan';
 import { ALL_EXERCISES, isTrendable } from '@/data/exercises';
 import { addDays, parseIsoDate, startOfWeek, toIsoDate } from '@/domain/dates';
 import { bestOneRepMax } from '@/domain/metrics';
@@ -20,14 +20,16 @@ export interface WeekStats {
   readonly strengthGoal: number;
 }
 
-export function weekStats(state: AppState, now: Date = new Date()): WeekStats {
+export type ActivePlan = Readonly<Record<DayKey, PlanDay>>;
+
+export function weekStats(state: AppState, now: Date = new Date(), plan: ActivePlan = PLAN): WeekStats {
   const weekBegan = startOfWeek(now);
   let aerobicMinutes = 0;
   let strengthSessions = 0;
 
   for (const session of state.sessions) {
     if (parseIsoDate(session.date) < weekBegan) continue;
-    const day = getPlanDay(session.dayKey);
+    const day = plan[session.dayKey] ?? getPlanDay(session.dayKey);
     if (!day) continue;
     if (day.aerobic && session.minutes) aerobicMinutes += session.minutes;
     if (day.type === 'strength') strengthSessions += 1;
@@ -81,7 +83,12 @@ export interface WeekBucket {
 }
 
 /** Aerobic minutes bucketed by week, oldest first, ending with the current week. */
-export function minutesByWeek(state: AppState, weeks = 8, now: Date = new Date()): WeekBucket[] {
+export function minutesByWeek(
+  state: AppState,
+  weeks = 8,
+  now: Date = new Date(),
+  plan: ActivePlan = PLAN,
+): WeekBucket[] {
   const currentWeekStart = startOfWeek(now);
   const buckets: WeekBucket[] = [];
 
@@ -93,7 +100,7 @@ export function minutesByWeek(state: AppState, weeks = 8, now: Date = new Date()
     for (const session of state.sessions) {
       const date = parseIsoDate(session.date);
       if (date < from || date >= to) continue;
-      const day = getPlanDay(session.dayKey);
+      const day = plan[session.dayKey] ?? getPlanDay(session.dayKey);
       if (day?.aerobic && session.minutes) minutes += session.minutes;
     }
 

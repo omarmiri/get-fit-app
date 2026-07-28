@@ -336,6 +336,66 @@ export interface Session {
   readonly startedAt: number;
   /** Epoch milliseconds when the session was finished. Absent while active. */
   readonly finishedAt?: number;
+  /**
+   * The plan day's label as it read when the session was logged.
+   *
+   * History renders this rather than looking the label up. Once plans can be
+   * regenerated, a lookup would retroactively relabel old sessions — a Tuesday
+   * logged as "Strength A" would silently become whatever Tuesday is called
+   * now. The snapshot keeps the record true to what actually happened.
+   */
+  readonly planLabel?: string;
+}
+
+/* ------------------------------------------------------- generated plans */
+
+/**
+ * A plan day as returned by the model.
+ *
+ * Deliberately narrower than `PlanDay`: the model chooses movements and
+ * structure by *referencing catalogue ids*, and never supplies cues, rep
+ * ranges, station mappings or loads. Those come from the catalogue on
+ * resolution, so a generated plan inherits everything the app already knows —
+ * substitutions, starting weights, progression history.
+ */
+export interface GeneratedDay {
+  readonly dayKey: DayKey;
+  readonly label: string;
+  readonly type: SessionType | 'rest';
+  readonly sub: string;
+  readonly note: string;
+  readonly outline: readonly string[];
+  readonly aerobic: boolean;
+  readonly minutes?: number;
+  /** Station ids from the catalogue. Never free text. */
+  readonly modalityStations?: readonly string[];
+  /** Exercise ids from the catalogue. Never invented movements. */
+  readonly exerciseIds?: readonly string[];
+  readonly exerciseFormat?: 'circuit' | 'sets';
+  readonly rounds?: string;
+}
+
+/** A complete generated week, plus how it came about. */
+export interface GeneratedPlan {
+  readonly id: string;
+  /** One line on the approach taken, shown before you accept it. */
+  readonly summary: string;
+  readonly days: readonly GeneratedDay[];
+  /** Epoch milliseconds the plan was generated. */
+  readonly generatedAt: number;
+  /** Model that produced it, for when two plans differ and you wonder why. */
+  readonly model: string;
+}
+
+/** What the user tells the model about themselves. */
+export interface PlanRequest {
+  readonly profile?: UserProfile;
+  /** Free-text health context, e.g. `high cholesterol`. */
+  readonly conditions: readonly string[];
+  /** Anything to work around this week, e.g. `sore left shoulder`. */
+  readonly notes: string;
+  /** Station ids actually available, so it cannot prescribe absent equipment. */
+  readonly availableStationIds: readonly string[];
 }
 
 /** User preferences. Additive only — unknown keys are dropped on load. */
@@ -366,6 +426,8 @@ export interface Preferences {
   readonly profile?: UserProfile;
   /** True once onboarding has been shown, so it is not offered again. */
   readonly onboarded?: boolean;
+  /** Health context reused as input whenever a plan is generated. */
+  readonly conditions?: readonly string[];
 }
 
 /** Weekly targets shown on the goals card. */
@@ -383,6 +445,13 @@ export interface AppState {
   /** The session currently being logged, if any. */
   readonly active: Session | null;
   readonly prefs: Preferences;
+  /**
+   * The generated plan in use, if the user accepted one.
+   *
+   * `null` means the built-in plan applies. Kept as data rather than replacing
+   * `data/plan.ts` so there is always a known-good plan to fall back to.
+   */
+  readonly plan: GeneratedPlan | null;
 }
 
 /* ------------------------------------------------------------------- views */

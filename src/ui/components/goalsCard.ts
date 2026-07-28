@@ -1,10 +1,10 @@
 import type { AppState } from '@/types';
-import { currentStreak, weekStats } from '@/state/selectors';
+import { type ActivePlan, currentStreak, weekStats } from '@/state/selectors';
 import { card, div, el, eyebrow, text } from '../dom';
 
 /** Weekly progress against the aerobic-minutes and strength-session targets. */
-export function renderGoalsCard(state: AppState, now: Date = new Date()): HTMLElement {
-  const stats = weekStats(state, now);
+export function renderGoalsCard(state: AppState, plan: ActivePlan, now: Date = new Date()): HTMLElement {
+  const stats = weekStats(state, now, plan);
   const streak = currentStreak(state, now);
 
   return card([

@@ -1,6 +1,6 @@
 import type { Child } from '../dom';
 import type { DayKey, PlanDay, Session } from '@/types';
-import { DAY_NAMES, PLAN } from '@/data/plan';
+import { DAY_NAMES } from '@/data/plan';
 import { stationName } from '@/data/equipment';
 import { defaultStationId, resolveOptions } from '@/domain/substitutions';
 import { recommend } from '@/domain/progression';
@@ -22,7 +22,7 @@ import type { ViewContext } from './context';
 /** The Today tab: the session for the selected plan day, and the controls to log it. */
 export function renderTodayView(context: ViewContext): Child[] {
   const dayKey = context.ui.viewDay ?? todayDayKey();
-  const day = PLAN[dayKey];
+  const day = context.plan[dayKey];
 
   // Setup comes first and replaces the session, so it is answered once rather
   // than nagging alongside the workout.
@@ -33,11 +33,11 @@ export function renderTodayView(context: ViewContext): Child[] {
   return [
     renderHeader(day),
     renderStaleBanner(context),
-    renderDateNotice(dayKey),
+    renderDateNotice(context, dayKey),
     renderOutline(day),
     ...renderBody(context, dayKey, day),
     card([eyebrow('How to run it'), text('prose', day.note)]),
-    renderGoalsCard(context.state),
+    renderGoalsCard(context.state, context.plan),
   ];
 }
 
@@ -72,13 +72,13 @@ function renderHeader(day: PlanDay): HTMLElement {
  * Tuesday and logging it produces a Tuesday-dated session that followed the
  * Friday plan. Saying so up front avoids a confusing surprise in History.
  */
-function renderDateNotice(dayKey: DayKey): HTMLElement | null {
+function renderDateNotice(context: ViewContext, dayKey: DayKey): HTMLElement | null {
   if (dayKey === todayDayKey()) return null;
 
   return div('notice', [
     text(
       'notice__body',
-      `Viewing the ${PLAN[dayKey].label} plan. Anything you log is recorded against today, ${formatWithWeekday(todayIso())}.`,
+      `Viewing the ${context.plan[dayKey].label} plan. Anything you log is recorded against today, ${formatWithWeekday(todayIso())}.`,
     ),
   ]);
 }
@@ -99,7 +99,7 @@ function renderStaleBanner(context: ViewContext): HTMLElement | null {
     eyebrow('Unfinished session'),
     text(
       'notice__body',
-      `You left a ${PLAN[stale.dayKey].label} session open on ${formatShortDate(stale.date)} — ${summary}.`,
+      `You left a ${context.plan[stale.dayKey].label} session open on ${formatShortDate(stale.date)} — ${summary}.`,
     ),
     div('notice__actions', [
       el('button', {

@@ -33,7 +33,10 @@ export function renderHistoryView(context: ViewContext): Child[] {
 
   return [
     header,
-    card([eyebrow('Aerobic minutes by week'), renderMinutesChart(minutesByWeek(state), GOALS.minutes)]),
+    card([
+      eyebrow('Aerobic minutes by week'),
+      renderMinutesChart(minutesByWeek(state, 8, new Date(), context.plan), GOALS.minutes),
+    ]),
     renderTrendSection(context),
     renderSessionLog(context),
   ];
@@ -91,8 +94,10 @@ function renderSessionLog(context: ViewContext): HTMLElement {
 }
 
 function renderSessionRow(context: ViewContext, session: Session): HTMLElement {
-  const day = getPlanDay(session.dayKey);
-  const label = day?.label ?? session.dayKey;
+  const day = context.plan[session.dayKey] ?? getPlanDay(session.dayKey);
+  // The label recorded at the time wins. Looking it up would rename past
+  // sessions whenever the plan changes.
+  const label = session.planLabel ?? day?.label ?? session.dayKey;
   const color = day?.color ?? PLATE.white;
 
   return div('logrow', [

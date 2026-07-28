@@ -180,7 +180,7 @@ Data written by v0.1 is migrated automatically on first launch, including the ex
 
 ## Testing
 
-229 tests over the domain logic, the store, schema migration, the equipment catalogue, substitution and progression logic:
+250 tests over the domain logic, the store, schema migration, the equipment catalogue, substitution, progression and plan-validation logic:
 
 ```bash
 npm test
@@ -191,16 +191,58 @@ The UI layer is verified by hand — the logic worth protecting from regressions
 
 ---
 
+## Plan generation (Gemini)
+
+The Plan tab can generate a week with Gemini and swap it in. Set `GEMINI_API_KEY`
+in the Render environment; the app hides the control when the server reports no
+key, so it never offers a button that can only fail.
+
+| Variable         | Purpose                                   |
+| ---------------- | ----------------------------------------- |
+| `GEMINI_API_KEY` | Required. Read server-side only.          |
+| `GEMINI_MODEL`   | Optional. Defaults to `gemini-2.5-flash`. |
+
+**The key never reaches the browser.** `gemini.js` runs in the server process and
+`/api/plan/generate` proxies the call. Never move this to a `VITE_`-prefixed
+variable — Vite inlines those into the client bundle at build time.
+
+### What the model is and is not allowed to do
+
+It selects movements and arranges a week **by referencing catalogue ids**. It
+never invents an exercise, never names equipment freehand, and never prescribes
+a load.
+
+That constraint is what makes the feature safe to build on. A generated day
+resolves against `data/exercises.ts` and `data/equipment.ts`, so it inherits
+coaching cues, plain-language summaries, station substitutions, starting weights
+and progression history for free. An invented movement would have none of that
+and would orphan anything logged against it.
+
+Loads stay with `domain/progression.ts`. The model says _leg press, 8–12_; the
+app decides _125 lb_ from your profile and your own logged history.
+
+### The gate
+
+Every generated plan passes through `domain/planValidation.ts` before it can be
+adopted — the same deterministic checks regardless of which model produced it:
+
+- Errors block: unknown exercise or station ids, missing or duplicated days,
+  strength days with no exercises, timed days with no duration or location.
+- Warnings inform: below the weekly aerobic target, too few strength days,
+  back-to-back strength days, equipment you have marked absent.
+
+Nothing is saved until you accept it, and the built-in plan is always one tap
+away. Sessions snapshot their plan label when logged, so regenerating never
+retroactively renames anything already in your history.
+
 ## Roadmap notes
 
-**Gemini belongs in plan restructuring, not progression.** Rewriting the plan in
-response to "my shoulder hurts, swap the pressing" is open-ended language over a
-structured document, and there is no reasonable way to write rules for it. That
-is where an LLM earns its place. Deciding whether to add 10 lb is not.
-
-If you add it: the API key must live server-side in `server.js` — never in a
-`VITE_`-prefixed variable, which Vite inlines into the client bundle at build
-time and would ship your key to every browser.
+**Gemini belongs in plan structure, not progression.** Choosing and arranging
+movements in response to "my shoulder hurts" is open-ended language over a
+structured document, and there is no reasonable way to write rules for it.
+Deciding whether to add 10 lb is arithmetic over your own history. The split is
+enforced in code: the model cannot return a weight, and the progression engine
+never calls the network.
 
 ## Not yet built
 

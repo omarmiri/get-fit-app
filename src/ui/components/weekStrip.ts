@@ -1,5 +1,5 @@
-import type { AppState, DayKey } from '@/types';
-import { DAY_KEYS, DAY_NAMES, PLAN } from '@/data/plan';
+import type { AppState, DayKey, PlanDay } from '@/types';
+import { DAY_KEYS, DAY_NAMES } from '@/data/plan';
 import { addDays, startOfWeek, toIsoDate, todayDayKey } from '@/domain/dates';
 import { completedDates } from '@/state/selectors';
 import { el, replaceChildren } from '../dom';
@@ -14,6 +14,8 @@ import { el, replaceChildren } from '../dom';
 
 export interface WeekStripOptions {
   readonly state: AppState;
+  /** The plan in force, so the strip reflects a generated week. */
+  readonly plan: Readonly<Record<DayKey, PlanDay>>;
   /** The plan day currently on screen. */
   readonly selected: DayKey;
   readonly onSelect: (day: DayKey) => void;
@@ -28,7 +30,7 @@ export function renderWeekStrip(container: HTMLElement, options: WeekStripOption
 
   const cells = DAY_KEYS.map((key, index) => {
     const date = addDays(weekBegan, index);
-    const day = PLAN[key];
+    const day = options.plan[key];
     const isSelected = key === options.selected;
     const isToday = key === currentDay;
     const isDone = done.has(toIsoDate(date));

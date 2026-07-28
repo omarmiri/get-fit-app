@@ -1,9 +1,9 @@
 /**
- * Static server for the built app.
+ * Server for the built app.
  *
- * There is no database and no API — the app keeps everything in the browser.
- * This process exists only to hand out `dist/` on Render with correct caching
- * and sensible security headers.
+ * Training data still lives entirely in the browser — there is no database and
+ * nothing about a session is stored here. The only server-side logic is the
+ * Gemini plan proxy, which exists solely so the API key never reaches a client.
  */
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -12,6 +12,8 @@ import { fileURLToPath } from 'node:url';
 import compression from 'compression';
 import express from 'express';
 import helmet from 'helmet';
+
+import { GeminiError, generatePlan } from './gemini.js';
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(rootDir, 'dist');
@@ -46,7 +48,8 @@ app.use(
         'img-src': ["'self'", 'data:', 'blob:'],
         'media-src': ["'self'", 'blob:'],
         'font-src': ["'self'"],
-        // Blob URLs back the backup export download.
+        // Same-origin only: the Gemini call goes through this server, so the
+        // browser never talks to a third-party API directly.
         'connect-src': ["'self'"],
         'manifest-src': ["'self'"],
         'worker-src': ["'self'"],
@@ -65,7 +68,64 @@ app.use(
 app.use(compression());
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, uptime: process.uptime() });
+  res.json({
+    ok: true,
+    uptime: process.uptime(),
+    // Lets the client hide the generate control rather than offering a button
+    // that can only fail. Reports presence, never the key itself.
+    gemini: Boolean(process.env.GEMINI_API_KEY),
+  });
+});
+
+/* --------------------------------------------------------------- plan API */
+
+// Plan requests carry the exercise and station catalogues, so the body is
+// larger than a default form post but nowhere near the 100kb default cap.
+app.use('/api', express.json({ limit: '256kb' }));
+
+/**
+ * Crude fixed-window rate limit.
+ *
+ * This is a single-user app, so the concern is not abuse but an accidental
+ * loop burning through quota. In-memory state is fine: a restart resetting the
+ * window costs nothing.
+ */
+const RATE_LIMIT = { windowMs: 60_000, max: 10 };
+const requestLog = new Map();
+
+function rateLimited(key) {
+  const now = Date.now();
+  const hits = (requestLog.get(key) ?? []).filter((at) => now - at < RATE_LIMIT.windowMs);
+  hits.push(now);
+  requestLog.set(key, hits);
+
+  // Bound the map so a long-running process cannot accumulate stale keys.
+  if (requestLog.size > 100) {
+    for (const [existing, times] of requestLog) {
+      if (times.every((at) => now - at >= RATE_LIMIT.windowMs)) requestLog.delete(existing);
+    }
+  }
+
+  return hits.length > RATE_LIMIT.max;
+}
+
+app.post('/api/plan/generate', async (req, res) => {
+  if (rateLimited(req.ip ?? 'unknown')) {
+    return res.status(429).json({ error: 'Too many plan requests. Wait a minute and try again.' });
+  }
+
+  try {
+    const { plan, model } = await generatePlan(req.body ?? {});
+    return res.json({ plan, model });
+  } catch (error) {
+    if (error instanceof GeminiError) {
+      // Logged without the request body, which carries health context.
+      console.error(`[plan] ${error.status}: ${error.message}`);
+      return res.status(error.status).json({ error: error.message });
+    }
+    console.error('[plan] unexpected failure', error);
+    return res.status(500).json({ error: 'Plan generation failed unexpectedly.' });
+  }
 });
 
 /**
