@@ -1,4 +1,5 @@
 import type { AppState, DayKey, PlanDay, SetEffort, Tab } from '@/types';
+import type { CardioTimerState } from '../components/cardioTimer';
 import type { AppStore } from '@/state/store';
 import type { RestTimer } from '../restTimer';
 
@@ -28,6 +29,14 @@ export interface UiState {
    * Cleared once the set is logged, so the next set re-seeds from history.
    */
   draftByExercise: Record<string, { weight: number; reps: number }>;
+  /**
+   * The cardio run clock, by plan day.
+   *
+   * Transient: a full reload loses it, and the manual minutes field is the
+   * fallback. Timestamp-based, so backgrounding the tab — which is the normal
+   * case for a 45-minute run with the screen off — keeps perfect time.
+   */
+  cardioByDay: Record<string, CardioTimerState | undefined>;
   /** Effort chosen for the set about to be logged, by exercise id. */
   effortByExercise: Record<string, SetEffort | undefined>;
 }

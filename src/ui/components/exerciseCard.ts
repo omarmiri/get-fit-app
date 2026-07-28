@@ -32,6 +32,10 @@ export interface ExerciseCardOptions {
   readonly onDraftChange: (draft: { weight: number; reps: number }) => void;
   /** What the progression engine suggests, or null when it has nothing to say. */
   readonly recommendation: Recommendation | null;
+  /** Text for the log button — a set number, or a circuit round. */
+  readonly logLabel: string;
+  /** True once this movement has met its target for the session. */
+  readonly targetMet: boolean;
   /** Effort selected for the set about to be logged. */
   readonly effort: SetEffort | undefined;
   readonly onEffortChange: (effort: SetEffort | undefined) => void;
@@ -70,8 +74,11 @@ export function renderExerciseCard(options: ExerciseCardOptions): HTMLElement {
   });
 
   const logButton = el('button', {
-    class: 'button button--primary',
-    text: `Log set ${logged.length + 1}`,
+    // Once the target is met the extra set is optional, so the button steps
+    // back visually rather than continuing to look like the next required
+    // action. Prompting "Log set 4" after three of three read as an instruction.
+    class: options.targetMet ? 'button button--ghost' : 'button button--primary',
+    text: options.targetMet ? 'Log an extra set' : options.logLabel,
     attrs: { type: 'button' },
     on: {
       click: () => options.onLogWithEffort(weightStepper.getValue(), repsStepper.getValue(), options.effort),
@@ -107,6 +114,13 @@ export function renderExerciseCard(options: ExerciseCardOptions): HTMLElement {
 
     renderRecommendation(options),
     exercise.repMetric === 'seconds' ? null : renderEffortPicker(options),
+
+    options.targetMet
+      ? div('donebadge', [
+          el('span', { class: 'donebadge__tick', text: '✓', attrs: { 'aria-hidden': 'true' } }),
+          text('donebadge__text', `${logged.length} of ${exercise.sets} done — nothing more needed here.`),
+        ])
+      : null,
 
     exercise.loaded
       ? null

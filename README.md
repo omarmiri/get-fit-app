@@ -33,6 +33,7 @@ Then open http://localhost:5173.
 
 - **Today** — opens on the current day's session, colour-coded by load
 - **Fast set logging** — weight and reps steppers prefilled from last time, one tap to log, rest timer starts itself
+- **Run clock** — start the cardio portion and it counts down, pauses for water breaks, and logs the time you _actually_ ran rather than the time you planned
 - **Rest timer** — deadline-based, so it stays accurate when the phone screen sleeps mid-set
 - **Progress charts** — estimated one-rep max per movement, aerobic minutes per week against the 150-minute target
 - **Guided cues** — setup, execution and the common mistake for every movement
@@ -180,7 +181,7 @@ Data written by v0.1 is migrated automatically on first launch, including the ex
 
 ## Testing
 
-260 tests over the domain logic, the store, schema migration, the equipment catalogue, substitution, progression and plan-validation logic:
+271 tests over the domain logic, the store, schema migration, the equipment catalogue, substitution, progression and plan-validation logic:
 
 ```bash
 npm test

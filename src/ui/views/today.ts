@@ -17,6 +17,7 @@ import { renderDurationCard } from '../components/durationCard';
 import { renderExerciseCard } from '../components/exerciseCard';
 import { renderGoalsCard } from '../components/goalsCard';
 import { renderOnboarding } from '../components/onboarding';
+import { elapsedMs, resetCardioTicker } from '../components/cardioTimer';
 import type { ViewContext } from './context';
 
 /** The Today tab: the session for the selected plan day, and the controls to log it. */
@@ -184,14 +185,32 @@ function renderLogger(context: ViewContext, dayKey: DayKey, day: PlanDay): Child
   const active = context.store.activeFor(dayKey);
   const logged = active?.sets.filter((set) => set.exerciseId === exercise.id) ?? [];
 
-  const railHeading =
-    day.exerciseFormat === 'circuit'
-      ? `Do all ${exercises.length}, then repeat — ${day.rounds ?? '2–3'} rounds`
+  const isCircuit = day.exerciseFormat === 'circuit';
+
+  // How many times each movement has been done this session.
+  const counts = exercises.map(
+    (item) => active?.sets.filter((set) => set.exerciseId === item.id).length ?? 0,
+  );
+  const targetRounds = Math.max(...exercises.map((item) => item.sets));
+  const roundsDone = Math.min(...counts);
+  const allDone = exercises.every((item, i) => (counts[i] ?? 0) >= item.sets);
+
+  const railHeading = allDone
+    ? isCircuit
+      ? `All ${targetRounds} rounds done — finish the session below`
+      : `All ${exercises.length} movements done — finish the session below`
+    : isCircuit
+      ? `Round ${Math.min(roundsDone + 1, targetRounds)} of ${targetRounds} — one set of each, then round again`
       : `Work through all ${exercises.length}`;
 
-  const railHeader = div('railhead', [
+  const railHeader = div(allDone ? 'railhead is-done' : 'railhead', [
     text('railhead__text', railHeading),
-    text('railhead__hint', 'Tap a name to jump to it. Logging a set moves you on automatically.'),
+    text(
+      'railhead__hint',
+      isCircuit
+        ? 'Logging a set moves you to the next movement automatically.'
+        : 'Tap a name to jump to it. Logging a set moves you on automatically.',
+    ),
   ]);
 
   const rail = el(
@@ -251,6 +270,10 @@ function renderLogger(context: ViewContext, dayKey: DayKey, day: PlanDay): Child
     stationId,
     swapOpen: context.ui.swapOpenFor === exercise.id,
     recommendation,
+    logLabel: isCircuit
+      ? `Log round ${Math.min(logged.length + 1, targetRounds)} — ${exercise.name}`
+      : `Log set ${logged.length + 1}`,
+    targetMet: logged.length >= exercise.sets,
     effort: context.ui.effortByExercise[exercise.id],
     onEffortChange: (effort) => {
       context.ui.effortByExercise[exercise.id] = effort;
@@ -264,9 +287,26 @@ function renderLogger(context: ViewContext, dayKey: DayKey, day: PlanDay): Child
       delete context.ui.draftByExercise[exercise.id];
       delete context.ui.effortByExercise[exercise.id];
 
-      const nowLogged =
-        context.store.activeFor(dayKey)?.sets.filter((set) => set.exerciseId === exercise.id).length ?? 0;
-      if (nowLogged >= exercise.sets && index < exercises.length - 1) {
+      /*
+       * A circuit moves on after every single set and wraps round to the top
+       * for the next round — that is what makes it a circuit. Straight sets
+       * stay on the movement until its target is met.
+       *
+       * The old rule applied straight-set behaviour to both, so a core circuit
+       * was silently logged as three sets of each movement in turn, which
+       * contradicted the session outline printed directly above it.
+       */
+      const after = context.store.activeFor(dayKey)?.sets ?? [];
+      const doneHere = after.filter((set) => set.exerciseId === exercise.id).length;
+
+      if (isCircuit) {
+        const finished = exercises.every(
+          (item) => after.filter((set) => set.exerciseId === item.id).length >= item.sets,
+        );
+        // Stay put once every movement has hit its target, rather than looping
+        // into a round nobody asked for.
+        if (!finished) context.ui.exerciseIndex = (index + 1) % exercises.length;
+      } else if (doneHere >= exercise.sets && index < exercises.length - 1) {
         context.ui.exerciseIndex = index + 1;
       }
       context.render();
@@ -315,10 +355,51 @@ function renderLogger(context: ViewContext, dayKey: DayKey, day: PlanDay): Child
 function renderDuration(context: ViewContext, dayKey: DayKey, day: PlanDay): HTMLElement {
   const fallbackMinutes = day.minutes ?? null;
 
+  const cardio = context.ui.cardioByDay[dayKey] ?? null;
+
   return renderDurationCard({
     day,
     active: context.store.activeFor(dayKey),
     prefs: context.state.prefs,
+    cardio,
+    onCardioStart: () => {
+      context.ui.cardioByDay[dayKey] = {
+        targetSeconds: (day.minutes ?? 30) * 60,
+        accumulatedMs: 0,
+        startedAt: Date.now(),
+      };
+      resetCardioTicker();
+      context.render();
+    },
+    onCardioPause: () => {
+      const current = context.ui.cardioByDay[dayKey];
+      if (!current) return;
+      // Bank the running segment so paused time never counts.
+      context.ui.cardioByDay[dayKey] = {
+        ...current,
+        accumulatedMs: elapsedMs(current),
+        startedAt: null,
+      };
+      context.render();
+    },
+    onCardioResume: () => {
+      const current = context.ui.cardioByDay[dayKey];
+      // Already running — resuming again would discard the current segment.
+      if (current?.startedAt !== null || current === undefined) return;
+      context.ui.cardioByDay[dayKey] = { ...current, startedAt: Date.now() };
+      context.render();
+    },
+    onCardioFinish: (minutes) => {
+      // The logged duration is what was actually run, not what was planned.
+      context.store.setMinutes(dayKey, minutes);
+      delete context.ui.cardioByDay[dayKey];
+      toast(`${minutes} minutes logged`);
+      context.render();
+    },
+    onCardioReset: () => {
+      delete context.ui.cardioByDay[dayKey];
+      context.render();
+    },
     onMinutes: (minutes) => context.store.setMinutes(dayKey, minutes),
     onModality: (modality) => {
       context.store.toggleModality(dayKey, modality, fallbackMinutes);

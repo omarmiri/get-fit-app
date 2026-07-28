@@ -2,6 +2,7 @@ import type { Effort, PlanDay, Preferences, Session, Station } from '@/types';
 import { ZONE_LABEL, getStation } from '@/data/equipment';
 import { clampMinutes } from '@/domain/limits';
 import { card, div, el, eyebrow, text } from '../dom';
+import { type CardioTimerState, renderCardioTimer } from './cardioTimer';
 
 /**
  * Minutes, modality and perceived effort for time-based sessions.
@@ -18,6 +19,13 @@ export interface DurationCardOptions {
   /** The in-progress session, if one has been started. */
   readonly active: Session | null;
   readonly prefs: Preferences;
+  /** Run clock state for this day, or null when it has not been started. */
+  readonly cardio: CardioTimerState | null;
+  readonly onCardioStart: () => void;
+  readonly onCardioPause: () => void;
+  readonly onCardioResume: () => void;
+  readonly onCardioFinish: (elapsedMinutes: number) => void;
+  readonly onCardioReset: () => void;
   readonly onMinutes: (minutes: number) => void;
   readonly onModality: (modality: string) => void;
   readonly onEffort: (effort: Effort) => void;
@@ -48,6 +56,19 @@ export function renderDurationCard(options: DurationCardOptions): HTMLElement {
   return card([
     eyebrow(day.type === 'mixed' ? 'Cardio portion' : 'Session'),
 
+    renderCardioTimer({
+      targetMinutes: day.minutes ?? 30,
+      state: options.cardio,
+      shouldVibrate: options.prefs.restVibrate,
+      onStart: options.onCardioStart,
+      onPause: options.onCardioPause,
+      onResume: options.onCardioResume,
+      onFinish: options.onCardioFinish,
+      onReset: options.onCardioReset,
+    }),
+
+    // The manual field stays. The clock is the convenient path, not the only
+    // one — you may have run before opening the app, or reloaded mid-session.
     div('bigfield', [minutesInput, el('span', { class: 'bigfield__unit', text: 'minutes' })]),
 
     renderStationChoices(options),
