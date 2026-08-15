@@ -1308,6 +1308,21 @@
   color: var(--dimmer);
 }
 
+/* Multi-line variant, for the gym description and pasted plans. Resizes
+   vertically only — horizontal resize would break the card's layout. */
+.gen__input--area {
+  min-height: calc(var(--tap) * 2);
+  resize: vertical;
+  line-height: 1.5;
+}
+
+/* Pasted plan JSON is machine text: monospace makes a truncated or mangled
+   paste visible at a glance rather than after a failed import. */
+.gen__input--code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
 /* The proposed week, before it is accepted. Visually set apart from the plan
    currently in force so the two are never confused. */
 .gen__candidate {

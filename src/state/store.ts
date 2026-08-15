@@ -147,10 +147,23 @@ export class AppStore {
   }
 
   /**
-   * Mark a station as present or absent at the user's club.
+   * Where the user trains, in their own words.
    *
-   * The equipment catalogue is partly inferred from the chain's usual lineup,
-   * so this is how the floor corrects it.
+   * Trimmed and cleared when blank, so an emptied box does not persist as a
+   * meaningless empty string that later gets pasted into a prompt.
+   */
+  setGym(gym: string): void {
+    const trimmed = gym.trim();
+    const { gym: _previous, ...rest } = this.#state.prefs;
+
+    this.#commit({ ...this.#state, prefs: trimmed ? { ...rest, gym: trimmed } : rest });
+  }
+
+  /**
+   * Mark a station as present or absent at the user's gym.
+   *
+   * The catalogue is a vocabulary of common equipment rather than an inventory
+   * of anyone's building, so this is how the floor corrects it.
    */
   setStationMissing(stationId: string, missing: boolean): void {
     const current = new Set(this.#state.prefs.missingStations ?? []);

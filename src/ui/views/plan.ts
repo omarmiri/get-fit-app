@@ -1,8 +1,7 @@
 import type { Child } from '../dom';
 import type { FitnessLevel, WeightUnit } from '@/types';
 import { DAY_NAMES, PLAN_ORDER } from '@/data/plan';
-import { CLUB, daysSinceVerified } from '@/data/club';
-import { ALL_STATIONS, ZONE_LABEL } from '@/data/equipment';
+import { ALL_STATIONS } from '@/data/equipment';
 import { PLATE_LEGEND } from '@/data/plates';
 import { daysBetween, todayIso } from '@/domain/dates';
 import { UNIT_LABEL, formatWeight } from '@/domain/units';
@@ -18,7 +17,7 @@ export function renderPlanView(context: ViewContext): Child[] {
   return [
     div('spine', [eyebrow('Seven-day rotation'), el('h1', { text: 'The plan' })]),
     renderRotation(context),
-    renderClubCard(),
+    renderGymCard(context),
     renderEquipmentCard(context),
     renderPlanGenerator(context),
     renderProfileCard(context),
@@ -328,80 +327,70 @@ function eraseAll(context: ViewContext): void {
   context.render();
 }
 
-/* ------------------------------------------------------------------- club */
+/* -------------------------------------------------------------------- gym */
 
-function renderClubCard(): HTMLElement {
-  const age = daysSinceVerified();
-
+/**
+ * Where you train, in your own words.
+ *
+ * Free text rather than a structured venue picker, because the app does not
+ * need to understand it — this is the paragraph that gets pasted into the
+ * prompt you hand your LLM, and that reader parses English better than any
+ * schema the app could impose. It is also the honest shape of the data: "the
+ * squat racks are always busy after 5" is a real constraint on a plan and fits
+ * nowhere in a list of checkboxes.
+ */
+function renderGymCard(context: ViewContext): HTMLElement {
   return card([
-    eyebrow('Your club'),
-    text('club__name', CLUB.name),
-    text('club__line', CLUB.address),
-    text('club__line', CLUB.phone),
-
-    div(
-      'club__hours',
-      CLUB.hours.map((h) => text('club__hoursrow', `${h.days} · ${h.open} – ${h.close}`)),
-    ),
-
-    div('club__group', [
-      eyebrow('Amenities'),
-      el(
-        'ul',
-        { class: 'club__list' },
-        CLUB.amenities.map((a) => el('li', { text: a })),
-      ),
-    ]),
-
-    div('club__group', [
-      eyebrow('Classes'),
-      text('club__line', CLUB.classes.join(' · ')),
-      text('club__hint', 'Times change week to week — check the LA Fitness app for the current schedule.'),
-    ]),
-
-    div('club__group', [eyebrow('Not at this club'), text('club__line', CLUB.notAvailable.join(' · '))]),
-
+    eyebrow('Your gym'),
     text(
-      'club__hint',
-      `Club listing checked ${age === 0 ? 'today' : age === 1 ? 'yesterday' : `${age} days ago`}. Hours and classes change — treat this as a starting point.`,
+      'prose',
+      'Describe where you train and what it has. This gets included when you copy a prompt for your LLM, so the plan it writes uses equipment you can actually reach.',
     ),
+    el('textarea', {
+      class: 'gen__input gen__input--area',
+      // A textarea's initial value is its child text, not a `value` attribute.
+      text: context.state.prefs.gym ?? '',
+      attrs: {
+        rows: 4,
+        autocomplete: 'off',
+        placeholder:
+          'e.g. Big commercial gym. Full dumbbell rack to 100 lb, cables, most machines, squat rack and a pool. No sled or turf.',
+        'aria-label': 'Describe your gym and its equipment',
+      },
+      on: {
+        change: (event) => {
+          context.store.setGym((event.target as HTMLTextAreaElement).value);
+          toast('Gym details saved');
+        },
+      },
+    }),
+    text('club__hint', 'Stored on this device with everything else. Nothing is sent anywhere on its own.'),
   ]);
 }
 
 /**
- * Equipment the app believes is on the floor, split by how confident it is.
+ * The equipment vocabulary, and which of it your gym is missing.
  *
- * The unconfirmed list is the honest part: LA Fitness publishes amenities but
- * not machine inventories, so those entries are the chain's usual lineup rather
- * than a verified fact. Marking one missing removes it from every suggestion.
+ * The app cannot know what is on your floor, so it assumes everything is
+ * possible and lets you cross things off. That correction is the only
+ * equipment fact the app actually holds, and it drives what the swap sheet
+ * offers when a machine is taken.
  */
 function renderEquipmentCard(context: ViewContext): HTMLElement {
   const missing = new Set(context.state.prefs.missingStations ?? []);
-  const confirmed = ALL_STATIONS.filter((s) => s.confidence === 'club-confirmed');
-  const assumed = ALL_STATIONS.filter((s) => s.confidence === 'chain-standard');
 
   return card([
     eyebrow('Equipment'),
     text(
       'prose',
-      'Confirmed items come from the club’s published amenities. The rest is LA Fitness’s usual lineup and is not verified for this location — correct it as you go and the app stops suggesting what is not there.',
+      'These are the names the app knows for common gym equipment, used to suggest an alternative when your machine is taken. Tap anything your gym does not have and it stops being suggested.',
     ),
 
     div('club__group', [
-      eyebrow(`Confirmed at this club (${confirmed.length})`),
-      el(
-        'ul',
-        { class: 'club__list' },
-        confirmed.map((s) => el('li', { text: `${s.name} — ${ZONE_LABEL[s.zone]}` })),
-      ),
-    ]),
-
-    div('club__group', [
-      eyebrow(`Assumed present (${assumed.length})`),
       el(
         'div',
         { class: 'stationtags' },
-        assumed.map((station) =>
+        ALL_STATIONS.map((station) =>
           el('button', {
             class: missing.has(station.id) ? 'stationtag is-missing' : 'stationtag',
             text: station.name,
@@ -409,8 +398,8 @@ function renderEquipmentCard(context: ViewContext): HTMLElement {
               type: 'button',
               'aria-pressed': missing.has(station.id),
               'aria-label': missing.has(station.id)
-                ? `${station.name} is marked as not at your club. Tap to restore.`
-                : `${station.name}. Tap to mark as not at your club.`,
+                ? `${station.name} is marked as not at your gym. Tap to restore.`
+                : `${station.name}. Tap to mark as not at your gym.`,
             },
             on: {
               click: () => {
@@ -423,7 +412,7 @@ function renderEquipmentCard(context: ViewContext): HTMLElement {
           }),
         ),
       ),
-      text('club__hint', 'Tap anything your club does not have. Tap again to bring it back.'),
+      text('club__hint', 'Tap again to bring something back.'),
     ]),
 
     missing.size > 0

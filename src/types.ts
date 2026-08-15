@@ -99,25 +99,20 @@ export type StationKind =
   | 'court';
 
 /**
- * How sure the app is that a station exists at this specific club.
+ * A piece of equipment or a space in a gym.
  *
- * This distinction is the honest core of the equipment data. LA Fitness
- * publishes club amenities but not machine inventories, and no third party
- * does either. Anything marked `chain-standard` is an informed guess from the
- * chain's usual lineup and must be presented as such — the user confirms or
- * corrects it on their first visit.
+ * The catalogue is a *vocabulary of common gym equipment*, not an inventory of
+ * any particular building. The app cannot know what is on your floor, so it
+ * does not pretend to: every station is treated as possibly-present until you
+ * say otherwise, and `Preferences.missingStations` is the only record of what
+ * your gym actually lacks. The floor corrects the data, not the other way
+ * round.
  */
-export type StationConfidence = 'club-confirmed' | 'chain-standard';
-
-/** A piece of equipment or a space in the club. */
 export interface Station {
   readonly id: string;
   readonly name: string;
   readonly kind: StationKind;
   readonly zone: Zone;
-  readonly confidence: StationConfidence;
-  /** Manufacturer, where the chain's standard lineup makes it predictable. */
-  readonly brand?: string;
   /** Short note on finding or setting it up. */
   readonly note?: string;
   /** Roadmap: photo or clip of the station itself. */
@@ -419,14 +414,25 @@ export interface Preferences {
   /** Whether the rest timer vibrates on completion, where supported. */
   readonly restVibrate: boolean;
   /**
-   * Stations the user has marked as not present at their club.
+   * Stations the user has marked as not present at their gym.
    *
-   * The equipment catalogue is partly inferred from the chain's usual lineup
-   * rather than from a published inventory, so it will be wrong in places.
-   * Rather than pretend otherwise, the app lets the floor correct the data:
-   * anything marked missing here stops being suggested.
+   * The equipment catalogue is a vocabulary of common gym equipment, not an
+   * inventory of anyone's building, so it will be wrong in places. Rather than
+   * pretend otherwise, the app lets the floor correct it: anything marked
+   * missing here stops being suggested.
    */
   readonly missingStations?: readonly string[];
+  /**
+   * Free-text description of where the user trains and what it has.
+   *
+   * Deliberately prose rather than structured data. The app does not need to
+   * parse it — its job is to be pasted into the prompt the user hands their
+   * LLM, which is the thing that actually needs to know whether there is a
+   * squat rack. Structuring it would mean maintaining an equipment ontology
+   * broad enough for every gym on earth, to serve a consumer that reads
+   * English perfectly well.
+   */
+  readonly gym?: string;
   /**
    * Per-exercise station preference, remembered across sessions.
    *

@@ -27,7 +27,16 @@ import { isWeightUnit } from '@/domain/units';
  *   add a step whenever a persisted shape changes.
  */
 
-export const CURRENT_SCHEMA_VERSION = 6;
+export const CURRENT_SCHEMA_VERSION = 7;
+
+/**
+ * Longest free-text gym description kept.
+ *
+ * Generous for a paragraph about a gym, and a hard stop on a pathological
+ * paste. There is no server to repair a browser whose only storage key has
+ * become a novel.
+ */
+const MAX_GYM_LENGTH = 2000;
 
 /** Storage key for the current schema. */
 export const STORAGE_KEY = 'rackfile:state';
@@ -231,6 +240,9 @@ function parsePreferences(raw: unknown): Preferences {
     ? rawConditions.filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
     : [];
 
+  const rawGym = raw['gym'];
+  const gym = typeof rawGym === 'string' ? rawGym.trim().slice(0, MAX_GYM_LENGTH) : '';
+
   const rawPreferred = raw['preferredStations'];
   const preferredStations: Record<string, string> = {};
   if (isRecord(rawPreferred)) {
@@ -250,6 +262,7 @@ function parsePreferences(raw: unknown): Preferences {
     ...(Object.keys(preferredStations).length === 0 ? {} : { preferredStations }),
     ...(profile === undefined ? {} : { profile }),
     ...(conditions.length === 0 ? {} : { conditions }),
+    ...(gym.length === 0 ? {} : { gym }),
     ...(raw['onboarded'] === true || profile !== undefined ? { onboarded: true } : {}),
   };
 }

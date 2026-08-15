@@ -43,7 +43,7 @@ Then open http://localhost:5173.
 - **Session clock** — start the workout when you walk in and the finished session records how long it took, kept separate from aerobic minutes
 - **Stagnation detection** — three sessions stuck at the same numbers triggers a deload suggestion instead of letting you grind
 - **Safe starting weights** — optional one-time profile (age, bodyweight, experience) picks a deliberately conservative opening weight for movements you've never done
-- **Equipment-aware** — every movement is tied to real stations at your club, with the zone to walk to
+- **Equipment-aware** — every movement is tied to named equipment, with the zone to walk to, and you tap off whatever your gym lacks
 - **Busy machine? Swap it** — tap "Taken?" for ranked alternatives, each with where to find it and a converted starting load
 - **Units** — pounds or kilograms, switchable at any time without rewriting history
 - **Export / import** — JSON backup, with validation on the way back in
@@ -94,13 +94,18 @@ _down_, always. The failure modes are not symmetric: too light costs one set,
 too heavy on an unfamiliar movement costs weeks. The estimate stops mattering
 the moment there is one real logged set.
 
-**Equipment data is split by confidence, and the user can correct it.** LA Fitness
-publishes club amenities but not machine inventories, and no third party does
-either. So `data/equipment.ts` marks each station `club-confirmed` (traceable to
-the club's published amenities) or `chain-standard` (the chain's usual lineup,
-_not_ verified for this location). Unconfirmed stations are labelled as such in
-the UI, and anything you mark missing stops being suggested. A test enforces the
-split: a station cannot claim `club-confirmed` unless the club profile backs it.
+**The equipment catalogue is a vocabulary, not an inventory.** `data/equipment.ts`
+names common gym equipment so the app can say "your machine is taken, here are
+three other things that train this and what to start at". It does not claim to
+know what is on your floor — every station is assumed possibly-present, and the
+only equipment fact the app holds is what _you_ mark missing. A test enforces
+this: the catalogue may not name a gym chain, operator or manufacturer.
+
+An earlier version described one specific club and graded each station by how
+confident it was the machine was really there. That was honest about its
+uncertainty but wrong about its job — it made the app a directory of one
+building. Where you train is now free text you write yourself, and its real
+consumer is the LLM you ask for a plan.
 
 **Sets record which station they were performed on.** 180 on the leg press and
 180 on the hack squat are not the same lift. Storing `stationId` keeps history
@@ -124,15 +129,14 @@ Everything is in `src/data/`.
 
 - `exercises.ts` — the exercise catalogue, including each movement's stations
 - `plan.ts` — which exercises belong to which day, and each day's guidance
-- `equipment.ts` — the station catalogue: what it is, where it is, how sure we are
-- `club.ts` — the home club's address, hours, amenities and classes
+- `equipment.ts` — the equipment vocabulary: what it is and which zone it lives in
 - `plates.ts` — the accent colours
 
 ### Pointing the app at a different gym
 
-Replace `club.ts` and adjust `equipment.ts`. Nothing else references the address,
-hours or class list. Station ids are referenced by `exercises.ts` and `plan.ts`,
-and a test fails loudly if any reference dangles.
+Nothing to edit — describe your gym in the Plan tab and tap off any equipment it
+does not have. Station ids are referenced by `exercises.ts` and `plan.ts`, and a
+test fails loudly if any reference dangles.
 
 ### Adding a substitution
 

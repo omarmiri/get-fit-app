@@ -25,7 +25,7 @@ export interface StationSwapOptions {
   readonly selectedStationId: string | undefined;
   /** Chose a station. `suggestedWeight` is null when there was nothing to convert. */
   readonly onChoose: (stationId: string, suggestedWeight: number | null) => void;
-  /** Marked a station present or missing at this club. */
+  /** Marked a station present or missing at this gym. */
   readonly onToggleMissing: (stationId: string, missing: boolean) => void;
   readonly onClose: () => void;
 }
@@ -73,7 +73,7 @@ function renderRow(entry: ResolvedOption, options: StationSwapOptions): HTMLElem
   const selected = station.id === options.selectedStationId;
   const basis = loadBasisLabel(entry.loadBasis);
 
-  const meta = [ZONE_LABEL[station.zone], station.brand].filter(Boolean).join(' · ');
+  const meta = ZONE_LABEL[station.zone];
 
   const load =
     entry.suggestedWeight === null
@@ -97,14 +97,6 @@ function renderRow(entry: ResolvedOption, options: StationSwapOptions): HTMLElem
           div('swap__title', [
             el('span', { class: 'swap__name', text: station.name }),
             entry.isPrimary ? el('span', { class: 'swap__tag', text: 'Planned' }) : null,
-            // Unverified entries say so. See the note at the top of data/equipment.ts.
-            station.confidence === 'chain-standard'
-              ? el('span', {
-                  class: 'swap__tag swap__tag--unverified',
-                  text: 'Unconfirmed',
-                  attrs: { title: 'Typical for LA Fitness, not verified for this club' },
-                })
-              : null,
           ]),
           meta ? text('swap__meta', meta) : null,
           option.note ? text('swap__note', option.note) : null,
@@ -121,8 +113,8 @@ function renderRow(entry: ResolvedOption, options: StationSwapOptions): HTMLElem
         type: 'button',
         'aria-pressed': entry.missing,
         'aria-label': entry.missing
-          ? `${station.name} is marked as not at your club. Undo.`
-          : `Mark ${station.name} as not at your club`,
+          ? `${station.name} is marked as not at your gym. Undo.`
+          : `Mark ${station.name} as not at your gym`,
       },
       on: { click: () => options.onToggleMissing(station.id, !entry.missing) },
     }),

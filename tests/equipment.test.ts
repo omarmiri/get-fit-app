@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { ALL_STATIONS, ZONE_LABEL, confirmedStations, getStation } from '@/data/equipment';
+import { ALL_STATIONS, ZONE_LABEL, getStation } from '@/data/equipment';
 import { ALL_EXERCISES } from '@/data/exercises';
 import { DAY_KEYS, PLAN } from '@/data/plan';
-import { CLUB } from '@/data/club';
 
 /**
  * Guards on the equipment data.
  *
- * The catalogue is partly inferred from the chain's usual lineup rather than a
- * published inventory, so the tests that matter most are the ones keeping that
- * distinction honest and keeping references from dangling.
+ * The catalogue names common gym equipment so the app can offer an alternative
+ * when a machine is taken. It is not an inventory of any particular building,
+ * so the tests that matter most keep it gym-agnostic and keep references from
+ * dangling.
  */
 
 describe('station catalogue', () => {
@@ -25,32 +25,19 @@ describe('station catalogue', () => {
     }
   });
 
-  it('marks every station with a confidence level', () => {
-    for (const station of ALL_STATIONS) {
-      expect(['club-confirmed', 'chain-standard']).toContain(station.confidence);
-    }
-  });
+  it('names no gym chain, operator or brand', () => {
+    /*
+     * The catalogue is a vocabulary of common gym equipment, not a description
+     * of one building. This guard is what keeps it that way: an earlier version
+     * asserted a specific club's amenities and a specific manufacturer lineup,
+     * which quietly made the app unusable to anyone training somewhere else.
+     */
+    const corpus = ALL_STATIONS.map((s) => `${s.name} ${s.note ?? ''}`)
+      .join(' ')
+      .toLowerCase();
 
-  it('only marks a station club-confirmed when the club listing backs it', () => {
-    // This is the guard against quietly promoting a guess to a fact. Every
-    // confirmed station must trace to something in the published amenities.
-    const listing = [...CLUB.amenities, ...CLUB.classes].join(' ').toLowerCase();
-    const backing: Record<string, string> = {
-      cardiocinema: 'cardio cinema',
-      poollaps: 'pool',
-      poolwalk: 'pool',
-      basketball: 'basketball',
-      racquetball: 'racquetball',
-      olympicplatform: 'olympic',
-      turfarea: 'turf',
-      sauna: 'sauna',
-      spa: 'spa',
-    };
-
-    for (const station of confirmedStations()) {
-      const keyword = backing[station.id];
-      expect(keyword, `${station.id} has no declared backing in the club listing`).toBeTruthy();
-      expect(listing, `${station.id} claims confirmation not present in CLUB`).toContain(keyword);
+    for (const brand of ['la fitness', 'life fitness', 'hammer strength', 'cybex', 'planet fitness']) {
+      expect(corpus, `station catalogue names "${brand}"`).not.toContain(brand);
     }
   });
 
@@ -129,14 +116,3 @@ describe('plan station references', () => {
   });
 });
 
-describe('club profile', () => {
-  it('records where the listing came from and when it was checked', () => {
-    expect(CLUB.sourceUrl).toMatch(/^https:\/\//);
-    expect(CLUB.verifiedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-  });
-
-  it('lists amenities and classes', () => {
-    expect(CLUB.amenities.length).toBeGreaterThan(0);
-    expect(CLUB.classes.length).toBeGreaterThan(0);
-  });
-});
