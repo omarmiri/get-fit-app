@@ -16,6 +16,13 @@ import { renderPlanCandidate } from './planCandidate';
  * either a paste or a file, because "the answer" arrives differently depending
  * on whether they were at a desk or on a phone.
  *
+ * Both routes work offline and neither involves any third party. An earlier
+ * version also accepted a Google Drive share link, fetched through a server
+ * proxy. It was dropped: using it meant setting a file containing the user's
+ * health context, age and bodyweight to "anyone with the link", which is a
+ * poor trade for saving a paste — and on Android, Drive already appears in the
+ * system file picker, so the file route covers that case without any of it.
+ *
  * Nothing is saved until the plan is explicitly accepted, and every plan —
  * pasted, opened from a file, or generated in-app — goes through the same
  * parser and the same validator. There is no trusted path.
@@ -23,8 +30,6 @@ import { renderPlanCandidate } from './planCandidate';
 
 interface ImportState {
   pasted: string;
-  link: string;
-  busy: boolean;
   candidate: UserPlan | null;
   validation: PlanValidation | null;
   error: string | null;
@@ -34,8 +39,6 @@ interface ImportState {
 
 const state: ImportState = {
   pasted: '',
-  link: '',
-  busy: false,
   candidate: null,
   validation: null,
   error: null,
@@ -45,8 +48,6 @@ const state: ImportState = {
 /** Reset between visits so a stale candidate is not offered on the next open. */
 export function resetPlanImport(): void {
   state.pasted = '';
-  state.link = '';
-  state.busy = false;
   state.candidate = null;
   state.validation = null;
   state.error = null;
@@ -85,7 +86,6 @@ export function renderPlanImport(context: ViewContext): HTMLElement {
     ]),
 
     state.open ? renderPasteBox(context) : null,
-    state.open ? renderLinkBox(context) : null,
 
     state.error ? div('notice notice--warn', [text('notice__body', state.error)]) : null,
 
@@ -137,83 +137,6 @@ function renderPasteBox(context: ViewContext): HTMLElement {
       on: { click: () => review(context, state.pasted) },
     }),
   ]);
-}
-
-/**
- * Load a plan from a Google Drive share link.
- *
- * The link is fetched by this app's own server rather than the browser, so the
- * page still talks only to its own origin and no Google account, OAuth flow or
- * third-party script is involved. See `drive.js` for the fencing on that.
- */
-function renderLinkBox(context: ViewContext): HTMLElement {
-  return div('gen__group', [
-    eyebrow('Or a Google Drive link'),
-    el('input', {
-      class: 'gen__input',
-      attrs: {
-        type: 'url',
-        inputmode: 'url',
-        autocomplete: 'off',
-        spellcheck: 'false',
-        placeholder: 'https://drive.google.com/file/d/…',
-        value: state.link,
-        'aria-label': 'Google Drive share link',
-      },
-      on: {
-        input: (event) => {
-          state.link = (event.target as HTMLInputElement).value;
-        },
-      },
-    }),
-    el('button', {
-      class: 'button button--ghost',
-      text: state.busy ? 'Fetching…' : 'Load from link',
-      attrs: { type: 'button', 'aria-busy': state.busy, disabled: state.busy || !state.link.trim() },
-      on: { click: () => void loadFromLink(context) },
-    }),
-    text('club__hint', 'The file has to be shared with “Anyone with the link”. Google Docs work too.'),
-  ]);
-}
-
-async function loadFromLink(context: ViewContext): Promise<void> {
-  if (state.busy) return;
-
-  state.busy = true;
-  state.error = null;
-  context.render();
-
-  try {
-    const response = await fetch('/api/plan/fetch', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ url: state.link.trim() }),
-    });
-
-    const body: unknown = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      const message =
-        typeof body === 'object' && body !== null && typeof (body as { error?: unknown }).error === 'string'
-          ? (body as { error: string }).error
-          : `Could not fetch that link (${response.status}).`;
-      state.error = message;
-      return;
-    }
-
-    const contents = (body as { contents?: unknown } | null)?.contents;
-    if (typeof contents !== 'string') {
-      state.error = 'That link returned nothing readable.';
-      return;
-    }
-
-    review(context, contents);
-  } catch {
-    state.error = 'Could not reach the server. Check your connection.';
-  } finally {
-    state.busy = false;
-    context.render();
-  }
 }
 
 /**

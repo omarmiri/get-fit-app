@@ -4,7 +4,7 @@
 
 A personal training log built around one seven-day plan. Mobile-first, installable to the home screen, works offline in the gym.
 
-**Bring your own plan.** Ask ChatGPT, Claude, Gemini or anything else for a training week and load it in — by paste, by file, or from a Google Drive link. The format is published at [`/llms.txt`](https://get-fit-app.onrender.com/llms.txt), so any model that can read a page can write a plan this app understands. See [Bringing a plan from an LLM](#bringing-a-plan-from-an-llm).
+**Bring your own plan.** Ask ChatGPT, Claude, Gemini or anything else for a training week and load it in — paste the reply, or open the file it gave you. The format is published at [`/llms.txt`](https://get-fit-app.onrender.com/llms.txt), so any model that can read a page can write a plan this app understands. See [Bringing a plan from an LLM](#bringing-a-plan-from-an-llm).
 
 All data lives in the browser on the device you use it on. There is no database, no account, and nothing leaves the phone. **Export a backup from the Plan tab now and then** — clearing browser data erases everything.
 
@@ -246,13 +246,14 @@ catalogue modules the parser uses — so the documentation cannot promise a fiel
 the parser rejects. `/catalog.json` carries the built-in ids in machine-readable
 form.
 
-Three ways in, all landing on the same parser and the same validator:
+Two ways in, both landing on the same parser and the same validator:
 
 | Route | For |
 | --- | --- |
 | **Copy prompt → paste the answer** | The normal path. The prompt carries the full format plus your gym, profile and health context. |
-| **Open a plan file** | Phones. On Android this covers Google Drive too, since Drive mounts in the system file picker. |
-| **Google Drive link** | A file shared with "anyone with the link". Fetched by this server, not the browser. |
+| **Open a plan file** | Phones, and whatever the model handed you as a download. On Android this covers Google Drive too, since Drive mounts in the system file picker. |
+
+Both work offline and neither involves a third party.
 
 ### The division of labour
 
@@ -337,19 +338,22 @@ This path is not privileged. Gemini emits the same format documented at
 validator as a stranger's pasted file. One format, one code path, one place for
 a hole to be found by a test.
 
-### Google Drive, and why not the Picker
+### Why there is no cloud-storage integration
 
-The Drive Picker needs an OAuth client, a Google account and scripts from
-`apis.google.com`. This app loads nothing from anywhere — `script-src 'self'`,
-`connect-src 'self'` — and giving that up to save a copy-paste is a poor trade.
-So `/api/plan/fetch` fetches the link server-side instead.
+There was briefly a Google Drive route: paste a share link, and a server proxy
+fetched it. It was removed.
 
-A server that fetches a URL for a client is an SSRF primitive unless fenced in.
-`drive.js` fences it four ways: the supplied URL is never fetched, only mined
-for a file id substituted into a fixed template; redirects are followed by hand
-with a host allowlist at every hop, since Drive serves bytes from
-`googleusercontent.com`; the body is capped while streaming; and the whole
-thing is on a timeout. `tests/drive.test.ts` is that fence's regression suite.
+Using it required setting the file to "anyone with the link" — and a plan
+generated from this app's prompt carries your health context, age and
+bodyweight. Making that publicly fetchable to save a paste is a bad trade. The
+Drive Picker would have avoided the public-sharing problem but needs an OAuth
+client, a Google account and scripts from `apis.google.com`, and this app loads
+nothing from anywhere: `script-src 'self'`, `connect-src 'self'`.
+
+Both routes also cost something the remaining two do not — a working network
+and a server. Paste and file import work on a phone in a basement gym. And on
+Android, Drive appears in the system file picker anyway, so the file route
+already covers the case the integration was meant to serve.
 
 ## Roadmap notes
 

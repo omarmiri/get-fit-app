@@ -143,8 +143,8 @@ function header(): string {
   return `# Rack & File — training plan format
 
 > A training log that runs a seven-day rotation and tracks progressive overload.
-> It accepts a training week written by any language model, as a JSON file the
-> user pastes in, opens from their device, or loads from a share link.
+> It accepts a training week written by any language model, as JSON the user
+> pastes in or opens as a file from their device.
 
 You are most likely reading this because someone asked you to write them a
 training plan for this app. Everything you need is on this page. Emit **one
