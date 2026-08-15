@@ -12,6 +12,8 @@ import { renderHistoryView } from '@/ui/views/history';
 import { renderPlanView } from '@/ui/views/plan';
 import { renderTodayView } from '@/ui/views/today';
 import { renderWeekStrip } from '@/ui/components/weekStrip';
+import { initAccountCard } from '@/ui/components/accountCard';
+import { backUpSoon, flushBackup } from '@/services/backup';
 
 /**
  * The application shell.
@@ -57,13 +59,25 @@ export class App {
 
     // Flush any debounced write before the page goes away. `pagehide` fires on
     // mobile Safari where `beforeunload` does not.
-    window.addEventListener('pagehide', () => this.#store.flush());
+    window.addEventListener('pagehide', () => {
+      this.#store.flush();
+      // A phone closing the app is exactly when the backup debounce has not
+      // fired yet and the data most needs to leave.
+      void flushBackup();
+    });
 
-    this.#store.subscribe(() => this.#paint());
+    this.#store.subscribe((state) => {
+      this.#paint();
+      backUpSoon(state);
+    });
   }
 
   start(): void {
     this.render();
+    // Probes whether this deploy has accounts at all, and redraws if so. The
+    // card renders nothing until that answer arrives, so a deploy without
+    // accounts never shows an offer to sign in to nowhere.
+    initAccountCard(() => this.render());
   }
 
   /** Re-render from current state. */

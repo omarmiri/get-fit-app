@@ -1,8 +1,31 @@
 # Render Blueprint. Import this repo under Render → Blueprints and the service
 # below is created with the right build and start commands already set.
 #
-# The app has no database, no API and no secrets: everything a user logs stays
-# in their own browser. This service only serves the built static files.
+# The app runs fully without any of the optional integrations below: with none
+# of them set it serves the built files, keeps everything in the user's browser,
+# and hides the features that would have no backing. Each secret is entered in
+# the Render dashboard rather than declared here, so nothing sensitive lands in
+# version control.
+#
+#   GEMINI_API_KEY            Enables "Generate a plan" in the app. Without it
+#                             the button is hidden rather than offered and
+#                             failing. Plans from any other LLM still import.
+#   GEMINI_MODEL              Optional. Defaults to gemini-2.5-flash.
+#
+#   SUPABASE_URL              Enables optional accounts. Identity only — no
+#   SUPABASE_ANON_KEY         training data is stored in Supabase, and the anon
+#                             key never reaches the browser because every call
+#                             is proxied by this server.
+#
+#   UPSTASH_REDIS_REST_URL    Where a signed-in account's backup actually
+#   UPSTASH_REDIS_REST_TOKEN  lives, and where the per-account plan quota is
+#                             counted. Without these the store falls back to
+#                             process memory, which a restart discards — fine
+#                             for a demo, not for a deploy with accounts.
+#
+# Setting SUPABASE_* without UPSTASH_* is the one combination to avoid: people
+# could sign in and be told they are backed up, while the backup evaporates on
+# the next deploy.
 services:
   - type: web
     name: rack-and-file

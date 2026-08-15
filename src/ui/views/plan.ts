@@ -11,6 +11,7 @@ import { toast } from '../toast';
 import { renderLegend } from '../components/charts';
 import { renderPlanGenerator } from '../components/planGenerator';
 import { renderPlanImport } from '../components/planImport';
+import { renderAccountCard } from '../components/accountCard';
 import { renderPlanInputs } from '../components/planInputs';
 import { renderPlanLibrary } from '../components/planLibrary';
 import type { ViewContext } from './context';
@@ -36,6 +37,7 @@ export function renderPlanView(context: ViewContext): Child[] {
     renderSettings(context),
     renderColourKey(),
     renderDataCard(context),
+    renderAccountCard(context),
     renderSafetyCard(),
   ];
 }

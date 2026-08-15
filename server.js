@@ -13,6 +13,8 @@ import compression from 'compression';
 import express from 'express';
 import helmet from 'helmet';
 
+import { AccountError, loadState, meterPlanGeneration, saveState } from './account.js';
+import * as auth from './auth.js';
 import { GeminiError, generatePlan } from './gemini.js';
 import { startKeepAlive } from './keepalive.js';
 
@@ -69,27 +71,46 @@ app.use(
 app.use(compression());
 
 app.get('/health', (_req, res) => {
+  const identity = auth.info();
+
   res.json({
     ok: true,
     uptime: process.uptime(),
     // Lets the client hide the generate control rather than offering a button
     // that can only fail. Reports presence, never the key itself.
     gemini: Boolean(process.env.GEMINI_API_KEY),
+    /*
+     * Whether accounts exist on this deploy, and nothing more. Every call that
+     * needs the anon key is proxied, so the key never leaves the server and
+     * `connect-src 'self'` survives sign-in.
+     */
+    auth: { configured: identity.configured },
   });
 });
 
 /* --------------------------------------------------------------- plan API */
+
+/*
+ * A backup is a whole training history and is much larger than anything else
+ * this API accepts, so it gets its own limit — mounted first, because the
+ * general parser below would otherwise reach the body first and reject it at
+ * 256kb. `express.json` is a no-op once a body is parsed, so the second mount
+ * simply passes it through.
+ */
+app.use('/api/account/state', express.json({ limit: '4mb' }));
 
 // Plan requests carry the exercise and station catalogues, so the body is
 // larger than a default form post but nowhere near the 100kb default cap.
 app.use('/api', express.json({ limit: '256kb' }));
 
 /**
- * Crude fixed-window rate limit.
+ * Coarse per-IP rate limit, in front of the per-account quota.
  *
- * This is a single-user app, so the concern is not abuse but an accidental
- * loop burning through quota. In-memory state is fine: a restart resetting the
- * window costs nothing.
+ * This is not the thing that protects the Gemini key — `meterPlanGeneration`
+ * is, and it counts against an account rather than an address. This is only
+ * here to blunt an unauthenticated flood before it reaches the identity
+ * provider. In-memory state is fine: a restart resetting the window costs
+ * nothing.
  */
 const RATE_LIMIT = { windowMs: 60_000, max: 10 };
 const requestLog = new Map();
@@ -110,9 +131,160 @@ function rateLimited(key) {
   return hits.length > RATE_LIMIT.max;
 }
 
-app.post('/api/plan/generate', async (req, res) => {
+/* ------------------------------------------------------------- accounts */
+
+/**
+ * Sign-in, proxied so the browser only ever talks to this origin.
+ *
+ * Rate-limited by IP because these routes send email and are the one part of
+ * the API an unauthenticated caller can reach. Supabase has its own limits;
+ * this stops us relaying a flood to them in the first place.
+ */
+app.post('/api/auth/code', async (req, res) => {
+  if (rateLimited(`auth:${req.ip ?? 'unknown'}`)) {
+    return res.status(429).json({ error: 'Too many attempts. Wait a minute and try again.' });
+  }
+
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
+  if (!email || email.length > 320 || !email.includes('@')) {
+    return res.status(400).json({ error: 'Enter an email address.' });
+  }
+
+  try {
+    await auth.requestCode(email);
+    // Deliberately the same answer whether or not an account exists, so this
+    // cannot be used to find out who has one.
+    return res.json({ ok: true });
+  } catch (error) {
+    return res
+      .status(error instanceof auth.AuthError ? error.status : 502)
+      .json({ error: error?.message ?? 'Could not send a code.' });
+  }
+});
+
+app.post('/api/auth/verify', async (req, res) => {
+  if (rateLimited(`auth:${req.ip ?? 'unknown'}`)) {
+    return res.status(429).json({ error: 'Too many attempts. Wait a minute and try again.' });
+  }
+
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
+  const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
+  if (!email || !code) {
+    return res.status(400).json({ error: 'Enter the code from your email.' });
+  }
+
+  try {
+    const session = await auth.verifyCode(email, code);
+    return res.json(sessionResponse(session));
+  } catch (error) {
+    return res
+      .status(error instanceof auth.AuthError ? error.status : 502)
+      .json({ error: error?.message ?? 'That code did not work.' });
+  }
+});
+
+app.post('/api/auth/refresh', async (req, res) => {
+  const token = typeof req.body?.refreshToken === 'string' ? req.body.refreshToken : '';
+  if (!token) return res.status(400).json({ error: 'No refresh token.' });
+
+  try {
+    const session = await auth.refreshSession(token);
+    return res.json(sessionResponse(session));
+  } catch (error) {
+    return res
+      .status(error instanceof auth.AuthError ? error.status : 502)
+      .json({ error: error?.message ?? 'Could not refresh the session.' });
+  }
+});
+
+/**
+ * Narrow a Supabase session to what the client needs.
+ *
+ * Passing the upstream body through wholesale would hand the browser fields it
+ * has no use for and would couple this app's contract to whatever Supabase
+ * adds next.
+ */
+function sessionResponse(session) {
+  return {
+    accessToken: session?.access_token ?? '',
+    refreshToken: session?.refresh_token ?? '',
+    expiresIn: session?.expires_in ?? 3600,
+    user: session?.user ? { id: session.user.id, email: session.user.email ?? '' } : null,
+  };
+}
+
+/**
+ * Who the caller is, if anyone.
+ *
+ * Anonymous is a normal answer, not an error — the app works with no account
+ * and that is the point. The client uses this to decide whether to offer a
+ * backup, not whether to let anyone train.
+ */
+app.get('/api/account/me', auth.attachUser, (req, res) => {
+  res.json({ user: req.user ?? null });
+});
+
+/**
+ * The account's stored state, or `null` when there is none yet.
+ *
+ * A first sign-in on a new device answers `null`, which the client reads as
+ * "keep what is here and push it", rather than as an instruction to wipe.
+ */
+app.get('/api/account/state', auth.attachUser, auth.requireUser, async (req, res) => {
+  try {
+    const record = await loadState(req.user.id);
+    return res.json({ state: record?.state ?? null, updatedAt: record?.updatedAt ?? null });
+  } catch (error) {
+    console.error(`[account] load failed: ${error?.message ?? 'unknown'}`);
+    return res.status(502).json({ error: 'Could not reach your backup.' });
+  }
+});
+
+/** Replace the account's stored state with the client's copy. */
+app.put('/api/account/state', auth.attachUser, auth.requireUser, async (req, res) => {
+  try {
+    await saveState(req.user.id, req.body?.state);
+    return res.json({ ok: true, updatedAt: Date.now() });
+  } catch (error) {
+    if (error instanceof AccountError) {
+      return res.status(error.status).json({ error: error.message });
+    }
+    console.error(`[account] save failed: ${error?.message ?? 'unknown'}`);
+    return res.status(502).json({ error: 'Could not save to your backup.' });
+  }
+});
+
+app.post('/api/plan/generate', auth.attachUser, async (req, res) => {
   if (rateLimited(req.ip ?? 'unknown')) {
     return res.status(429).json({ error: 'Too many plan requests. Wait a minute and try again.' });
+  }
+
+  /*
+   * Metering, once accounts exist.
+   *
+   * The IP limit below this was written when the app had one user and the risk
+   * was an accidental loop rather than abuse. With sign-in that stopped being
+   * true — the Gemini key is the operator's and the users are not — so a
+   * signed-in caller is metered per account, and an anonymous one cannot spend
+   * the key at all on a deploy that has accounts configured.
+   */
+  if (auth.configured()) {
+    if (!req.user) {
+      return res
+        .status(401)
+        .json({ error: 'Sign in to generate a plan here, or write one with your own LLM.', code: 'auth_required' });
+    }
+    try {
+      await meterPlanGeneration(req.user.id);
+    } catch (error) {
+      if (error instanceof AccountError) {
+        return res.status(error.status).json({ error: error.message });
+      }
+      console.error(`[plan] metering failed: ${error?.message ?? 'unknown'}`);
+      // A metering outage must not become a free-for-all on someone else's
+      // quota, so this fails closed.
+      return res.status(503).json({ error: 'Cannot check your plan allowance right now.' });
+    }
   }
 
   /*
