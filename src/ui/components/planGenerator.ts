@@ -49,7 +49,7 @@ export function renderPlanGenerator(context: ViewContext): HTMLElement {
   const conditions = context.state.prefs.conditions ?? [];
 
   return card([
-    eyebrow('Plan'),
+    eyebrow('Plan in force'),
     text('setting__label', describePlanSource(context.state.plan)),
     context.state.plan?.summary ? text('prose', context.state.plan.summary) : null,
 
@@ -63,7 +63,10 @@ export function renderPlanGenerator(context: ViewContext): HTMLElement {
             .filter(Boolean),
         );
       }),
-      text('club__hint', 'Sent to Gemini along with your age, bodyweight and available equipment.'),
+      text(
+        'club__hint',
+        'Included both in the prompt you copy above and in a plan generated here, along with your age, bodyweight and gym.',
+      ),
     ]),
 
     div('gen__group', [

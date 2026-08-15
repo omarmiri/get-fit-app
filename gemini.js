@@ -5,12 +5,17 @@
  * cost-control measure as much as anything: a key shipped to the client is a
  * key someone else spends.
  *
- * The model's job is deliberately narrow. It selects movements and arranges a
- * week *by referencing catalogue ids the client supplies* — it never invents an
- * exercise, never names a machine freehand, and never prescribes a load. Loads
- * come from the app's own progression arithmetic, which is deterministic and
- * testable. A response schema enforces the shape; the client then validates the
- * content against the real catalogue before anything is saved.
+ * This is the convenience path — the same week the user could get by taking
+ * the app's prompt to any chatbot, without leaving the app. It therefore emits
+ * *the same format*, documented at `/llms.txt` and parsed by
+ * `domain/planFormat.ts`. There is no privileged shape and no relaxed
+ * validation: whatever comes back goes through the parser and validator a
+ * stranger's pasted file goes through.
+ *
+ * The one thing the model may not do, here or anywhere, is prescribe loads.
+ * Those come from the app's progression arithmetic, which is deterministic and
+ * testable. It may suggest an *opening* weight for a movement it invents,
+ * which is used once and then never again.
  */
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
@@ -29,8 +34,9 @@ const SESSION_TYPES = ['strength', 'duration', 'intervals', 'mixed', 'rest'];
  *
  * `enum` on `dayKey` and `type` closes those fields entirely. Exercise and
  * station ids cannot be closed the same way — the lists are supplied per
- * request — so they are constrained by the prompt and then checked properly by
- * the client's validator, which owns the real catalogue.
+ * request, and the model is free to define movements of its own — so they are
+ * constrained by the prompt and then checked properly by the client, which
+ * owns the real catalogue and the real parser.
  */
 function responseSchema() {
   return {
@@ -39,6 +45,57 @@ function responseSchema() {
       summary: {
         type: 'STRING',
         description: 'One sentence on the approach taken and why it suits this person.',
+      },
+      exercises: {
+        type: 'ARRAY',
+        description:
+          'Movements you are defining yourself, beyond the supplied catalogue. Reference them from a day by the id you give here.',
+        items: {
+          type: 'OBJECT',
+          properties: {
+            id: { type: 'STRING', description: 'Short slug, e.g. "db-floor-press".' },
+            name: { type: 'STRING' },
+            summary: {
+              type: 'STRING',
+              description: 'One plain sentence saying what the movement physically is.',
+            },
+            equipment: {
+              type: 'STRING',
+              description: 'What is needed, in plain English, e.g. "adjustable bench and one dumbbell".',
+            },
+            stationId: {
+              type: 'STRING',
+              description: 'Optional station id from the supplied list, when one happens to fit.',
+            },
+            sets: { type: 'INTEGER' },
+            repMin: { type: 'INTEGER' },
+            repMax: { type: 'INTEGER' },
+            repMetric: { type: 'STRING', enum: ['reps', 'seconds'] },
+            loaded: { type: 'BOOLEAN', description: 'True when the movement is performed with weight.' },
+            restSeconds: { type: 'INTEGER' },
+            alternative: { type: 'STRING', description: 'An easier or equipment-free substitute.' },
+            muscles: { type: 'ARRAY', items: { type: 'STRING' } },
+            openingWeight: {
+              type: 'OBJECT',
+              description:
+                'Conservative first-session load. Used once, then replaced by the logged history. Omit for bodyweight movements.',
+              properties: {
+                value: { type: 'NUMBER' },
+                unit: { type: 'STRING', enum: ['lb', 'kg'] },
+              },
+            },
+            cues: {
+              type: 'OBJECT',
+              properties: {
+                setup: { type: 'STRING', description: 'How to get into position before the first rep.' },
+                execute: { type: 'STRING', description: 'What to do during the rep.' },
+                avoid: { type: 'STRING', description: 'The commonest way this movement goes wrong.' },
+              },
+              required: ['setup', 'execute', 'avoid'],
+            },
+          },
+          required: ['id', 'name', 'summary', 'loaded', 'cues'],
+        },
       },
       days: {
         type: 'ARRAY',
@@ -68,12 +125,18 @@ function responseSchema() {
             modalityStations: {
               type: 'ARRAY',
               items: { type: 'STRING' },
-              description: 'Station ids from the supplied list. Required for timed sessions.',
+              description: 'Station ids from the supplied list. Timed sessions need these or "modality".',
+            },
+            modality: {
+              type: 'STRING',
+              description:
+                'How the cardio is done, in plain English, when no supplied station fits. e.g. "outdoors around the neighbourhood".',
             },
             exerciseIds: {
               type: 'ARRAY',
               items: { type: 'STRING' },
-              description: 'Exercise ids from the supplied list. Required for strength days.',
+              description:
+                'Required for strength days. Ids from the supplied catalogue, or ids you defined in "exercises".',
             },
             exerciseFormat: { type: 'STRING', enum: ['circuit', 'sets'] },
             rounds: { type: 'STRING', description: 'Rounds through a circuit, e.g. "2-3". Circuits only.' },
@@ -87,7 +150,7 @@ function responseSchema() {
 }
 
 function buildPrompt(request) {
-  const { profile, conditions = [], notes = '', exercises = [], stations = [], goals } = request;
+  const { profile, conditions = [], notes = '', exercises = [], stations = [], goals, gym = '' } = request;
 
   const exerciseLines = exercises
     .map((e) => `- ${e.id}: ${e.name}${e.muscles ? ` (${e.muscles.join(', ')})` : ''}`)
@@ -101,31 +164,40 @@ function buildPrompt(request) {
 
   const health = conditions.length > 0 ? conditions.join(', ') : 'none stated';
 
-  return `You are programming one week of training for a single person using a specific gym.
+  return `You are programming one week of training for a single person.
 
 PERSON
 ${person}
 Health context: ${health}
 ${notes ? `This week: ${notes}` : ''}
+${gym ? `Where they train, in their own words: ${gym}` : 'They have not described their gym. Stay with widely available equipment.'}
 
 WEEKLY TARGETS
 At least ${goals?.minutes ?? 150} minutes of moderate aerobic activity.
 At least ${goals?.strength ?? 2} full-body strength sessions.
 Spread strength days apart — avoid back-to-back.
 
-AVAILABLE EXERCISES — you MUST use these ids exactly and MUST NOT invent others:
+CATALOGUE EXERCISES — referencing these by id is preferred, because the app
+already knows their coaching cues, machine alternatives and load conversions:
 ${exerciseLines}
 
-AVAILABLE STATIONS — you MUST use these ids exactly and MUST NOT invent others:
+CATALOGUE STATIONS — equipment the app has names for:
 ${stationLines}
 
 RULES
 1. Return exactly seven days, one per dayKey, covering sun through sat.
-2. Use only the ids listed above. Never invent an exercise or a station id.
-3. Never prescribe weights, loads or set counts — the app computes those from
-   the person's own logged history.
+2. Prefer the catalogue ids above when they fit the person's gym. When they do
+   not, define your own movement in "exercises" with a summary, all three cues,
+   and an "equipment" line in plain English. Do not contort the week to avoid
+   defining a movement, and do not reference an id that is neither in the
+   catalogue nor defined by you.
+3. Never prescribe per-set weights or loads — the app computes those from the
+   person's own logged history and will contradict anything you write. For a
+   movement you define, you MAY give "openingWeight": a conservative
+   first-session load, used once and then replaced by real history. Bias it low
+   and omit it when "loaded" is false.
 4. Strength days need exerciseIds. Timed days (duration, intervals, mixed) need
-   minutes and modalityStations.
+   minutes, and either modalityStations or a plain-English "modality".
 5. "outline" must be 2-4 short steps a complete beginner can follow, in order,
    naming what they actually do. Avoid jargon.
 6. Set aerobic true only for sessions whose minutes are genuinely cardiovascular.
@@ -144,8 +216,9 @@ export class GeminiError extends Error {
 }
 
 /**
- * Ask Gemini for a week. Returns the parsed plan object, unvalidated —
- * content validation is the client's job, against the real catalogue.
+ * Ask Gemini for a week. Returns the parsed plan object, unvalidated — shape
+ * and content validation are the client's job, against the real catalogue and
+ * the same parser every other plan goes through.
  */
 export async function generatePlan(request) {
   const apiKey = process.env.GEMINI_API_KEY;
