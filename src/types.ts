@@ -520,8 +520,15 @@ export interface Preferences {
   readonly profile?: UserProfile;
   /** True once onboarding has been shown, so it is not offered again. */
   readonly onboarded?: boolean;
-  /** Health context reused as input whenever a plan is generated. */
-  readonly conditions?: readonly string[];
+  /*
+   * Health context deliberately does not live here.
+   *
+   * It was a persisted preference so it would not have to be retyped — a real
+   * convenience and the wrong trade. It turned a sentence typed once into a
+   * medical detail held in browser storage indefinitely, and under accounts it
+   * would have become one held in a database. It is now per-session input, in
+   * `state/ephemeral.ts`, used for one generation and gone.
+   */
 }
 
 /** Weekly targets shown on the goals card. */

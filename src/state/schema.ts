@@ -29,7 +29,7 @@ import { isWeightUnit } from '@/domain/units';
  *   add a step whenever a persisted shape changes.
  */
 
-export const CURRENT_SCHEMA_VERSION = 9;
+export const CURRENT_SCHEMA_VERSION = 10;
 
 /**
  * Ceiling on saved plans.
@@ -258,10 +258,16 @@ function parsePreferences(raw: unknown): Preferences {
 
   const profile = parseProfile(raw['profile']);
 
-  const rawConditions = raw['conditions'];
-  const conditions = Array.isArray(rawConditions)
-    ? rawConditions.filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
-    : [];
+  /*
+   * `conditions` is read and discarded on purpose.
+   *
+   * Schema 9 and earlier saved health context as a preference. Dropping the
+   * field from the type would leave those strings sitting in every existing
+   * user's storage until something else happened to rewrite the key. Naming it
+   * here means the next load actively removes it — a migration that deletes
+   * rather than one that merely stops looking.
+   */
+  void raw['conditions'];
 
   const rawGym = raw['gym'];
   const gym = typeof rawGym === 'string' ? rawGym.trim().slice(0, MAX_GYM_LENGTH) : '';
@@ -284,7 +290,6 @@ function parsePreferences(raw: unknown): Preferences {
     ...(missingStations.length === 0 ? {} : { missingStations }),
     ...(Object.keys(preferredStations).length === 0 ? {} : { preferredStations }),
     ...(profile === undefined ? {} : { profile }),
-    ...(conditions.length === 0 ? {} : { conditions }),
     ...(gym.length === 0 ? {} : { gym }),
     ...(raw['onboarded'] === true || profile !== undefined ? { onboarded: true } : {}),
   };

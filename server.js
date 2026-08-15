@@ -115,16 +115,22 @@ app.post('/api/plan/generate', async (req, res) => {
     return res.status(429).json({ error: 'Too many plan requests. Wait a minute and try again.' });
   }
 
+  /*
+   * The request body carries health context, and this is the only place it
+   * ever exists on a server. It is passed to Gemini, and then it is gone: not
+   * stored, not cached, not written to a log. Nothing below logs the body or
+   * an object that could contain it — an error's `message` is safe, an error
+   * object is not necessarily, so only the message is printed.
+   */
   try {
     const { plan, model } = await generatePlan(req.body ?? {});
     return res.json({ plan, model });
   } catch (error) {
     if (error instanceof GeminiError) {
-      // Logged without the request body, which carries health context.
       console.error(`[plan] ${error.status}: ${error.message}`);
       return res.status(error.status).json({ error: error.message });
     }
-    console.error('[plan] unexpected failure', error);
+    console.error(`[plan] unexpected failure: ${error?.message ?? 'unknown'}`);
     return res.status(500).json({ error: 'Plan generation failed unexpectedly.' });
   }
 });

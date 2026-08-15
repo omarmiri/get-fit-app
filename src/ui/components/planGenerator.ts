@@ -2,6 +2,7 @@ import type { UserPlan } from '@/types';
 import { ALL_STATIONS } from '@/data/equipment';
 import { type PlanValidation, validatePlan } from '@/domain/planValidation';
 import { PlanApiError, requestPlan } from '@/services/planApi';
+import { conditionsList, getNotes } from '@/state/ephemeral';
 import { card, div, el, eyebrow, text } from '../dom';
 import { toast } from '../toast';
 import type { ViewContext } from '../views/context';
@@ -25,7 +26,6 @@ interface GeneratorState {
   candidate: UserPlan | null;
   validation: PlanValidation | null;
   error: string | null;
-  notes: string;
 }
 
 const state: GeneratorState = {
@@ -33,7 +33,6 @@ const state: GeneratorState = {
   candidate: null,
   validation: null,
   error: null,
-  notes: '',
 };
 
 /** Reset between visits so a stale candidate is not offered on the next open. */
@@ -45,39 +44,15 @@ export function resetPlanGenerator(): void {
 }
 
 export function renderPlanGenerator(context: ViewContext): HTMLElement {
-  const conditions = context.state.prefs.conditions ?? [];
-
   return card([
     // Which plan is in force, and switching between them, belongs to the
-    // library card above. This card is only the act of making a new one.
+    // library card above. The health context and notes belong to the shared
+    // inputs card. This card is only the act of making a new plan.
     eyebrow('Generate one here instead'),
     text(
       'prose',
-      'Uses the same format and the same checks as a plan from your own LLM, without leaving the app.',
+      'Uses what you wrote above, plus the same format and the same checks as a plan from your own LLM, without leaving the app.',
     ),
-
-    div('gen__group', [
-      eyebrow('Health context'),
-      renderTextField(conditions.join(', '), 'e.g. high cholesterol, high glucose', (value) => {
-        context.store.setConditions(
-          value
-            .split(',')
-            .map((item) => item.trim())
-            .filter(Boolean),
-        );
-      }),
-      text(
-        'club__hint',
-        'Included both in the prompt you copy above and in a plan generated here, along with your age, bodyweight and gym.',
-      ),
-    ]),
-
-    div('gen__group', [
-      eyebrow('Anything to work around this week'),
-      renderTextField(state.notes, 'e.g. sore left shoulder, travelling Thursday', (value) => {
-        state.notes = value;
-      }),
-    ]),
 
     state.error ? div('notice notice--warn', [text('notice__body', state.error)]) : null,
     state.candidate && state.validation
@@ -118,8 +93,8 @@ async function generate(context: ViewContext): Promise<void> {
 
     const plan = await requestPlan({
       ...(context.state.prefs.profile ? { profile: context.state.prefs.profile } : {}),
-      conditions: context.state.prefs.conditions ?? [],
-      notes: state.notes,
+      conditions: conditionsList(),
+      notes: getNotes(),
       availableStationIds: available,
       ...(context.state.prefs.gym ? { gym: context.state.prefs.gym } : {}),
     });
@@ -137,16 +112,4 @@ async function generate(context: ViewContext): Promise<void> {
     state.busy = false;
     context.render();
   }
-}
-
-function renderTextField(
-  initial: string,
-  placeholder: string,
-  onChange: (value: string) => void,
-): HTMLElement {
-  return el('input', {
-    class: 'gen__input',
-    attrs: { type: 'text', autocomplete: 'off', placeholder, value: initial },
-    on: { change: (event) => onChange((event.target as HTMLInputElement).value) },
-  });
 }

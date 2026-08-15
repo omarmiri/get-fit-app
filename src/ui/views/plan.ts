@@ -11,6 +11,7 @@ import { toast } from '../toast';
 import { renderLegend } from '../components/charts';
 import { renderPlanGenerator } from '../components/planGenerator';
 import { renderPlanImport } from '../components/planImport';
+import { renderPlanInputs } from '../components/planInputs';
 import { renderPlanLibrary } from '../components/planLibrary';
 import type { ViewContext } from './context';
 
@@ -22,6 +23,13 @@ export function renderPlanView(context: ViewContext): Child[] {
     renderGymCard(context),
     renderEquipmentCard(context),
     renderPlanLibrary(context),
+    renderPlanInputs(() => {
+      /*
+       * Deliberately no re-render. These inputs feed the prompt and the
+       * generator when they are next used; redrawing on every keystroke would
+       * tear down the field being typed into and lose the caret.
+       */
+    }),
     renderPlanImport(context),
     renderPlanGenerator(context),
     renderProfileCard(context),

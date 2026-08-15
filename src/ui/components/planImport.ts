@@ -3,6 +3,7 @@ import { ALL_STATIONS, stationName } from '@/data/equipment';
 import { type PlanValidation, validatePlan } from '@/domain/planValidation';
 import { parsePortablePlan } from '@/domain/planFormat';
 import { buildPrompt } from '@/spec/planSpec';
+import { conditionsList, getNotes } from '@/state/ephemeral';
 import { card, div, el, eyebrow, text } from '../dom';
 import { toast } from '../toast';
 import type { ViewContext } from '../views/context';
@@ -234,7 +235,10 @@ async function copyPrompt(context: ViewContext): Promise<void> {
             level: profile.level,
           }
         : {}),
-      ...(prefs.conditions?.length ? { conditions: prefs.conditions } : {}),
+      // Read from ephemeral state, not preferences — health context is typed
+      // per plan and never stored. See `state/ephemeral.ts`.
+      ...(conditionsList().length > 0 ? { conditions: conditionsList() } : {}),
+      ...(getNotes() ? { notes: getNotes() } : {}),
       // Only what they have actually crossed off. Listing all forty stations
       // as "available" would be a claim the app cannot support.
       ...(missing.size > 0

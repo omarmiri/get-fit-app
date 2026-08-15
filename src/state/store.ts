@@ -162,11 +162,6 @@ export class AppStore {
     });
   }
 
-  /** Health context, remembered so it does not have to be retyped each time. */
-  setConditions(conditions: readonly string[]): void {
-    this.#commit({ ...this.#state, prefs: { ...this.#state.prefs, conditions } });
-  }
-
   /** Save the onboarding profile used to estimate opening weights. */
   setProfile(profile: UserProfile): void {
     this.#commit({
