@@ -6,14 +6,16 @@ import { PlanApiError, requestPlan } from '@/services/planApi';
 import { card, div, el, eyebrow, text } from '../dom';
 import { toast } from '../toast';
 import type { ViewContext } from '../views/context';
+import { renderPlanCandidate } from './planCandidate';
 
 /**
- * Generate a week with Gemini, check it, then decide whether to keep it.
+ * Generate a week without leaving the app, then decide whether to keep it.
  *
- * The model chooses movements and structure by referencing catalogue ids; it
- * never invents an exercise and never prescribes a load. Everything it returns
- * goes through `validatePlan` before it can be adopted, so a plan that names a
- * movement the app does not have is rejected rather than half-rendered.
+ * The convenient path, for when the user does not want to go to a chatbot and
+ * come back. It is not a privileged one: the response is parsed by the same
+ * parser and checked by the same validator as a plan pasted in from anywhere
+ * else, and presented by the same component. See `planImport.ts` for the
+ * bring-your-own path.
  *
  * Nothing is saved until the plan is explicitly accepted, and the built-in plan
  * is always one tap away.
@@ -72,7 +74,19 @@ export function renderPlanGenerator(context: ViewContext): HTMLElement {
     ]),
 
     state.error ? div('notice notice--warn', [text('notice__body', state.error)]) : null,
-    state.candidate && state.validation ? renderCandidate(context, state.candidate, state.validation) : null,
+    state.candidate && state.validation
+      ? renderPlanCandidate({
+          plan: state.candidate,
+          validation: state.validation,
+          onAccept: () => {
+            if (!state.candidate) return;
+            context.store.setPlan(state.candidate);
+            resetPlanGenerator();
+            toast('Plan updated');
+            context.render();
+          },
+        })
+      : null,
 
     el('button', {
       class: 'button button--primary',
@@ -107,8 +121,8 @@ async function generate(context: ViewContext): Promise<void> {
   context.render();
 
   try {
-    // Only equipment the club actually has, so the model cannot prescribe a
-    // machine that is not there.
+    // Equipment the user has not crossed off, so the model is not steered
+    // toward a machine they have already said is not there.
     const missing = new Set(context.state.prefs.missingStations ?? []);
     const available = ALL_STATIONS.filter((s) => !missing.has(s.id)).map((s) => s.id);
 
@@ -117,6 +131,7 @@ async function generate(context: ViewContext): Promise<void> {
       conditions: context.state.prefs.conditions ?? [],
       notes: state.notes,
       availableStationIds: available,
+      ...(context.state.prefs.gym ? { gym: context.state.prefs.gym } : {}),
     });
 
     const validation = validatePlan(plan, { missingStationIds: [...missing] });
@@ -132,75 +147,6 @@ async function generate(context: ViewContext): Promise<void> {
     state.busy = false;
     context.render();
   }
-}
-
-/** The proposed week, its check results, and the decision to keep it or not. */
-function renderCandidate(context: ViewContext, plan: UserPlan, validation: PlanValidation): HTMLElement {
-  const errors = validation.issues.filter((issue) => issue.severity === 'error');
-  const warnings = validation.issues.filter((issue) => issue.severity === 'warning');
-
-  return div('gen__candidate', [
-    eyebrow('Proposed week'),
-    plan.summary ? text('prose', plan.summary) : null,
-
-    text(
-      'gen__stats',
-      `${validation.weeklyAerobicMinutes} aerobic minutes · ${validation.strengthDays} strength ${validation.strengthDays === 1 ? 'day' : 'days'}`,
-    ),
-
-    el(
-      'ul',
-      { class: 'gen__days' },
-      plan.days.map((day) =>
-        el('li', { class: 'gen__day' }, [
-          el('span', { class: 'gen__daykey', text: day.dayKey.toUpperCase() }),
-          div('', [text('gen__daylabel', day.label), text('gen__daysub', day.sub || day.type)]),
-        ]),
-      ),
-    ),
-
-    ...(errors.length > 0
-      ? [
-          div('gen__issues gen__issues--error', [
-            eyebrow(`${errors.length} blocking ${errors.length === 1 ? 'problem' : 'problems'}`),
-            el(
-              'ul',
-              {},
-              errors.map((issue) => el('li', { text: issue.message })),
-            ),
-          ]),
-        ]
-      : []),
-
-    ...(warnings.length > 0
-      ? [
-          div('gen__issues', [
-            eyebrow(`${warnings.length} ${warnings.length === 1 ? 'note' : 'notes'}`),
-            el(
-              'ul',
-              {},
-              warnings.map((issue) => el('li', { text: issue.message })),
-            ),
-          ]),
-        ]
-      : []),
-
-    validation.ok
-      ? el('button', {
-          class: 'button button--primary',
-          text: 'Use this plan',
-          attrs: { type: 'button' },
-          on: {
-            click: () => {
-              context.store.setPlan(plan);
-              resetPlanGenerator();
-              toast('Plan updated');
-              context.render();
-            },
-          },
-        })
-      : null,
-  ]);
 }
 
 function renderTextField(

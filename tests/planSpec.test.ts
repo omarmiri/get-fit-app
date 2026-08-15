@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildCatalog, buildLlmsTxt } from '@/spec/planSpec';
+import { buildCatalog, buildLlmsTxt, buildPrompt } from '@/spec/planSpec';
 import { ALL_EXERCISES } from '@/data/exercises';
 import { ALL_STATIONS } from '@/data/equipment';
 import { PLAN_FORMAT_VERSION, PLAN_KIND, parsePortablePlan } from '@/domain/planFormat';
@@ -98,6 +98,53 @@ describe('llms.txt', () => {
   it('says where opening weights are used and that they stop mattering', () => {
     expect(spec).toContain('openingWeight');
     expect(spec).toContain('used exactly once');
+  });
+});
+
+describe('the prompt handed to the user', () => {
+  it('carries the whole contract inline, not just a link', () => {
+    // A link works beautifully in chat apps that can browse and fails silently
+    // in the ones that cannot, producing a plan in some invented format the
+    // user then cannot import and cannot debug.
+    const prompt = buildPrompt({});
+
+    expect(prompt).toContain('rackfile.plan');
+    expect(prompt).toContain('Do not prescribe per-set weights');
+    expect(prompt.length).toBeGreaterThan(buildLlmsTxt().length);
+  });
+
+  it('leads with the person, not the specification', () => {
+    const prompt = buildPrompt({
+      gym: 'Apartment gym, dumbbells to 50 lb',
+      age: 41,
+      bodyweight: 190,
+      bodyweightUnit: 'lb',
+      level: 'returning',
+      conditions: ['high cholesterol'],
+    });
+
+    const aboutMe = prompt.indexOf('ABOUT ME');
+    expect(aboutMe).toBeGreaterThan(-1);
+    expect(aboutMe).toBeLessThan(prompt.indexOf('# Rack & File'));
+
+    for (const detail of ['41', '190 lb', 'returning', 'high cholesterol', 'Apartment gym']) {
+      expect(prompt).toContain(detail);
+    }
+  });
+
+  it('asks the model to ask about equipment when the user has not said', () => {
+    expect(buildPrompt({})).toContain('Ask me what equipment I have');
+    expect(buildPrompt({ gym: 'Full commercial gym' })).not.toContain('Ask me what equipment I have');
+  });
+
+  it('names crossed-off equipment rather than claiming the rest is present', () => {
+    const prompt = buildPrompt({ gym: 'A gym', missingEquipment: ['Squat rack', 'Pool — laps'] });
+
+    expect(prompt).toContain('does NOT have: Squat rack, Pool — laps');
+  });
+
+  it('includes the site URL when one is known', () => {
+    expect(buildPrompt({}, 'https://example.test')).toContain('https://example.test/llms.txt');
   });
 });
 

@@ -10,6 +10,7 @@ import { card, div, el, eyebrow, text } from '../dom';
 import { toast } from '../toast';
 import { renderLegend } from '../components/charts';
 import { renderPlanGenerator } from '../components/planGenerator';
+import { renderPlanImport } from '../components/planImport';
 import type { ViewContext } from './context';
 
 /** The Plan tab: the rotation, settings, and data management. */
@@ -19,6 +20,7 @@ export function renderPlanView(context: ViewContext): Child[] {
     renderRotation(context),
     renderGymCard(context),
     renderEquipmentCard(context),
+    renderPlanImport(context),
     renderPlanGenerator(context),
     renderProfileCard(context),
     renderSettings(context),

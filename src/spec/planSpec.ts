@@ -37,6 +37,72 @@ import { PLAN_FORMAT_VERSION, PLAN_KIND } from '../domain/planFormat';
  * logged history and will ignore anything else.
  */
 
+/** What the app knows about the person, for the prompt it hands them. */
+export interface PromptContext {
+  /** Where they train, in their own words. */
+  readonly gym?: string;
+  readonly age?: number;
+  readonly bodyweight?: number;
+  readonly bodyweightUnit?: string;
+  readonly level?: string;
+  readonly conditions?: readonly string[];
+  /** Anything to work around this week. */
+  readonly notes?: string;
+  /** Equipment they have marked as absent. */
+  readonly missingEquipment?: readonly string[];
+}
+
+/**
+ * A ready-to-paste prompt for whichever LLM the user prefers.
+ *
+ * Carries the full contract inline rather than only linking to it. A link
+ * would be shorter and would work beautifully in the chat apps that can
+ * browse — and would fail silently in the ones that cannot, producing a plan
+ * in some invented format that the user then cannot import and cannot debug.
+ * The URL is included too, for models that would rather fetch the current
+ * version.
+ *
+ * The user's own details go at the top, where they are least likely to be lost
+ * in a long document.
+ */
+export function buildPrompt(context: PromptContext, siteUrl?: string): string {
+  const person: string[] = [];
+
+  if (context.age) person.push(`- Age: ${context.age}`);
+  if (context.bodyweight) {
+    person.push(`- Bodyweight: ${context.bodyweight} ${context.bodyweightUnit ?? 'lb'}`);
+  }
+  if (context.level) person.push(`- Training experience: ${context.level}`);
+  if (context.conditions?.length) person.push(`- Health context: ${context.conditions.join(', ')}`);
+  if (context.notes) person.push(`- This week: ${context.notes}`);
+  if (context.gym) person.push(`- Where I train: ${context.gym}`);
+  if (context.missingEquipment?.length) {
+    person.push(`- My gym does NOT have: ${context.missingEquipment.join(', ')}`);
+  }
+
+  const about =
+    person.length > 0
+      ? person.join('\n')
+      : '- (I have not filled in my details — assume a general adult beginner and stay conservative.)';
+
+  const gymPrompt = context.gym
+    ? ''
+    : '\nI have not described my gym above. Ask me what equipment I have before writing the plan.\n';
+
+  return `Please write me a one-week training plan as a JSON file for an app called Rack & File.
+
+ABOUT ME
+${about}
+${gymPrompt}
+Reply with the JSON only, in a single code block. The complete format follows.${
+    siteUrl ? ` The current version of this specification is also at ${siteUrl}/llms.txt.` : ''
+  }
+
+---
+
+${buildLlmsTxt()}`;
+}
+
 /** Machine-readable catalogue, emitted to `/catalog.json`. */
 export function buildCatalog(): object {
   return {
