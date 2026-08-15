@@ -1,8 +1,11 @@
 import type { Exercise, ExerciseCues, UserPlan, UserPlanDay, WeightUnit } from '@/types';
-import { getBuiltinExercise } from '@/data/exercises';
-import { getStation } from '@/data/equipment';
-import { isDayKey } from '@/data/plan';
-import { isWeightUnit } from '@/domain/units';
+// Relative rather than `@/` on purpose — see the note in `src/spec/planSpec.ts`.
+// This module is reachable from the build-time spec generator, which loads it
+// outside Vite's alias resolution.
+import { getBuiltinExercise } from '../data/exercises';
+import { getStation } from '../data/equipment';
+import { isDayKey } from '../data/plan';
+import { isWeightUnit } from './units';
 
 /**
  * The interchange format: what an LLM writes, and how it becomes a `UserPlan`.
