@@ -293,7 +293,31 @@ export class AppStore {
       // Drives progression. Absent when the user chose not to say.
       ...(effort === undefined ? {} : { effort }),
     };
+    this.#archiveExercise(exerciseId);
     this.#updateActive(dayKey, (session) => ({ ...session, sets: [...session.sets, set] }));
+  }
+
+  /**
+   * Keep a copy of a plan-defined movement the moment it is first logged.
+   *
+   * Without this, replacing the plan strands the sets: they survive, but
+   * nothing can say what `x:sled-push` was, whether it counted reps or
+   * seconds, or whether it belongs on a strength trend.
+   *
+   * A no-op for built-in movements and for anything already archived. The
+   * archived copy is deliberately not refreshed afterwards — it records the
+   * movement as it was described when the work was done, which is what makes
+   * the history true rather than merely current.
+   */
+  #archiveExercise(exerciseId: string): void {
+    const definition = this.#state.plan?.exercises?.find((exercise) => exercise.id === exerciseId);
+    if (!definition) return;
+    if (this.#state.exerciseArchive.some((exercise) => exercise.id === exerciseId)) return;
+
+    this.#commit({
+      ...this.#state,
+      exerciseArchive: [...this.#state.exerciseArchive, definition],
+    });
   }
 
   /** Remove the most recently logged set for one exercise. */

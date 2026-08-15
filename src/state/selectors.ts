@@ -1,6 +1,7 @@
-import type { AppState, DayKey, IsoDate, LoggedSet, PlanDay, Session, WeightUnit } from '@/types';
+import type { AppState, DayKey, Exercise, IsoDate, LoggedSet, PlanDay, Session, WeightUnit } from '@/types';
 import { GOALS, PLAN, getPlanDay } from '@/data/plan';
-import { ALL_EXERCISES, isTrendable } from '@/data/exercises';
+import { isTrendable } from '@/data/exercises';
+import { catalogueFor } from '@/data/catalogue';
 import { addDays, parseIsoDate, startOfWeek, toIsoDate } from '@/domain/dates';
 import { bestOneRepMax } from '@/domain/metrics';
 import { type PerformanceBlock, toPerformanceBlocks } from '@/domain/progression';
@@ -121,7 +122,9 @@ export interface TrendPoint {
 export function trendPoints(state: AppState, exerciseId: string, unit: WeightUnit): TrendPoint[] {
   const points: TrendPoint[] = [];
   for (const session of state.sessions) {
-    const best = bestOneRepMax(session, exerciseId, unit);
+    // `state` is itself a valid exercise source, so a movement defined by the
+    // plan or retained in the archive charts like any built-in one.
+    const best = bestOneRepMax(session, exerciseId, unit, state);
     if (best !== null) points.push({ date: session.date, value: best });
   }
   return points;
@@ -131,15 +134,20 @@ export function trendPoints(state: AppState, exerciseId: string, unit: WeightUni
  * Exercises that have enough logged history to chart.
  *
  * Bodyweight and timed movements are excluded — see `isTrendable`.
+ *
+ * Drawn from the full catalogue rather than the built-in one, so a movement an
+ * imported plan defined appears in the trend picker on the same terms as
+ * anything the app shipped. The point of logging a custom movement is being
+ * able to see whether it is going anywhere.
  */
-export function trendableExercises(state: AppState): typeof ALL_EXERCISES {
+export function trendableExercises(state: AppState): readonly Exercise[] {
   const logged = new Set<string>();
   for (const session of state.sessions) {
     for (const set of session.sets) {
       if (set.weight > 0) logged.add(set.exerciseId);
     }
   }
-  return ALL_EXERCISES.filter((exercise) => isTrendable(exercise) && logged.has(exercise.id));
+  return catalogueFor(state).filter((exercise) => isTrendable(exercise) && logged.has(exercise.id));
 }
 
 /** Consecutive days ending today (or yesterday) with a logged session. */

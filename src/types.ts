@@ -538,6 +538,22 @@ export interface AppState {
    * `data/plan.ts` so there is always a known-good plan to fall back to.
    */
   readonly plan: UserPlan | null;
+  /**
+   * Definitions of plan-defined movements that have been logged against.
+   *
+   * A custom movement lives in the plan that defined it, so replacing the plan
+   * would otherwise strand every set logged against it: the sets survive, but
+   * nothing can say what `x:sled-push` was, whether it was measured in reps or
+   * seconds, or whether it belongs on a strength trend.
+   *
+   * So the definition is copied here the first time a set is logged against
+   * it, and kept for as long as the history is. Written on logging rather than
+   * on plan replacement because that is the moment the movement stops being a
+   * suggestion and becomes part of the record — and because it means the
+   * archive holds only what was actually performed, not every movement of
+   * every plan ever tried.
+   */
+  readonly exerciseArchive: readonly Exercise[];
 }
 
 /* ------------------------------------------------------------------- views */

@@ -176,7 +176,7 @@ function validateDay(day: UserPlanDay, plan: UserPlan, missing: ReadonlySet<stri
    * movements and shown five, with nothing saying why.
    */
   for (const id of day.exerciseIds ?? []) {
-    if (!resolveExercise(id, plan)) {
+    if (!resolveExercise(id, { plan })) {
       issues.push(at('error', `${day.dayKey}: unknown exercise "${id}".`));
     }
   }

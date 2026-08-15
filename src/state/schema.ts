@@ -29,7 +29,18 @@ import { isWeightUnit } from '@/domain/units';
  *   add a step whenever a persisted shape changes.
  */
 
-export const CURRENT_SCHEMA_VERSION = 7;
+export const CURRENT_SCHEMA_VERSION = 8;
+
+/**
+ * Ceiling on retained movement definitions.
+ *
+ * The archive only grows when a movement is performed for the first time, so
+ * reaching this would take years of importing new plans. It is here because
+ * the archive is the one part of state that grows without an explicit user
+ * action, and unbounded growth in the single storage key is not something a
+ * server can come and fix.
+ */
+const MAX_ARCHIVED_EXERCISES = 300;
 
 /**
  * Longest free-text gym description kept.
@@ -73,6 +84,7 @@ export function defaultState(): AppState {
     active: null,
     prefs: DEFAULT_PREFERENCES,
     plan: null,
+    exerciseArchive: [],
   };
 }
 
@@ -329,6 +341,7 @@ export function parseState(raw: unknown): ParseResult {
   );
 
   const active = parseSession(raw['active']);
+  const plan = parsePlan(raw['plan']);
 
   return {
     state: {
@@ -336,11 +349,62 @@ export function parseState(raw: unknown): ParseResult {
       sessions: ordered,
       active,
       prefs: parsePreferences(raw['prefs']),
-      plan: parsePlan(raw['plan']),
+      plan,
+      exerciseArchive: parseArchive(raw['exerciseArchive'], plan, [...ordered, ...(active ? [active] : [])]),
     },
     dropped,
     recognised: true,
   };
+}
+
+/**
+ * Parse the archive of movements already logged against.
+ *
+ * Two things happen here beyond reading the field.
+ *
+ * Entries nothing references are dropped. The archive exists to explain
+ * logged sets, so one that explains none is dead weight — and deleting the
+ * sessions that used a movement should not leave its definition behind
+ * forever.
+ *
+ * Entries that *should* exist but do not are back-filled from the current
+ * plan. That covers the upgrade from schema 7, where the archive did not
+ * exist: anyone who had already logged against a custom movement keeps it,
+ * as long as the plan that defined it is still in force. Where it is not,
+ * nothing can be recovered — the definition was never stored anywhere — and
+ * the sets remain readable by id, which is the situation this whole field
+ * exists to stop happening again.
+ */
+function parseArchive(
+  raw: unknown,
+  plan: UserPlan | null,
+  sessions: readonly Session[],
+): readonly Exercise[] {
+  const referenced = new Set<string>();
+  for (const session of sessions) {
+    for (const set of session.sets) referenced.add(set.exerciseId);
+  }
+
+  const stored = Array.isArray(raw)
+    ? raw.map(parseCustomExercise).filter((exercise): exercise is Exercise => exercise !== null)
+    : [];
+
+  const archive: Exercise[] = [];
+  const seen = new Set<string>();
+
+  for (const exercise of stored) {
+    if (seen.has(exercise.id) || !referenced.has(exercise.id)) continue;
+    seen.add(exercise.id);
+    archive.push(exercise);
+  }
+
+  for (const exercise of plan?.exercises ?? []) {
+    if (seen.has(exercise.id) || !referenced.has(exercise.id)) continue;
+    seen.add(exercise.id);
+    archive.push(exercise);
+  }
+
+  return archive.slice(0, MAX_ARCHIVED_EXERCISES);
 }
 
 /** Parse a JSON string. Returns an unrecognised result for malformed JSON. */

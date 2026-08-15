@@ -151,7 +151,7 @@ describe('custom exercise identity', () => {
     const custom = plan?.exercises?.[0];
     expect(custom?.id).toBe(`${CUSTOM_ID_PREFIX}legpress`);
     expect(getBuiltinExercise('legpress')?.name).toBe('Leg press');
-    expect(resolveExercise('legpress', plan)?.name).toBe('Leg press');
+    expect(resolveExercise('legpress', { plan })?.name).toBe('Leg press');
   });
 
   it('does not double-prefix an id that already carries the namespace', () => {

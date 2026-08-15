@@ -1,4 +1,5 @@
-import type { LoggedSet, Session, UserPlan, WeightUnit } from '@/types';
+import type { LoggedSet, Session, WeightUnit } from '@/types';
+import type { ExerciseSource } from '@/data/catalogue';
 import { isTrendable } from '@/data/exercises';
 import { resolveExercise } from '@/data/catalogue';
 import { convertWeight } from './units';
@@ -42,9 +43,9 @@ export function bestOneRepMax(
   session: Session,
   exerciseId: string,
   unit: WeightUnit,
-  plan: UserPlan | null = null,
+  source: ExerciseSource = {},
 ): number | null {
-  const exercise = resolveExercise(exerciseId, plan);
+  const exercise = resolveExercise(exerciseId, source);
   if (!exercise || !isTrendable(exercise)) return null;
 
   let best: number | null = null;
@@ -67,11 +68,11 @@ export function bestOneRepMax(
 export function sessionVolume(
   sets: readonly LoggedSet[],
   unit: WeightUnit,
-  plan: UserPlan | null = null,
+  source: ExerciseSource = {},
 ): number {
   let total = 0;
   for (const set of sets) {
-    const exercise = resolveExercise(set.exerciseId, plan);
+    const exercise = resolveExercise(set.exerciseId, source);
     if (exercise?.repMetric === 'seconds') continue;
     total += convertWeight(set.weight, set.unit, unit) * set.reps;
   }

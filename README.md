@@ -275,6 +275,24 @@ override them:
   silently rewrite the meaning of every leg press already in your history. It
   cannot: it gets `x:legpress`, and the built-in id is untouched.
 
+### Custom movements outlive the plan that defined them
+
+A movement an imported plan invents lives in that plan — so replacing the plan
+would strand every set logged against it. The numbers would survive, but
+nothing could say what `x:sled-push` was, whether it counted reps or seconds,
+or whether it belonged on a strength trend.
+
+So `AppState.exerciseArchive` keeps a copy, written the first time a set is
+logged against the movement. On logging rather than on plan replacement,
+because that is the moment it stops being a suggestion and becomes part of the
+record — and because it means the archive holds only what you actually
+performed, not every movement of every plan you have tried. Entries nothing
+references any more are dropped on load.
+
+Resolution goes plan → archive → built-in. The plan wins when both can answer:
+it describes what you are being asked to do _now_, while the archive explains
+what you did _then_.
+
 ### The gate
 
 Every plan passes `domain/planValidation.ts` before it can be adopted —

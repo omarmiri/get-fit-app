@@ -133,7 +133,9 @@ function describe(session: Session, context: ViewContext): string {
 
   if (session.sets.length > 0) {
     parts.push(session.sets.length === 1 ? '1 set' : `${session.sets.length} sets`);
-    const volume = sessionVolume(session.sets, unit);
+    // Passing state, not just the plan: a session may contain a movement whose
+    // plan has since been replaced, and its volume still counts.
+    const volume = sessionVolume(session.sets, unit, context.state);
     if (volume > 0) parts.push(formatVolume(volume, unit));
   }
   if (session.minutes) parts.push(`${session.minutes} min`);

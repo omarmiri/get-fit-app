@@ -324,6 +324,9 @@ function eraseAll(context: ViewContext): void {
     prefs: context.state.prefs,
     // Erasing training history does not throw away the plan you are following.
     plan: context.state.plan,
+    // The archive only exists to explain logged sets. With none left it
+    // explains nothing, and the plan still defines whatever it defines.
+    exerciseArchive: [],
   });
   toast('All data erased');
   context.render();

@@ -63,7 +63,7 @@ function resolveDay(day: UserPlanDay, plan: UserPlan): PlanDay | null {
   const type = day.type === 'rest' ? 'duration' : day.type;
 
   const exercises = (day.exerciseIds ?? [])
-    .map((id) => resolveExercise(id, plan))
+    .map((id) => resolveExercise(id, { plan }))
     .filter((exercise): exercise is NonNullable<typeof exercise> => exercise !== undefined);
 
   const outline = day.outline.length > 0 ? day.outline : [day.sub || day.label];

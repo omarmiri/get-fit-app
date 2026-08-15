@@ -498,7 +498,7 @@ function describeLines(session: Session, context: ViewContext): string[] {
   const lines: string[] = [];
 
   if (session.sets.length > 0) {
-    const volume = sessionVolume(session.sets, unit);
+    const volume = sessionVolume(session.sets, unit, context.state);
     lines.push(
       volume > 0
         ? `${session.sets.length} sets · ${formatVolume(volume, unit)} total volume`
