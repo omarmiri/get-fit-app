@@ -1,18 +1,20 @@
 import type {
   AppState,
   Effort,
-  GeneratedPlan,
+  Exercise,
   FitnessLevel,
   LoggedSet,
   Preferences,
   Session,
   SetEffort,
+  UserPlan,
   UserProfile,
   WeightUnit,
 } from '@/types';
 import { isDayKey } from '@/data/plan';
 import { isValidIsoDate } from '@/domain/dates';
 import { clampMinutes, clampNumber, clampReps, clampWeight } from '@/domain/limits';
+import { parseCustomExercise } from '@/domain/planFormat';
 import { isWeightUnit } from '@/domain/units';
 
 /**
@@ -268,25 +270,36 @@ function parsePreferences(raw: unknown): Preferences {
 }
 
 /**
- * Parse a stored generated plan.
+ * Parse a stored plan.
  *
  * Shape only. Whether the plan is sensible is decided by `validatePlan`, which
  * runs before it is ever adopted; anything already stored has been through it.
+ *
+ * The movements a plan defined for itself are re-parsed through the same
+ * function that read them off the wire. They are the only part of stored state
+ * originally authored by a language model, and a backup file is trivially
+ * hand-editable, so they get the same treatment on the way back in as they got
+ * the first time.
  */
-function parsePlan(raw: unknown): GeneratedPlan | null {
+function parsePlan(raw: unknown): UserPlan | null {
   if (!isRecord(raw) || !Array.isArray(raw['days'])) return null;
 
   const days = raw['days']
     .filter(isRecord)
     .filter((day) => isDayKey(day['dayKey']))
-    .map((day) => day as unknown as GeneratedPlan['days'][number]);
+    .map((day) => day as unknown as UserPlan['days'][number]);
 
   if (days.length === 0) return null;
+
+  const exercises = Array.isArray(raw['exercises'])
+    ? raw['exercises'].map(parseCustomExercise).filter((e): e is Exercise => e !== null)
+    : [];
 
   return {
     id: typeof raw['id'] === 'string' ? raw['id'] : `plan-${Date.now().toString(36)}`,
     summary: typeof raw['summary'] === 'string' ? raw['summary'] : '',
     days,
+    ...(exercises.length > 0 ? { exercises } : {}),
     generatedAt: finiteOr(raw['generatedAt'], 0),
     model: typeof raw['model'] === 'string' ? raw['model'] : 'unknown',
   };

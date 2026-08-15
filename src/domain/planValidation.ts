@@ -1,14 +1,22 @@
-import type { DayKey, GeneratedDay, GeneratedPlan } from '@/types';
-import { getExercise } from '@/data/exercises';
+import type { DayKey, UserPlan, UserPlanDay } from '@/types';
+import { resolveExercise } from '@/data/catalogue';
 import { getStation } from '@/data/equipment';
 import { DAY_KEYS, GOALS } from '@/data/plan';
 
 /**
- * Deterministic validation of a generated plan.
+ * Deterministic validation of a plan, wherever it came from.
  *
- * The model is non-deterministic; this gate is not. Every plan — generated or
- * built-in — has to pass the same checks before it can be used, which turns
- * "is this plan any good" from a matter of taste into something answerable.
+ * The author is non-deterministic; this gate is not. Every plan — generated
+ * in-app, imported from someone's chatbot, or built in — passes the same
+ * checks before it can be used, which turns "is this plan any good" from a
+ * matter of taste into something answerable.
+ *
+ * This is the load-bearing part of letting users bring plans from any LLM. The
+ * app cannot vouch for the training advice in an imported file, and does not
+ * try to. What it can do is guarantee the file will not break the app, will
+ * not silently lose a day, and will not quietly prescribe nothing on a day
+ * that claims to be a workout — and then show the user everything it noticed
+ * before they commit to it.
  *
  * Two classes of finding:
  *
@@ -34,18 +42,20 @@ export interface PlanValidation {
   /** Aerobic minutes across the week, for the summary line. */
   readonly weeklyAerobicMinutes: number;
   readonly strengthDays: number;
+  /** How many movements the plan defined itself, rather than referencing. */
+  readonly customExercises: number;
 }
 
 export interface ValidationContext {
-  /** Stations the user has marked absent from their club. */
+  /** Stations the user has marked absent from their gym. */
   readonly missingStationIds?: readonly string[];
 }
 
-export function validatePlan(plan: GeneratedPlan, context: ValidationContext = {}): PlanValidation {
+export function validatePlan(plan: UserPlan, context: ValidationContext = {}): PlanValidation {
   const issues: PlanIssue[] = [];
   const missing = new Set(context.missingStationIds ?? []);
 
-  const byDay = new Map<DayKey, GeneratedDay>();
+  const byDay = new Map<DayKey, UserPlanDay>();
   for (const day of plan.days) {
     if (byDay.has(day.dayKey)) {
       issues.push({ severity: 'error', message: `Duplicate day: ${day.dayKey}`, dayKey: day.dayKey });
@@ -64,11 +74,13 @@ export function validatePlan(plan: GeneratedPlan, context: ValidationContext = {
   let strengthDays = 0;
 
   for (const day of byDay.values()) {
-    issues.push(...validateDay(day, missing));
+    issues.push(...validateDay(day, plan, missing));
 
     if (day.aerobic && day.minutes) weeklyAerobicMinutes += day.minutes;
     if (day.type === 'strength') strengthDays += 1;
   }
+
+  issues.push(...validateCustomExercises(plan));
 
   // Guideline checks. Warnings, not errors — the user may knowingly run a
   // lighter week, and the app should not refuse to show them their own plan.
@@ -99,10 +111,54 @@ export function validatePlan(plan: GeneratedPlan, context: ValidationContext = {
     issues,
     weeklyAerobicMinutes,
     strengthDays,
+    customExercises: plan.exercises?.length ?? 0,
   };
 }
 
-function validateDay(day: GeneratedDay, missing: ReadonlySet<string>): PlanIssue[] {
+/**
+ * Checks on movements the plan invented.
+ *
+ * These are warnings, deliberately. A custom movement with a thin coaching cue
+ * is worse than a built-in one but still better than no plan, and the user is
+ * entitled to run a week their LLM wrote badly. What they are not entitled to
+ * is not being told.
+ */
+function validateCustomExercises(plan: UserPlan): PlanIssue[] {
+  const issues: PlanIssue[] = [];
+  const used = new Set(plan.days.flatMap((day) => day.exerciseIds ?? []));
+
+  for (const exercise of plan.exercises ?? []) {
+    if (!used.has(exercise.id)) {
+      issues.push({
+        severity: 'warning',
+        message: `"${exercise.name}" is defined but never used on any day.`,
+      });
+    }
+
+    if (exercise.repMin > exercise.repMax) {
+      issues.push({
+        severity: 'error',
+        message: `"${exercise.name}" has a rep range that runs backwards.`,
+      });
+    }
+
+    /*
+     * A loaded movement with no equipment named and no station that resolves
+     * is one the user cannot act on: they are told to do three sets of
+     * something with weight, and nothing says what to put the weight on.
+     */
+    if (exercise.loaded && !exercise.equipment && (exercise.stations?.length ?? 0) === 0) {
+      issues.push({
+        severity: 'warning',
+        message: `"${exercise.name}" is a weighted movement but names no equipment.`,
+      });
+    }
+  }
+
+  return issues;
+}
+
+function validateDay(day: UserPlanDay, plan: UserPlan, missing: ReadonlySet<string>): PlanIssue[] {
   const issues: PlanIssue[] = [];
   const at = (severity: IssueSeverity, message: string): PlanIssue => ({
     severity,
@@ -114,14 +170,13 @@ function validateDay(day: GeneratedDay, missing: ReadonlySet<string>): PlanIssue
   if (day.outline.length === 0) issues.push(at('error', `${day.dayKey}: no session outline.`));
 
   /*
-   * The critical check. Exercise ids are persistence keys, and every catalogue
-   * entry carries cues, station mappings, load conversions and a bodyweight
-   * factor. An invented movement has none of that, so it would render without
-   * substitutions, without a starting weight, and without progression — and it
-   * would orphan any history logged against it.
+   * Every referenced movement has to resolve — to the built-in catalogue or to
+   * something this plan defined for itself. An id that resolves to neither
+   * would render as a gap in the day's rail: the user is told to do six
+   * movements and shown five, with nothing saying why.
    */
   for (const id of day.exerciseIds ?? []) {
-    if (!getExercise(id)) {
+    if (!resolveExercise(id, plan)) {
       issues.push(at('error', `${day.dayKey}: unknown exercise "${id}".`));
     }
   }
@@ -131,7 +186,7 @@ function validateDay(day: GeneratedDay, missing: ReadonlySet<string>): PlanIssue
     if (!station) {
       issues.push(at('error', `${day.dayKey}: unknown station "${id}".`));
     } else if (missing.has(id)) {
-      issues.push(at('warning', `${day.dayKey}: ${station.name} is marked as not at your club.`));
+      issues.push(at('warning', `${day.dayKey}: ${station.name} is marked as not at your gym.`));
     }
   }
 
@@ -145,8 +200,11 @@ function validateDay(day: GeneratedDay, missing: ReadonlySet<string>): PlanIssue
     if (!day.minutes || day.minutes <= 0) {
       issues.push(at('error', `${day.dayKey}: timed day with no duration.`));
     }
-    if ((day.modalityStations?.length ?? 0) === 0) {
-      issues.push(at('error', `${day.dayKey}: timed day with nowhere to do it.`));
+    // Either a station the app knows or the author's own description will do.
+    // Requiring a catalogue id here would reject any plan written for a gym
+    // whose equipment this app has no name for, which is most of them.
+    if ((day.modalityStations?.length ?? 0) === 0 && !day.modality) {
+      issues.push(at('error', `${day.dayKey}: timed day that does not say what to do.`));
     }
   }
 
@@ -162,7 +220,7 @@ function validateDay(day: GeneratedDay, missing: ReadonlySet<string>): PlanIssue
 }
 
 /** Strength days that fall on consecutive calendar days, week wrapping included. */
-function consecutiveStrengthDays(byDay: ReadonlyMap<DayKey, GeneratedDay>): DayKey[] {
+function consecutiveStrengthDays(byDay: ReadonlyMap<DayKey, UserPlanDay>): DayKey[] {
   const flagged: DayKey[] = [];
 
   for (let i = 0; i < DAY_KEYS.length; i += 1) {

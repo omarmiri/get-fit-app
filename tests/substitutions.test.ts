@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Exercise, Preferences } from '@/types';
-import { getExercise } from '@/data/exercises';
+import { getBuiltinExercise } from '@/data/exercises';
 import { getStation } from '@/data/equipment';
 import { DEFAULT_PREFERENCES } from '@/state/schema';
 import {
@@ -12,7 +12,7 @@ import {
 } from '@/domain/substitutions';
 
 function exercise(id: string): Exercise {
-  const found = getExercise(id);
+  const found = getBuiltinExercise(id);
   if (!found) throw new Error(`missing fixture exercise: ${id}`);
   return found;
 }

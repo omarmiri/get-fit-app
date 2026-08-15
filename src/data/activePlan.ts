@@ -1,5 +1,5 @@
-import type { DayKey, GeneratedDay, GeneratedPlan, PlanDay } from '@/types';
-import { getExercise } from './exercises';
+import type { DayKey, PlanDay, UserPlan, UserPlanDay } from '@/types';
+import { resolveExercise } from './catalogue';
 import { PLATE } from './plates';
 import { DAY_KEYS, PLAN } from './plan';
 
@@ -40,22 +40,22 @@ const LOAD_BY_TYPE: Readonly<Record<string, string>> = {
  *
  * Pass `null` for the built-in plan.
  */
-export function resolvePlan(generated: GeneratedPlan | null): Readonly<Record<DayKey, PlanDay>> {
-  if (!generated) return PLAN;
+export function resolvePlan(plan: UserPlan | null): Readonly<Record<DayKey, PlanDay>> {
+  if (!plan) return PLAN;
 
-  const byDay = new Map<DayKey, GeneratedDay>(generated.days.map((day) => [day.dayKey, day]));
+  const byDay = new Map<DayKey, UserPlanDay>(plan.days.map((day) => [day.dayKey, day]));
   const resolved: Partial<Record<DayKey, PlanDay>> = {};
 
   for (const key of DAY_KEYS) {
     const day = byDay.get(key);
-    resolved[key] = day ? (resolveDay(day) ?? PLAN[key]) : PLAN[key];
+    resolved[key] = day ? (resolveDay(day, plan) ?? PLAN[key]) : PLAN[key];
   }
 
   return resolved as Record<DayKey, PlanDay>;
 }
 
-/** Turn one generated day into a `PlanDay`, or `null` if it cannot be used. */
-function resolveDay(day: GeneratedDay): PlanDay | null {
+/** Turn one plan day into a `PlanDay`, or `null` if it cannot be used. */
+function resolveDay(day: UserPlanDay, plan: UserPlan): PlanDay | null {
   if (!day.label.trim()) return null;
 
   // Rest days have no counterpart in `SessionType`; they render as a very light
@@ -63,10 +63,20 @@ function resolveDay(day: GeneratedDay): PlanDay | null {
   const type = day.type === 'rest' ? 'duration' : day.type;
 
   const exercises = (day.exerciseIds ?? [])
-    .map(getExercise)
+    .map((id) => resolveExercise(id, plan))
     .filter((exercise): exercise is NonNullable<typeof exercise> => exercise !== undefined);
 
   const outline = day.outline.length > 0 ? day.outline : [day.sub || day.label];
+
+  /*
+   * A day may name its cardio in prose instead of referencing a station, for
+   * gyms whose equipment the app has no vocabulary for. That sentence is
+   * appended to the outline rather than dropped: the outline is what the user
+   * actually reads before starting, and "how do I do the cardio" is not an
+   * optional detail.
+   */
+  const withModality =
+    day.modality && !day.modalityStations?.length ? [...outline, day.modality] : outline;
 
   return {
     key: day.dayKey,
@@ -76,7 +86,7 @@ function resolveDay(day: GeneratedDay): PlanDay | null {
     load: LOAD_BY_TYPE[day.type] ?? '5 kg',
     sub: day.sub,
     note: day.note,
-    outline,
+    outline: withModality,
     aerobic: day.aerobic,
     ...(day.minutes !== undefined ? { minutes: day.minutes } : {}),
     ...(day.modalityStations && day.modalityStations.length > 0
@@ -89,11 +99,11 @@ function resolveDay(day: GeneratedDay): PlanDay | null {
 }
 
 /** A one-line description of which plan is in force, for the Plan tab. */
-export function describePlanSource(generated: GeneratedPlan | null): string {
-  if (!generated) return 'Built-in seven-day rotation';
-  const when = new Date(generated.generatedAt).toLocaleDateString(undefined, {
+export function describePlanSource(plan: UserPlan | null): string {
+  if (!plan) return 'Built-in seven-day rotation';
+  const when = new Date(plan.generatedAt).toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
   });
-  return `Generated ${when} · ${generated.model}`;
+  return `${plan.model} · ${when}`;
 }

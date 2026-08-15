@@ -517,13 +517,15 @@ export const ALL_EXERCISES: readonly Exercise[] = [...STRENGTH_A, ...STRENGTH_B,
 const BY_ID = new Map<string, Exercise>(ALL_EXERCISES.map((e) => [e.id, e]));
 
 /**
- * Resolve an exercise by its persisted id.
+ * Resolve an exercise from the built-in catalogue by its persisted id.
  *
- * Returns `undefined` for ids that no longer exist in the catalogue, which
- * happens when an exercise is retired from the plan but history still
- * references it. Callers must handle that rather than assuming presence.
+ * Returns `undefined` for ids that no longer exist here — an exercise retired
+ * from the plan that history still references, or a movement defined by an
+ * imported plan. Callers must handle that rather than assuming presence, and
+ * callers that hold the active plan should use `data/catalogue.ts` instead,
+ * which resolves across both.
  */
-export function getExercise(id: string): Exercise | undefined {
+export function getBuiltinExercise(id: string): Exercise | undefined {
   return BY_ID.get(id);
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ALL_EXERCISES, getExercise, isTrendable } from '@/data/exercises';
+import { ALL_EXERCISES, getBuiltinExercise, isTrendable } from '@/data/exercises';
 import { DAY_KEYS, PLAN, PLAN_ORDER, getPlanDay, isDayKey } from '@/data/plan';
 
 /**
@@ -66,13 +66,13 @@ describe('exercise catalogue', () => {
   });
 
   it('resolves known ids and returns undefined for retired ones', () => {
-    expect(getExercise('legpress')?.name).toBe('Leg press');
-    expect(getExercise('nope')).toBeUndefined();
+    expect(getBuiltinExercise('legpress')?.name).toBe('Leg press');
+    expect(getBuiltinExercise('nope')).toBeUndefined();
   });
 
   it('excludes bodyweight and timed movements from trends', () => {
     const trendable = (id: string): boolean => {
-      const exercise = getExercise(id);
+      const exercise = getBuiltinExercise(id);
       expect(exercise, id).toBeDefined();
       return exercise ? isTrendable(exercise) : false;
     };
@@ -134,7 +134,7 @@ describe('plan', () => {
   it('only references exercises that exist in the catalogue', () => {
     for (const key of DAY_KEYS) {
       for (const exercise of PLAN[key].exercises ?? []) {
-        expect(getExercise(exercise.id), `${key}/${exercise.id}`).toBeDefined();
+        expect(getBuiltinExercise(exercise.id), `${key}/${exercise.id}`).toBeDefined();
       }
     }
   });

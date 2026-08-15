@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { GeneratedDay, GeneratedPlan } from '@/types';
+import type { UserPlanDay, UserPlan } from '@/types';
 import { DAY_KEYS } from '@/data/plan';
 import { errorsOf, validatePlan } from '@/domain/planValidation';
 
@@ -12,7 +12,7 @@ import { errorsOf, validatePlan } from '@/domain/planValidation';
  * rather than half-rendered in a gym.
  */
 
-function day(overrides: Partial<GeneratedDay> & Pick<GeneratedDay, 'dayKey'>): GeneratedDay {
+function day(overrides: Partial<UserPlanDay> & Pick<UserPlanDay, 'dayKey'>): UserPlanDay {
   return {
     label: 'Session',
     type: 'duration',
@@ -32,7 +32,7 @@ function day(overrides: Partial<GeneratedDay> & Pick<GeneratedDay, 'dayKey'>): G
  * to `undefined` are different things, and these days genuinely have neither
  * minutes nor stations.
  */
-function strengthDay(dayKey: GeneratedDay['dayKey']): GeneratedDay {
+function strengthDay(dayKey: UserPlanDay['dayKey']): UserPlanDay {
   return {
     dayKey,
     label: 'Strength',
@@ -47,7 +47,7 @@ function strengthDay(dayKey: GeneratedDay['dayKey']): GeneratedDay {
 }
 
 /** A week that passes cleanly: 5 cardio days, 2 spaced strength days. */
-function healthyPlan(overrides: Partial<GeneratedPlan> = {}): GeneratedPlan {
+function healthyPlan(overrides: Partial<UserPlan> = {}): UserPlan {
   const strength = strengthDay;
 
   return {
@@ -149,14 +149,35 @@ describe('validatePlan — day shape', () => {
     expect(errorsOf(result).some((i) => i.message.includes('no exercises'))).toBe(true);
   });
 
-  it('rejects a timed day with nowhere to do it', () => {
+  it('rejects a timed day that says neither where nor how', () => {
     const plan = healthyPlan();
     const result = validatePlan({
       ...plan,
       days: plan.days.map((d) => (d.dayKey === 'mon' ? { ...d, modalityStations: [] } : d)),
     });
 
-    expect(errorsOf(result).some((i) => i.message.includes('nowhere'))).toBe(true);
+    expect(errorsOf(result).some((i) => i.message.includes('does not say what to do'))).toBe(true);
+  });
+
+  it('accepts a timed day described in prose instead of by station id', () => {
+    /*
+     * The escape hatch that makes plans from other gyms usable. An LLM writing
+     * for a gym this app has no vocabulary for must be able to say what the
+     * cardio is in words, rather than having the whole week rejected for
+     * naming a machine that is not on a list.
+     */
+    const plan = healthyPlan();
+    const result = validatePlan({
+      ...plan,
+      days: plan.days.map((d) =>
+        d.dayKey === 'mon'
+          ? { ...d, modalityStations: [], modality: 'The assault bike in the corner by the door' }
+          : d,
+      ),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(errorsOf(result).some((i) => i.message.includes('does not say what to do'))).toBe(false);
   });
 
   it('rejects an implausible duration', () => {

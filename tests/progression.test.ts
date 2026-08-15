@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Exercise, LoggedSet, SetEffort, UserProfile } from '@/types';
-import { getExercise } from '@/data/exercises';
+import { getBuiltinExercise } from '@/data/exercises';
 import {
   type PerformanceBlock,
   STAGNATION_SESSIONS,
@@ -17,7 +17,7 @@ import {
 import { floorToIncrement, startingWeight } from '@/domain/startingWeights';
 
 function exercise(id: string): Exercise {
-  const found = getExercise(id);
+  const found = getBuiltinExercise(id);
   if (!found) throw new Error(`missing fixture exercise: ${id}`);
   return found;
 }

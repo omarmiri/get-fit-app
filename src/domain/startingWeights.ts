@@ -56,6 +56,13 @@ function ageFactor(age: number): number {
  *
  * Returns `null` when there is nothing sensible to suggest: no profile, or a
  * bodyweight movement that should simply start unloaded.
+ *
+ * An opening weight named by the plan's author wins over the bodyweight-ratio
+ * estimate. It is the more specific claim — someone who knows the movement
+ * picked a number for it, where the ratio is a crude instrument applied to a
+ * movement it has never seen. It still gets rounded down and still gets shown
+ * as a floor to work up from, because the reasoning at the top of this file
+ * does not stop applying just because a model did the guessing.
  */
 export function startingWeight(
   exercise: Exercise,
@@ -63,6 +70,12 @@ export function startingWeight(
   unit: WeightUnit,
   option?: StationOption,
 ): number | null {
+  const authored = exercise.openingWeight;
+  if (authored && authored.value > 0) {
+    const converted = convertWeight(authored.value, authored.unit, unit);
+    return floorToIncrement(converted * (option?.loadFactor ?? 1), unit);
+  }
+
   if (!profile) return null;
   if (exercise.bodyweightFactor === undefined) return null;
   if (!Number.isFinite(profile.bodyweight) || profile.bodyweight <= 0) return null;

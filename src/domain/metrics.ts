@@ -1,5 +1,6 @@
-import type { LoggedSet, Session, WeightUnit } from '@/types';
-import { getExercise, isTrendable } from '@/data/exercises';
+import type { LoggedSet, Session, UserPlan, WeightUnit } from '@/types';
+import { isTrendable } from '@/data/exercises';
+import { resolveExercise } from '@/data/catalogue';
 import { convertWeight } from './units';
 
 /**
@@ -37,8 +38,13 @@ export function estimateOneRepMax(weight: number, reps: number): number | null {
  *
  * Only loaded, rep-counted exercises are considered — a plank has no 1RM.
  */
-export function bestOneRepMax(session: Session, exerciseId: string, unit: WeightUnit): number | null {
-  const exercise = getExercise(exerciseId);
+export function bestOneRepMax(
+  session: Session,
+  exerciseId: string,
+  unit: WeightUnit,
+  plan: UserPlan | null = null,
+): number | null {
+  const exercise = resolveExercise(exerciseId, plan);
   if (!exercise || !isTrendable(exercise)) return null;
 
   let best: number | null = null;
@@ -58,10 +64,14 @@ export function bestOneRepMax(session: Session, exerciseId: string, unit: Weight
  * seconds produces a number in the wrong dimension entirely, and mixing it into
  * the total would swamp the real volume.
  */
-export function sessionVolume(sets: readonly LoggedSet[], unit: WeightUnit): number {
+export function sessionVolume(
+  sets: readonly LoggedSet[],
+  unit: WeightUnit,
+  plan: UserPlan | null = null,
+): number {
   let total = 0;
   for (const set of sets) {
-    const exercise = getExercise(set.exerciseId);
+    const exercise = resolveExercise(set.exerciseId, plan);
     if (exercise?.repMetric === 'seconds') continue;
     total += convertWeight(set.weight, set.unit, unit) * set.reps;
   }

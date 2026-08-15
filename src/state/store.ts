@@ -2,7 +2,7 @@ import type {
   AppState,
   DayKey,
   Effort,
-  GeneratedPlan,
+  UserPlan,
   LoggedSet,
   Session,
   SetEffort,
@@ -105,7 +105,7 @@ export class AppStore {
    * The built-in plan is never overwritten, so there is always a known-good
    * week to fall back to when a generated one turns out badly.
    */
-  setPlan(plan: GeneratedPlan | null): void {
+  setPlan(plan: UserPlan | null): void {
     this.#commit({ ...this.#state, plan });
   }
 

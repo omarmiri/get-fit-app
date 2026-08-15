@@ -1,4 +1,4 @@
-import type { GeneratedPlan } from '@/types';
+import type { UserPlan } from '@/types';
 import { ALL_STATIONS } from '@/data/equipment';
 import { describePlanSource } from '@/data/activePlan';
 import { type PlanValidation, validatePlan } from '@/domain/planValidation';
@@ -21,7 +21,7 @@ import type { ViewContext } from '../views/context';
 
 interface GeneratorState {
   busy: boolean;
-  candidate: GeneratedPlan | null;
+  candidate: UserPlan | null;
   validation: PlanValidation | null;
   error: string | null;
   notes: string;
@@ -135,7 +135,7 @@ async function generate(context: ViewContext): Promise<void> {
 }
 
 /** The proposed week, its check results, and the decision to keep it or not. */
-function renderCandidate(context: ViewContext, plan: GeneratedPlan, validation: PlanValidation): HTMLElement {
+function renderCandidate(context: ViewContext, plan: UserPlan, validation: PlanValidation): HTMLElement {
   const errors = validation.issues.filter((issue) => issue.severity === 'error');
   const warnings = validation.issues.filter((issue) => issue.severity === 'warning');
 

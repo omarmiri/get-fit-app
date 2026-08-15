@@ -175,6 +175,20 @@ export interface ExerciseCues {
 }
 
 /**
+ * Where an exercise's definition came from.
+ *
+ * `builtin` movements live in `data/exercises.ts` and carry everything the app
+ * knows how to do — station substitutions, load conversions, a bodyweight
+ * factor for the opening estimate. `plan` movements were written by whichever
+ * LLM produced an imported plan, and carry only what that file supplied.
+ *
+ * The distinction is surfaced, not hidden. A movement someone's chatbot
+ * invented last Tuesday should not be presented with the same authority as one
+ * that has been through this codebase.
+ */
+export type ExerciseSource = 'builtin' | 'plan';
+
+/**
  * One movement in the plan.
  *
  * `id` is a stable persistence key: logged sets reference it forever, so
@@ -183,6 +197,29 @@ export interface ExerciseCues {
 export interface Exercise {
   readonly id: string;
   readonly name: string;
+  /** Absent on the built-in catalogue, which is the default. */
+  readonly source?: ExerciseSource;
+  /**
+   * Equipment needed, in plain English, e.g. `adjustable bench, dumbbells`.
+   *
+   * Only imported movements set this. The app cannot enumerate the equipment
+   * of every gym on earth, so for anything outside the built-in vocabulary it
+   * shows the author's own words rather than pretending to resolve them.
+   */
+  readonly equipment?: string;
+  /**
+   * Load to open the very first set of a movement with no logged history.
+   *
+   * Supplied by the author of an imported plan, and used exactly once: the
+   * moment there is one real logged set, `domain/progression.ts` takes over
+   * and this is never consulted again. It is a starting guess from someone who
+   * knows the movement, not a prescription — the app still rounds it down and
+   * still says on screen that it is a floor to work up from.
+   */
+  readonly openingWeight?: {
+    readonly value: number;
+    readonly unit: WeightUnit;
+  };
   /** Equipment-free or lighter substitute, shown as "or ..." on the card. */
   readonly alternative?: string;
   /**
@@ -354,18 +391,16 @@ export interface Session {
   readonly planLabel?: string;
 }
 
-/* ------------------------------------------------------- generated plans */
+/* ------------------------------------------------------------- user plans */
 
 /**
- * A plan day as returned by the model.
+ * One day of a plan the user brought, rather than the built-in rotation.
  *
- * Deliberately narrower than `PlanDay`: the model chooses movements and
- * structure by *referencing catalogue ids*, and never supplies cues, rep
- * ranges, station mappings or loads. Those come from the catalogue on
- * resolution, so a generated plan inherits everything the app already knows —
- * substitutions, starting weights, progression history.
+ * Narrower than `PlanDay` because the parts the app owns — accent colour,
+ * plate weight, resolved `Exercise` objects — are filled in on resolution
+ * rather than stored. What is stored is the author's structural intent.
  */
-export interface GeneratedDay {
+export interface UserPlanDay {
   readonly dayKey: DayKey;
   readonly label: string;
   readonly type: SessionType | 'rest';
@@ -374,23 +409,54 @@ export interface GeneratedDay {
   readonly outline: readonly string[];
   readonly aerobic: boolean;
   readonly minutes?: number;
-  /** Station ids from the catalogue. Never free text. */
+  /** Station ids from the built-in vocabulary. */
   readonly modalityStations?: readonly string[];
-  /** Exercise ids from the catalogue. Never invented movements. */
+  /**
+   * How the day's cardio is done, in the author's words.
+   *
+   * The escape hatch from the station vocabulary. A plan written for a gym the
+   * app has never heard of can say "the assault bike by the door" and have it
+   * render, instead of being rejected for naming equipment not on a list.
+   */
+  readonly modality?: string;
+  /**
+   * Movements for the day, referencing either the built-in catalogue or an
+   * exercise defined by this plan.
+   */
   readonly exerciseIds?: readonly string[];
   readonly exerciseFormat?: 'circuit' | 'sets';
   readonly rounds?: string;
 }
 
-/** A complete generated week, plus how it came about. */
-export interface GeneratedPlan {
+/**
+ * A complete week the user adopted, and where it came from.
+ *
+ * Covers both plans generated in-app and plans written by an external LLM and
+ * imported — they are the same thing by the time they get here, which is the
+ * point. One shape, one validator, one resolution path.
+ */
+export interface UserPlan {
   readonly id: string;
   /** One line on the approach taken, shown before you accept it. */
   readonly summary: string;
-  readonly days: readonly GeneratedDay[];
-  /** Epoch milliseconds the plan was generated. */
+  readonly days: readonly UserPlanDay[];
+  /**
+   * Movements this plan defines for itself, beyond the built-in catalogue.
+   *
+   * Stored with the plan rather than merged into the catalogue: these are the
+   * plan's own vocabulary, and they must disappear along with it. Their ids
+   * are namespaced (see `CUSTOM_ID_PREFIX`) so they can never collide with a
+   * built-in id and silently rewrite the meaning of logged history.
+   */
+  readonly exercises?: readonly Exercise[];
+  /** Epoch milliseconds the plan was adopted. */
   readonly generatedAt: number;
-  /** Model that produced it, for when two plans differ and you wonder why. */
+  /**
+   * Who wrote it — a model name, or whatever an imported file declared.
+   *
+   * Free text and never trusted for anything: it exists so that when two plans
+   * differ and you wonder why, there is an answer on screen.
+   */
   readonly model: string;
 }
 
@@ -401,8 +467,10 @@ export interface PlanRequest {
   readonly conditions: readonly string[];
   /** Anything to work around this week, e.g. `sore left shoulder`. */
   readonly notes: string;
-  /** Station ids actually available, so it cannot prescribe absent equipment. */
+  /** Station ids the user has not marked missing. */
   readonly availableStationIds: readonly string[];
+  /** Where the user trains, in their own words. */
+  readonly gym?: string;
 }
 
 /** User preferences. Additive only — unknown keys are dropped on load. */
@@ -464,12 +532,12 @@ export interface AppState {
   readonly active: Session | null;
   readonly prefs: Preferences;
   /**
-   * The generated plan in use, if the user accepted one.
+   * The plan in use, if the user generated or imported one.
    *
    * `null` means the built-in plan applies. Kept as data rather than replacing
    * `data/plan.ts` so there is always a known-good plan to fall back to.
    */
-  readonly plan: GeneratedPlan | null;
+  readonly plan: UserPlan | null;
 }
 
 /* ------------------------------------------------------------------- views */
