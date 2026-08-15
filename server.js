@@ -13,6 +13,7 @@ import compression from 'compression';
 import express from 'express';
 import helmet from 'helmet';
 
+import { DriveError, fetchDrivePlan } from './drive.js';
 import { GeminiError, generatePlan } from './gemini.js';
 import { startKeepAlive } from './keepalive.js';
 
@@ -126,6 +127,40 @@ app.post('/api/plan/generate', async (req, res) => {
     }
     console.error('[plan] unexpected failure', error);
     return res.status(500).json({ error: 'Plan generation failed unexpectedly.' });
+  }
+});
+
+/**
+ * Fetch a plan from a Google Drive share link.
+ *
+ * Exists so the browser never has to talk to Google directly, which keeps the
+ * CSP at `connect-src 'self'` and avoids OAuth and third-party scripts
+ * entirely. The SSRF fencing is in `drive.js`; this route only rate-limits and
+ * translates errors.
+ *
+ * Nothing is stored. The file's text is handed straight back to the client,
+ * which parses and validates it exactly as it would a paste.
+ */
+app.post('/api/plan/fetch', async (req, res) => {
+  if (rateLimited(req.ip ?? 'unknown')) {
+    return res.status(429).json({ error: 'Too many requests. Wait a minute and try again.' });
+  }
+
+  const url = req.body?.url;
+  if (typeof url !== 'string' || url.length === 0 || url.length > 2048) {
+    return res.status(400).json({ error: 'No link supplied.' });
+  }
+
+  try {
+    return res.json({ contents: await fetchDrivePlan(url) });
+  } catch (error) {
+    if (error instanceof DriveError) {
+      // Logged without the URL, which identifies a user's private file.
+      console.error(`[drive] ${error.status}: ${error.message}`);
+      return res.status(error.status).json({ error: error.message });
+    }
+    console.error('[drive] unexpected failure', error);
+    return res.status(500).json({ error: 'Could not fetch that link.' });
   }
 });
 
