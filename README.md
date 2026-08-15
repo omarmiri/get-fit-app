@@ -4,6 +4,8 @@
 
 A personal training log built around one seven-day plan. Mobile-first, installable to the home screen, works offline in the gym.
 
+**Bring your own plan.** Ask ChatGPT, Claude, Gemini or anything else for a training week and load it in — by paste, by file, or from a Google Drive link. The format is published at [`/llms.txt`](https://get-fit-app.onrender.com/llms.txt), so any model that can read a page can write a plan this app understands. See [Bringing a plan from an LLM](#bringing-a-plan-from-an-llm).
+
 All data lives in the browser on the device you use it on. There is no database, no account, and nothing leaves the phone. **Export a backup from the Plan tab now and then** — clearing browser data erases everything.
 
 ---
@@ -46,6 +48,7 @@ Then open http://localhost:5173.
 - **Equipment-aware** — every movement is tied to named equipment, with the zone to walk to, and you tap off whatever your gym lacks
 - **Busy machine? Swap it** — tap "Taken?" for ranked alternatives, each with where to find it and a converted starting load
 - **Units** — pounds or kilograms, switchable at any time without rewriting history
+- **Bring a plan from any LLM** — copy a prompt, paste the answer back; the app checks it before anything is adopted
 - **Export / import** — JSON backup, with validation on the way back in
 - **Offline** — self-hosted fonts and a precached shell; no third-party requests at runtime
 
@@ -235,11 +238,72 @@ daylight time. `tests/keepalive.test.ts` pins both offsets and the boundaries.
 Set `KEEP_ALIVE=false` to disable the self-ping, and disable the workflow in the
 Actions tab, if you move to a paid instance where none of this is needed.
 
-## Plan generation (Gemini)
+## Bringing a plan from an LLM
 
-The Plan tab can generate a week with Gemini and swap it in. Set `GEMINI_API_KEY`
-in the Render environment; the app hides the control when the server reports no
-key, so it never offers a button that can only fail.
+The app accepts a training week written by any language model. The whole
+contract is published at **`/llms.txt`**, generated at build time from the same
+catalogue modules the parser uses — so the documentation cannot promise a field
+the parser rejects. `/catalog.json` carries the built-in ids in machine-readable
+form.
+
+Three ways in, all landing on the same parser and the same validator:
+
+| Route | For |
+| --- | --- |
+| **Copy prompt → paste the answer** | The normal path. The prompt carries the full format plus your gym, profile and health context. |
+| **Open a plan file** | Phones. On Android this covers Google Drive too, since Drive mounts in the system file picker. |
+| **Google Drive link** | A file shared with "anyone with the link". Fetched by this server, not the browser. |
+
+### The division of labour
+
+A plan file is **self-describing**: it may define movements this app has never
+heard of, with their own cues, rep ranges, rest and equipment in plain English.
+That is the point — no shipped catalogue covers every gym and every body.
+
+Three things stay with the app, and the format gives an author no way to
+override them:
+
+- **Progression.** Loads after the first session come from your logged history
+  via `domain/progression.ts`. An author may name an *opening* weight for a
+  movement you have never done; it is used once, rounded down like every other
+  starting estimate, and then never consulted again. The model says
+  _dumbbell floor press, 8–12_; the app decides _30 lb_ from your own history.
+- **Presentation.** `repRange` is derived from `repMin`/`repMax` rather than
+  accepted, so `"8-12 GO HEAVY"` cannot land where a rep range belongs.
+- **Identity.** Imported exercise ids are namespaced under `x:`. Logged sets
+  reference exercise ids forever, so a plan that could define `legpress` would
+  silently rewrite the meaning of every leg press already in your history. It
+  cannot: it gets `x:legpress`, and the built-in id is untouched.
+
+### The gate
+
+Every plan passes `domain/planValidation.ts` before it can be adopted —
+generated in-app, pasted from a chatbot, or loaded from a link, the same
+deterministic checks either way.
+
+- Errors block: unresolvable exercise or station ids, missing or duplicated
+  days, strength days with no exercises, timed days with no duration or no
+  description of what to do.
+- Warnings inform: below the weekly aerobic target, too few strength days,
+  back-to-back strength days, equipment you have marked absent, defined
+  movements that no day uses, weighted movements naming no equipment.
+
+The app cannot vouch for the *training advice* in a file someone's chatbot
+wrote, and does not try to. What it guarantees is that the file will not break
+the app, will not silently lose a day, and will not prescribe nothing on a day
+claiming to be a workout — and that you see everything it noticed before you
+commit. Nothing is saved until you accept it, and the built-in plan is always
+one tap away.
+
+`domain/planFormat.ts` is the parser: total, never throwing, with a cap on
+every string an author controls. There is no server to repair a browser whose
+only storage key has been filled with one pathological note.
+
+## Generating a plan in-app (Gemini)
+
+The convenience path, for when you do not want to leave the app. Set
+`GEMINI_API_KEY` in the Render environment; the app hides the control when the
+server reports no key, so it never offers a button that can only fail.
 
 | Variable         | Purpose                                   |
 | ---------------- | ----------------------------------------- |
@@ -250,43 +314,33 @@ key, so it never offers a button that can only fail.
 `/api/plan/generate` proxies the call. Never move this to a `VITE_`-prefixed
 variable — Vite inlines those into the client bundle at build time.
 
-### What the model is and is not allowed to do
+This path is not privileged. Gemini emits the same format documented at
+`/llms.txt`, and the response goes through the same parser and the same
+validator as a stranger's pasted file. One format, one code path, one place for
+a hole to be found by a test.
 
-It selects movements and arranges a week **by referencing catalogue ids**. It
-never invents an exercise, never names equipment freehand, and never prescribes
-a load.
+### Google Drive, and why not the Picker
 
-That constraint is what makes the feature safe to build on. A generated day
-resolves against `data/exercises.ts` and `data/equipment.ts`, so it inherits
-coaching cues, plain-language summaries, station substitutions, starting weights
-and progression history for free. An invented movement would have none of that
-and would orphan anything logged against it.
+The Drive Picker needs an OAuth client, a Google account and scripts from
+`apis.google.com`. This app loads nothing from anywhere — `script-src 'self'`,
+`connect-src 'self'` — and giving that up to save a copy-paste is a poor trade.
+So `/api/plan/fetch` fetches the link server-side instead.
 
-Loads stay with `domain/progression.ts`. The model says _leg press, 8–12_; the
-app decides _125 lb_ from your profile and your own logged history.
-
-### The gate
-
-Every generated plan passes through `domain/planValidation.ts` before it can be
-adopted — the same deterministic checks regardless of which model produced it:
-
-- Errors block: unknown exercise or station ids, missing or duplicated days,
-  strength days with no exercises, timed days with no duration or location.
-- Warnings inform: below the weekly aerobic target, too few strength days,
-  back-to-back strength days, equipment you have marked absent.
-
-Nothing is saved until you accept it, and the built-in plan is always one tap
-away. Sessions snapshot their plan label when logged, so regenerating never
-retroactively renames anything already in your history.
+A server that fetches a URL for a client is an SSRF primitive unless fenced in.
+`drive.js` fences it four ways: the supplied URL is never fetched, only mined
+for a file id substituted into a fixed template; redirects are followed by hand
+with a host allowlist at every hop, since Drive serves bytes from
+`googleusercontent.com`; the body is capped while streaming; and the whole
+thing is on a timeout. `tests/drive.test.ts` is that fence's regression suite.
 
 ## Roadmap notes
 
-**Gemini belongs in plan structure, not progression.** Choosing and arranging
-movements in response to "my shoulder hurts" is open-ended language over a
-structured document, and there is no reasonable way to write rules for it.
-Deciding whether to add 10 lb is arithmetic over your own history. The split is
-enforced in code: the model cannot return a weight, and the progression engine
-never calls the network.
+**A language model belongs in plan structure, not progression.** Choosing and
+arranging movements in response to "my shoulder hurts" is open-ended language
+over a structured document, and there is no reasonable way to write rules for
+it. Deciding whether to add 10 lb is arithmetic over your own history. The split
+is enforced in code: an author can name an opening weight for a movement with no
+history and nothing else, and the progression engine never calls the network.
 
 ## Not yet built
 
