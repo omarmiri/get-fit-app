@@ -11,6 +11,7 @@ import { toast } from '../toast';
 import { renderLegend } from '../components/charts';
 import { renderPlanGenerator } from '../components/planGenerator';
 import { renderPlanImport } from '../components/planImport';
+import { renderPlanLibrary } from '../components/planLibrary';
 import type { ViewContext } from './context';
 
 /** The Plan tab: the rotation, settings, and data management. */
@@ -20,6 +21,7 @@ export function renderPlanView(context: ViewContext): Child[] {
     renderRotation(context),
     renderGymCard(context),
     renderEquipmentCard(context),
+    renderPlanLibrary(context),
     renderPlanImport(context),
     renderPlanGenerator(context),
     renderProfileCard(context),
@@ -322,8 +324,9 @@ function eraseAll(context: ViewContext): void {
     sessions: [],
     active: null,
     prefs: context.state.prefs,
-    // Erasing training history does not throw away the plan you are following.
-    plan: context.state.plan,
+    // Erasing training history does not throw away your saved plans.
+    plans: context.state.plans,
+    activePlanId: context.state.activePlanId,
     // The archive only exists to explain logged sets. With none left it
     // explains nothing, and the plan still defines whatever it defines.
     exerciseArchive: [],

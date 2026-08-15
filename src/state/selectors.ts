@@ -1,7 +1,7 @@
 import type { AppState, DayKey, Exercise, IsoDate, LoggedSet, PlanDay, Session, WeightUnit } from '@/types';
 import { GOALS, PLAN, getPlanDay } from '@/data/plan';
 import { isTrendable } from '@/data/exercises';
-import { catalogueFor } from '@/data/catalogue';
+import { catalogueFor, exerciseSourceOf } from '@/data/catalogue';
 import { addDays, parseIsoDate, startOfWeek, toIsoDate } from '@/domain/dates';
 import { bestOneRepMax } from '@/domain/metrics';
 import { type PerformanceBlock, toPerformanceBlocks } from '@/domain/progression';
@@ -124,7 +124,7 @@ export function trendPoints(state: AppState, exerciseId: string, unit: WeightUni
   for (const session of state.sessions) {
     // `state` is itself a valid exercise source, so a movement defined by the
     // plan or retained in the archive charts like any built-in one.
-    const best = bestOneRepMax(session, exerciseId, unit, state);
+    const best = bestOneRepMax(session, exerciseId, unit, exerciseSourceOf(state));
     if (best !== null) points.push({ date: session.date, value: best });
   }
   return points;
@@ -147,7 +147,7 @@ export function trendableExercises(state: AppState): readonly Exercise[] {
       if (set.weight > 0) logged.add(set.exerciseId);
     }
   }
-  return catalogueFor(state).filter((exercise) => isTrendable(exercise) && logged.has(exercise.id));
+  return catalogueFor(exerciseSourceOf(state)).filter((exercise) => isTrendable(exercise) && logged.has(exercise.id));
 }
 
 /** Consecutive days ending today (or yesterday) with a logged session. */

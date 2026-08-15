@@ -437,6 +437,14 @@ export interface UserPlanDay {
  */
 export interface UserPlan {
   readonly id: string;
+  /**
+   * What the user calls this plan, once it is one of several.
+   *
+   * Absent on plans saved before the library existed, and on anything the
+   * user has not renamed — `describePlanName` falls back to the model and
+   * date, which is how they were identified before.
+   */
+  readonly name?: string;
   /** One line on the approach taken, shown before you accept it. */
   readonly summary: string;
   readonly days: readonly UserPlanDay[];
@@ -532,12 +540,24 @@ export interface AppState {
   readonly active: Session | null;
   readonly prefs: Preferences;
   /**
-   * The plan in use, if the user generated or imported one.
+   * Every plan the user has kept, oldest first.
    *
-   * `null` means the built-in plan applies. Kept as data rather than replacing
-   * `data/plan.ts` so there is always a known-good plan to fall back to.
+   * A library rather than a single slot. Adopting a plan used to overwrite the
+   * previous one, so trying a week your LLM wrote meant destroying the block
+   * you had been running — and the only way back was to still have the file.
+   * Training is seasonal: a winter strength block, a travel week and a rehab
+   * plan are all worth keeping and switching between.
    */
-  readonly plan: UserPlan | null;
+  readonly plans: readonly UserPlan[];
+  /**
+   * Which plan in `plans` is in force.
+   *
+   * `null` means the built-in rotation applies, which is also what an id that
+   * no longer resolves falls back to. The built-in plan is never in `plans` —
+   * it lives in `data/plan.ts` and cannot be deleted, so there is always a
+   * known-good week underneath whatever the user is trying.
+   */
+  readonly activePlanId: string | null;
   /**
    * Definitions of plan-defined movements that have been logged against.
    *

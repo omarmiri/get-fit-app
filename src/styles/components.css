@@ -1308,6 +1308,102 @@
   color: var(--dimmer);
 }
 
+/* ---- plan library ----
+   The saved plans, with the built-in rotation always first and never
+   deletable. The active row is marked by the accent bar rather than by colour
+   alone, so it survives a colourblind reader and a greyscale screenshot. */
+.planlist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.planlist__item {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-2);
+  border: var(--border);
+  border-radius: var(--radius);
+  background: var(--iron-0);
+  overflow: hidden;
+}
+
+.planlist__item.is-active {
+  border-color: var(--pc);
+}
+
+.planlist__pick {
+  flex: 1;
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-left: 3px solid transparent;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.planlist__item.is-active .planlist__pick {
+  border-left-color: var(--pc);
+}
+
+.planlist__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.planlist__name {
+  font-weight: 700;
+}
+
+.planlist__sub {
+  margin-top: 2px;
+  color: var(--dim);
+  font-size: 13px;
+  /* Summaries run long. Two lines is enough to tell plans apart. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.planlist__actions {
+  display: flex;
+  flex-direction: column;
+  border-left: var(--border);
+}
+
+.planlist__action {
+  flex: 1;
+  min-width: var(--tap);
+  padding: 0 var(--space-2);
+  border: 0;
+  background: none;
+  color: var(--dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.planlist__action + .planlist__action {
+  border-top: var(--border);
+}
+
+.planlist__action:hover {
+  color: var(--chalk);
+}
+
+.planlist__action--danger:hover {
+  color: var(--danger);
+}
+
 /* Multi-line variant, for the gym description and pasted plans. Resizes
    vertically only — horizontal resize would break the card's layout. */
 .gen__input--area {

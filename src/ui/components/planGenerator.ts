@@ -1,6 +1,5 @@
 import type { UserPlan } from '@/types';
 import { ALL_STATIONS } from '@/data/equipment';
-import { describePlanSource } from '@/data/activePlan';
 import { type PlanValidation, validatePlan } from '@/domain/planValidation';
 import { PlanApiError, requestPlan } from '@/services/planApi';
 import { card, div, el, eyebrow, text } from '../dom';
@@ -49,9 +48,13 @@ export function renderPlanGenerator(context: ViewContext): HTMLElement {
   const conditions = context.state.prefs.conditions ?? [];
 
   return card([
-    eyebrow('Plan in force'),
-    text('setting__label', describePlanSource(context.state.plan)),
-    context.state.plan?.summary ? text('prose', context.state.plan.summary) : null,
+    // Which plan is in force, and switching between them, belongs to the
+    // library card above. This card is only the act of making a new one.
+    eyebrow('Generate one here instead'),
+    text(
+      'prose',
+      'Uses the same format and the same checks as a plan from your own LLM, without leaving the app.',
+    ),
 
     div('gen__group', [
       eyebrow('Health context'),
@@ -83,9 +86,9 @@ export function renderPlanGenerator(context: ViewContext): HTMLElement {
           validation: state.validation,
           onAccept: () => {
             if (!state.candidate) return;
-            context.store.setPlan(state.candidate);
+            context.store.adoptPlan(state.candidate);
             resetPlanGenerator();
-            toast('Plan updated');
+            toast('Saved to your plans and switched to it');
             context.render();
           },
         })
@@ -97,22 +100,6 @@ export function renderPlanGenerator(context: ViewContext): HTMLElement {
       attrs: { type: 'button', 'aria-busy': state.busy, disabled: state.busy },
       on: { click: () => void generate(context) },
     }),
-
-    context.state.plan
-      ? el('button', {
-          class: 'button button--ghost',
-          text: 'Back to the built-in plan',
-          attrs: { type: 'button' },
-          on: {
-            click: () => {
-              context.store.setPlan(null);
-              resetPlanGenerator();
-              toast('Reverted to the built-in plan');
-              context.render();
-            },
-          },
-        })
-      : null,
   ]);
 }
 

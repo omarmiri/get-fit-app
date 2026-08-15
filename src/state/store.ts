@@ -9,6 +9,7 @@ import type {
   UserProfile,
   WeightUnit,
 } from '@/types';
+import { activePlan } from '@/data/catalogue';
 import { todayIso } from '@/domain/dates';
 import { clampMinutes, clampReps, clampWeight } from '@/domain/limits';
 import { type KeyValueStore, type SaveFailure, debounce, saveState } from './storage';
@@ -100,13 +101,65 @@ export class AppStore {
   }
 
   /**
-   * Adopt a generated plan, or revert to the built-in one with `null`.
+   * Add a plan to the library and make it the one in force.
    *
-   * The built-in plan is never overwritten, so there is always a known-good
-   * week to fall back to when a generated one turns out badly.
+   * Adopting a plan no longer discards the previous one — that is the whole
+   * point of the library. Re-adopting a plan already present replaces it in
+   * place rather than adding a duplicate, so regenerating and accepting does
+   * not fill the list with near-identical weeks.
    */
-  setPlan(plan: UserPlan | null): void {
-    this.#commit({ ...this.#state, plan });
+  adoptPlan(plan: UserPlan): void {
+    const existing = this.#state.plans.findIndex((saved) => saved.id === plan.id);
+    const plans =
+      existing === -1
+        ? [...this.#state.plans, plan]
+        : this.#state.plans.map((saved, i) => (i === existing ? plan : saved));
+
+    this.#commit({ ...this.#state, plans, activePlanId: plan.id });
+  }
+
+  /**
+   * Switch to a saved plan, or to the built-in rotation with `null`.
+   *
+   * An id not in the library is ignored rather than selected, so a stale
+   * reference cannot leave the app pointing at nothing.
+   */
+  selectPlan(planId: string | null): void {
+    if (planId !== null && !this.#state.plans.some((plan) => plan.id === planId)) return;
+    this.#commit({ ...this.#state, activePlanId: planId });
+  }
+
+  /**
+   * Remove a plan from the library.
+   *
+   * Deleting the plan in force falls back to the built-in rotation. Logged
+   * history is untouched: sets reference exercise ids, and any custom movement
+   * that was actually performed is in `exerciseArchive`, which is exactly the
+   * situation that field exists for.
+   */
+  deletePlan(planId: string): void {
+    const plans = this.#state.plans.filter((plan) => plan.id !== planId);
+    if (plans.length === this.#state.plans.length) return;
+
+    this.#commit({
+      ...this.#state,
+      plans,
+      activePlanId: this.#state.activePlanId === planId ? null : this.#state.activePlanId,
+    });
+  }
+
+  /** Rename a saved plan. A blank name clears it, restoring the default label. */
+  renamePlan(planId: string, name: string): void {
+    const trimmed = name.trim().slice(0, 80);
+
+    this.#commit({
+      ...this.#state,
+      plans: this.#state.plans.map((plan) => {
+        if (plan.id !== planId) return plan;
+        const { name: _previous, ...rest } = plan;
+        return trimmed ? { ...rest, name: trimmed } : rest;
+      }),
+    });
   }
 
   /** Health context, remembered so it does not have to be retyped each time. */
@@ -310,7 +363,7 @@ export class AppStore {
    * the history true rather than merely current.
    */
   #archiveExercise(exerciseId: string): void {
-    const definition = this.#state.plan?.exercises?.find((exercise) => exercise.id === exerciseId);
+    const definition = activePlan(this.#state)?.exercises?.find((exercise) => exercise.id === exerciseId);
     if (!definition) return;
     if (this.#state.exerciseArchive.some((exercise) => exercise.id === exerciseId)) return;
 

@@ -4,7 +4,7 @@ import type { AppState, Exercise, UserPlan } from '@/types';
 import { AppStore } from '@/state/store';
 import { createMemoryStore } from '@/state/storage';
 import { defaultState, parseState } from '@/state/schema';
-import { catalogueFor, resolveExercise } from '@/data/catalogue';
+import { activePlan, catalogueFor, exerciseSourceOf, resolveExercise } from '@/data/catalogue';
 import { sessionVolume } from '@/domain/metrics';
 import { trendableExercises } from '@/state/selectors';
 
@@ -66,7 +66,7 @@ function storeWithPlan(plan: UserPlan): AppStore {
     saveDelayMs: 0,
     now: () => 1_700_000_000_000,
   });
-  store.setPlan(plan);
+  store.adoptPlan(plan);
   return store;
 }
 
@@ -109,20 +109,20 @@ describe('surviving a plan change', () => {
     const store = storeWithPlan(planWith([customExercise('x:sled-push', { name: 'Sled push' })]));
     store.logSet('tue', 'x:sled-push', 90, 10, 'lb');
 
-    store.setPlan(null);
+    store.selectPlan(null);
 
-    expect(store.getState().plan).toBeNull();
-    expect(resolveExercise('x:sled-push', store.getState())?.name).toBe('Sled push');
+    expect(activePlan(store.getState())).toBeNull();
+    expect(resolveExercise('x:sled-push', exerciseSourceOf(store.getState()))?.name).toBe('Sled push');
   });
 
   it('still resolves it after a different plan is adopted', () => {
     const store = storeWithPlan(planWith([customExercise('x:sled-push', { name: 'Sled push' })]));
     store.logSet('tue', 'x:sled-push', 90, 10, 'lb');
 
-    store.setPlan(planWith([customExercise('x:farmers-walk', { name: "Farmer's walk" })]));
+    store.adoptPlan(planWith([customExercise('x:farmers-walk', { name: "Farmer's walk" })]));
 
-    expect(resolveExercise('x:sled-push', store.getState())?.name).toBe('Sled push');
-    expect(resolveExercise('x:farmers-walk', store.getState())?.name).toBe("Farmer's walk");
+    expect(resolveExercise('x:sled-push', exerciseSourceOf(store.getState()))?.name).toBe('Sled push');
+    expect(resolveExercise('x:farmers-walk', exerciseSourceOf(store.getState()))?.name).toBe("Farmer's walk");
   });
 
   it('counts an orphaned movement toward session volume', () => {
@@ -132,10 +132,10 @@ describe('surviving a plan change', () => {
     const store = storeWithPlan(planWith([customExercise('x:sled-push')]));
     store.logSet('tue', 'x:sled-push', 100, 10, 'lb');
     store.finishActive('tue', null);
-    store.setPlan(null);
+    store.selectPlan(null);
 
     const sets = store.getState().sessions[0]?.sets ?? [];
-    expect(sessionVolume(sets, 'lb', store.getState())).toBe(1000);
+    expect(sessionVolume(sets, 'lb', exerciseSourceOf(store.getState()))).toBe(1000);
   });
 
   it('excludes a timed movement from volume even once orphaned', () => {
@@ -144,10 +144,10 @@ describe('surviving a plan change', () => {
     );
     store.logSet('tue', 'x:hollow-hold', 0, 45, 'lb');
     store.finishActive('tue', null);
-    store.setPlan(null);
+    store.selectPlan(null);
 
     const sets = store.getState().sessions[0]?.sets ?? [];
-    expect(sessionVolume(sets, 'lb', store.getState())).toBe(0);
+    expect(sessionVolume(sets, 'lb', exerciseSourceOf(store.getState()))).toBe(0);
   });
 
   it('prefers the current plan when it redefines an archived id', () => {
@@ -158,9 +158,9 @@ describe('surviving a plan change', () => {
     const store = storeWithPlan(planWith([customExercise('x:row', { name: 'Row, first version' })]));
     store.logSet('tue', 'x:row', 60, 10, 'lb');
 
-    store.setPlan(planWith([customExercise('x:row', { name: 'Row, revised' })]));
+    store.adoptPlan(planWith([customExercise('x:row', { name: 'Row, revised' })]));
 
-    expect(resolveExercise('x:row', store.getState())?.name).toBe('Row, revised');
+    expect(resolveExercise('x:row', exerciseSourceOf(store.getState()))?.name).toBe('Row, revised');
     expect(store.getState().exerciseArchive[0]?.name).toBe('Row, first version');
   });
 });
@@ -178,7 +178,7 @@ describe('the trend picker', () => {
     const store = storeWithPlan(planWith([customExercise('x:sled-push')]));
     store.logSet('tue', 'x:sled-push', 90, 10, 'lb');
     store.finishActive('tue', null);
-    store.setPlan(null);
+    store.selectPlan(null);
 
     expect(trendableExercises(store.getState()).map((e) => e.id)).toContain('x:sled-push');
   });

@@ -107,3 +107,16 @@ export function describePlanSource(plan: UserPlan | null): string {
   });
   return `${plan.model} · ${when}`;
 }
+
+/**
+ * What to call a plan in the library.
+ *
+ * The user's own name wins. Failing that, who wrote it and when — which is how
+ * plans were identified before they could be named, and is enough to tell two
+ * apart in a list.
+ */
+export function describePlanName(plan: UserPlan): string {
+  // A name that is present but blank falls back too, so `??` would be wrong.
+  const named = plan.name?.trim() ?? '';
+  return named.length > 0 ? named : describePlanSource(plan);
+}

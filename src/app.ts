@@ -1,5 +1,6 @@
 import type { AppState, Tab } from '@/types';
 import { resolvePlan } from '@/data/activePlan';
+import { activePlan } from '@/data/catalogue';
 import { PLATE } from '@/data/plates';
 import { todayDayKey } from '@/domain/dates';
 import type { AppStore } from '@/state/store';
@@ -76,7 +77,7 @@ export class App {
     return {
       store: this.#store,
       state,
-      plan: resolvePlan(state.plan),
+      plan: resolvePlan(activePlan(state)),
       rest: this.#rest,
       ui: this.#ui,
       render: () => {
@@ -118,7 +119,7 @@ export class App {
    * than inheriting whichever day happened to be open last.
    */
   #applyAccent(): void {
-    const plan = resolvePlan(this.#store.getState().plan);
+    const plan = resolvePlan(activePlan(this.#store.getState()));
     const accent = this.#ui.tab === 'today' ? plan[this.#ui.viewDay ?? todayDayKey()].color : NEUTRAL_ACCENT;
     document.documentElement.style.setProperty('--pc', accent);
   }

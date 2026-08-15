@@ -1,4 +1,4 @@
-import type { Exercise, UserPlan } from '@/types';
+import type { AppState, Exercise, UserPlan } from '@/types';
 import { ALL_EXERCISES, getBuiltinExercise } from './exercises';
 
 /**
@@ -14,10 +14,9 @@ import { ALL_EXERCISES, getBuiltinExercise } from './exercises';
  * derives from it. A second source of truth that has to be kept in sync with
  * the first is exactly the bug this codebase has otherwise avoided.
  *
- * `ExerciseSource` is shaped so that `AppState` satisfies it structurally, so
- * a caller holding state just passes state. A caller holding only a plan —
- * validation, for instance, which runs before a plan is adopted — passes
- * `{ plan }`.
+ * A caller holding state passes `exerciseSourceOf(state)`. A caller holding
+ * only a plan — validation, for instance, which runs before a plan is adopted
+ * — passes `{ plan }`.
  *
  * ## Precedence, and why
  *
@@ -36,6 +35,23 @@ export interface ExerciseSource {
   readonly plan?: UserPlan | null;
   /** Definitions retained for movements already logged against. */
   readonly exerciseArchive?: readonly Exercise[];
+}
+
+/**
+ * The plan in force, or `null` for the built-in rotation.
+ *
+ * An `activePlanId` that no longer resolves — a plan deleted while selected,
+ * or an id from a restored backup whose plan did not come with it — falls back
+ * to the built-in rotation rather than erroring. There is always a week.
+ */
+export function activePlan(state: Pick<AppState, 'plans' | 'activePlanId'>): UserPlan | null {
+  if (!state.activePlanId) return null;
+  return state.plans.find((plan) => plan.id === state.activePlanId) ?? null;
+}
+
+/** Everything needed to resolve an exercise id, derived from state. */
+export function exerciseSourceOf(state: AppState): ExerciseSource {
+  return { plan: activePlan(state), exerciseArchive: state.exerciseArchive };
 }
 
 /**

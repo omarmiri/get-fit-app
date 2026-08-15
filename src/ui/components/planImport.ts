@@ -95,9 +95,9 @@ export function renderPlanImport(context: ViewContext): HTMLElement {
           validation: state.validation,
           onAccept: () => {
             if (!state.candidate) return;
-            context.store.setPlan(state.candidate);
+            context.store.adoptPlan(state.candidate);
             resetPlanImport();
-            toast('Plan updated');
+            toast('Saved to your plans and switched to it');
             context.render();
           },
           onDiscard: () => {

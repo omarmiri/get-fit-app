@@ -9,6 +9,7 @@ import './styles/index.css';
 
 import { App, createSaveErrorReporter } from './app';
 import { resolvePlan } from './data/activePlan';
+import { activePlan } from './data/catalogue';
 import { AppStore } from './state/store';
 import { loadState, resolveBrowserStore } from './state/storage';
 import { toast } from './ui/toast';
@@ -35,7 +36,7 @@ function boot(): void {
     },
     // Sessions snapshot their label at creation so regenerating the plan never
     // renames anything already logged.
-    planLabel: (dayKey) => resolvePlan(store.getState().plan)[dayKey].label,
+    planLabel: (dayKey) => resolvePlan(activePlan(store.getState()))[dayKey].label,
   });
 
   new App(store).start();

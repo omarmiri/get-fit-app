@@ -29,7 +29,15 @@ import { isWeightUnit } from '@/domain/units';
  *   add a step whenever a persisted shape changes.
  */
 
-export const CURRENT_SCHEMA_VERSION = 8;
+export const CURRENT_SCHEMA_VERSION = 9;
+
+/**
+ * Ceiling on saved plans.
+ *
+ * High enough that nobody curating their own training will meet it, low enough
+ * that a restored backup cannot fill the single storage key with weeks.
+ */
+const MAX_PLANS = 50;
 
 /**
  * Ceiling on retained movement definitions.
@@ -83,7 +91,8 @@ export function defaultState(): AppState {
     sessions: [],
     active: null,
     prefs: DEFAULT_PREFERENCES,
-    plan: null,
+    plans: [],
+    activePlanId: null,
     exerciseArchive: [],
   };
 }
@@ -307,8 +316,11 @@ function parsePlan(raw: unknown): UserPlan | null {
     ? raw['exercises'].map(parseCustomExercise).filter((e): e is Exercise => e !== null)
     : [];
 
+  const name = typeof raw['name'] === 'string' ? raw['name'].trim().slice(0, 80) : '';
+
   return {
     id: typeof raw['id'] === 'string' ? raw['id'] : `plan-${Date.now().toString(36)}`,
+    ...(name ? { name } : {}),
     summary: typeof raw['summary'] === 'string' ? raw['summary'] : '',
     days,
     ...(exercises.length > 0 ? { exercises } : {}),
@@ -341,7 +353,9 @@ export function parseState(raw: unknown): ParseResult {
   );
 
   const active = parseSession(raw['active']);
-  const plan = parsePlan(raw['plan']);
+  const { plans, activePlanId } = parseLibrary(raw);
+
+  const inForce = plans.find((plan) => plan.id === activePlanId) ?? null;
 
   return {
     state: {
@@ -349,12 +363,57 @@ export function parseState(raw: unknown): ParseResult {
       sessions: ordered,
       active,
       prefs: parsePreferences(raw['prefs']),
-      plan,
-      exerciseArchive: parseArchive(raw['exerciseArchive'], plan, [...ordered, ...(active ? [active] : [])]),
+      plans,
+      activePlanId,
+      exerciseArchive: parseArchive(raw['exerciseArchive'], inForce, [
+        ...ordered,
+        ...(active ? [active] : []),
+      ]),
     },
     dropped,
     recognised: true,
   };
+}
+
+/**
+ * Parse the plan library, migrating the single-plan shape of schema 8.
+ *
+ * Before the library there was one slot, `plan`. A state written then has its
+ * plan become the library's only entry and stays in force, so upgrading is
+ * invisible: the week you were running is the week you are still running.
+ *
+ * Order is preserved rather than sorted. The library is a list the user
+ * curates, and reordering it under them on every load would be its own bug.
+ */
+function parseLibrary(raw: Record<string, unknown>): {
+  plans: readonly UserPlan[];
+  activePlanId: string | null;
+} {
+  const parsed = Array.isArray(raw['plans'])
+    ? raw['plans'].map(parsePlan).filter((plan): plan is UserPlan => plan !== null)
+    : [];
+
+  // Schema 8 and earlier. Only consulted when there is no library, so a state
+  // carrying both — a hand-edited backup, say — does not resurrect the old one.
+  if (parsed.length === 0) {
+    const legacy = parsePlan(raw['plan']);
+    if (legacy) return { plans: [legacy], activePlanId: legacy.id };
+  }
+
+  const plans: UserPlan[] = [];
+  const seen = new Set<string>();
+  for (const plan of parsed) {
+    if (seen.has(plan.id)) continue;
+    seen.add(plan.id);
+    plans.push(plan);
+    if (plans.length >= MAX_PLANS) break;
+  }
+
+  const rawActive = raw['activePlanId'];
+  const activePlanId =
+    typeof rawActive === 'string' && seen.has(rawActive) ? rawActive : null;
+
+  return { plans, activePlanId };
 }
 
 /**

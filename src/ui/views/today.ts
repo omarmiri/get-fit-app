@@ -7,6 +7,7 @@ import { recommend } from '@/domain/progression';
 import { startingWeight } from '@/domain/startingWeights';
 import { performanceHistory } from '@/state/selectors';
 import { formatDuration, formatShortDate, formatWithWeekday, todayDayKey, todayIso } from '@/domain/dates';
+import { exerciseSourceOf } from '@/data/catalogue';
 import { sessionVolume } from '@/domain/metrics';
 import { formatVolume } from '@/domain/units';
 import { lastPerformance, todaysSession } from '@/state/selectors';
@@ -498,7 +499,7 @@ function describeLines(session: Session, context: ViewContext): string[] {
   const lines: string[] = [];
 
   if (session.sets.length > 0) {
-    const volume = sessionVolume(session.sets, unit, context.state);
+    const volume = sessionVolume(session.sets, unit, exerciseSourceOf(context.state));
     lines.push(
       volume > 0
         ? `${session.sets.length} sets · ${formatVolume(volume, unit)} total volume`

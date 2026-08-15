@@ -3,6 +3,7 @@ import type { Session } from '@/types';
 import { GOALS, getPlanDay } from '@/data/plan';
 import { PLATE } from '@/data/plates';
 import { formatDuration, formatShortDate } from '@/domain/dates';
+import { exerciseSourceOf } from '@/data/catalogue';
 import { sessionVolume } from '@/domain/metrics';
 import { formatVolume } from '@/domain/units';
 import { minutesByWeek, trendPoints, trendableExercises } from '@/state/selectors';
@@ -133,9 +134,9 @@ function describe(session: Session, context: ViewContext): string {
 
   if (session.sets.length > 0) {
     parts.push(session.sets.length === 1 ? '1 set' : `${session.sets.length} sets`);
-    // Passing state, not just the plan: a session may contain a movement whose
+    // The source, not just the plan: a session may contain a movement whose
     // plan has since been replaced, and its volume still counts.
-    const volume = sessionVolume(session.sets, unit, context.state);
+    const volume = sessionVolume(session.sets, unit, exerciseSourceOf(context.state));
     if (volume > 0) parts.push(formatVolume(volume, unit));
   }
   if (session.minutes) parts.push(`${session.minutes} min`);
