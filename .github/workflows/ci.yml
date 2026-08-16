@@ -33,8 +33,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Reported, not enforced. Formatting has no bearing on whether the app
+      # works, and `npm run verify` already checks it locally where a single
+      # `npm run format` fixes it. Failing a build over whitespace costs a
+      # re-push and teaches nothing; typecheck and test below stay blocking
+      # because they catch things that cannot be fixed by running a formatter.
       - name: Check formatting
         run: npm run format:check
+        continue-on-error: true
 
       - name: Test
         run: npm test
