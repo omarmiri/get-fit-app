@@ -230,7 +230,19 @@ async function post(path, body) {
   if (!response.ok) {
     const message =
       payload?.error_description ?? payload?.msg ?? payload?.message ?? `Sign-in failed (${response.status}).`;
-    throw new AuthError(String(message), response.status === 400 ? 400 : 502);
+
+    /*
+     * A 4xx from the identity provider is about the request, so it is passed
+     * through as itself; only a genuine upstream failure becomes 502.
+     *
+     * This was `status === 400 ? 400 : 502`, which was wrong against the real
+     * service: Supabase answers a mistyped one-time code with 403, so every
+     * wrong code was reported as a bad gateway. The user still saw the right
+     * message, but the logs blamed the server for someone's typo — and a
+     * rate-limit 429 was flattened the same way.
+     */
+    const status = response.status >= 400 && response.status < 500 ? response.status : 502;
+    throw new AuthError(String(message), status);
   }
 
   return payload ?? {};
