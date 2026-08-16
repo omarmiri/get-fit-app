@@ -38,7 +38,28 @@ function env(...names) {
   return '';
 }
 
-const SUPA_URL = env('SUPABASE_URL', 'SUPABASE-URL').replace(/\/$/, '');
+/**
+ * Reduce whatever was pasted into `SUPABASE_URL` to the project origin.
+ *
+ * Everything here appends its own API path — `/auth/v1/user`, `/auth/v1/token`
+ * — so this value has to be the bare origin. The dashboard shows the project
+ * URL with an API suffix in several places, and pasting one of those produces
+ * `…/rest/v1/auth/v1/user`, which 404s. The failure is silent in the worst
+ * way: `/health` still reports `configured: true`, because a non-empty string
+ * is all that check ever tested, and sign-in simply never works.
+ *
+ * Rather than make that a thing each operator has to know, the known API
+ * suffixes are stripped. Only those specific ones — an unrecognised path is
+ * left alone, since a self-hosted instance could legitimately live under one.
+ */
+export function normalizeProjectUrl(raw) {
+  return String(raw ?? '')
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/(rest|auth|storage|realtime|functions)\/v\d+$/, '');
+}
+
+const SUPA_URL = normalizeProjectUrl(env('SUPABASE_URL', 'SUPABASE-URL'));
 
 /*
  * The anon key is designed to be public, but it never leaves this process:
@@ -47,7 +68,41 @@ const SUPA_URL = env('SUPABASE_URL', 'SUPABASE-URL').replace(/\/$/, '');
  */
 const SUPA_ANON = env('SUPABASE_ANON_KEY', 'SUPABASE-ANON-KEY');
 
-export const configured = () => Boolean(SUPA_URL) && Boolean(SUPA_ANON);
+/**
+ * Whether the project URL is something requests can actually be built from.
+ *
+ * `Boolean(SUPA_URL)` was the whole test, which is how a deploy reported
+ * itself healthy while every auth call 404'd. A non-empty string is not a
+ * usable origin, and the difference is invisible until someone tries to sign
+ * in.
+ */
+function usableUrl(value) {
+  if (!value) return false;
+  try {
+    const parsed = new URL(value);
+    return (parsed.protocol === 'https:' || parsed.protocol === 'http:') && parsed.host.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+export const configured = () => usableUrl(SUPA_URL) && Boolean(SUPA_ANON);
+
+/*
+ * Say so at startup rather than at the first sign-in attempt.
+ *
+ * Half-configured is the state worth shouting about: something was set, so the
+ * operator believes accounts work, and nothing will contradict that belief
+ * until a user tries and silently fails.
+ */
+if (!configured() && (env('SUPABASE_URL', 'SUPABASE-URL') || SUPA_ANON)) {
+  console.warn(
+    '[auth] Accounts are disabled: ' +
+      (usableUrl(SUPA_URL)
+        ? 'SUPABASE_ANON_KEY is missing.'
+        : `SUPABASE_URL is not a usable origin (got "${SUPA_URL}"). It should be https://<project-ref>.supabase.co with no path.`),
+  );
+}
 
 /**
  * How long a verified token is trusted without re-asking.
