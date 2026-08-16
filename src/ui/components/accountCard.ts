@@ -72,7 +72,7 @@ export function renderAccountCard(context: ViewContext): HTMLElement | null {
 
 function renderSignedIn(context: ViewContext, email: string): HTMLElement {
   return card([
-    eyebrow('Backup'),
+    eyebrow('Account'),
     text('setting__label', email),
     text(
       'prose',
@@ -115,7 +115,7 @@ function renderSignedIn(context: ViewContext, email: string): HTMLElement {
 
 function renderSignedOut(context: ViewContext): HTMLElement {
   return card([
-    eyebrow('Backup'),
+    eyebrow('Account'),
     text(
       'prose',
       'Everything is stored on this device. Sign in with an email code to keep a copy, so clearing your browser does not lose your training history. Optional — the app works exactly the same without it.',
