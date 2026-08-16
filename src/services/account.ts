@@ -3,10 +3,14 @@ import type { AppState } from '@/types';
 /**
  * Client side of accounts.
  *
- * Talks only to this app's own origin. Every call to the identity provider is
- * proxied by the server, so there is no Supabase SDK here, no anon key in the
- * bundle, and `connect-src 'self'` holds exactly as it did before accounts
- * existed.
+ * Every *fetch* goes to this app's own origin — there is no Supabase SDK here,
+ * no anon key in the bundle, and `connect-src 'self'` is untouched.
+ *
+ * The one exception is deliberate and unavoidable: signing in with Google is a
+ * top-level navigation to Supabase, which hands off to Google and comes back
+ * here with tokens in the URL fragment. That is a navigation rather than a
+ * fetch, so no CSP directive relaxes for it, but it is still the moment the
+ * browser leaves this origin and it should not be discovered by surprise.
  *
  * ## Signing in is optional and stays optional
  *
@@ -96,41 +100,135 @@ export function signOut(): void {
 
 /* ------------------------------------------------------------ availability */
 
-let available: boolean | null = null;
+interface AuthConfig {
+  readonly configured: boolean;
+  readonly url: string;
+}
+
+let config: AuthConfig | null = null;
 
 /** Whether this deploy has accounts configured, so the UI can stay quiet if not. */
 export async function accountsAvailable(): Promise<boolean> {
-  if (available !== null) return available;
+  return (await loadConfig()).configured;
+}
+
+async function loadConfig(): Promise<AuthConfig> {
+  if (config) return config;
 
   try {
     const response = await fetch('/health', { cache: 'no-store' });
-    if (!response.ok) return (available = false);
+    if (!response.ok) return (config = { configured: false, url: '' });
+
     const body: unknown = await response.json();
-    available = (body as { auth?: { configured?: boolean } })?.auth?.configured === true;
+    const auth = (body as { auth?: { configured?: boolean; url?: string } })?.auth;
+    config = { configured: auth?.configured === true, url: auth?.url ?? '' };
   } catch {
-    available = false;
+    config = { configured: false, url: '' };
   }
-  return available;
+  return config;
 }
 
 /* -------------------------------------------------------------- sign-in */
 
-export async function requestCode(email: string): Promise<void> {
-  await postJson('/api/auth/code', { email });
+/**
+ * Leave for Google.
+ *
+ * Returns only if it could not start — a successful call navigates away and
+ * nothing after it runs.
+ */
+export async function signInWithGoogle(): Promise<void> {
+  const { configured, url } = await loadConfig();
+  if (!configured || !url) throw new AccountError('Accounts are not set up on this server.', 503);
+
+  /*
+   * Come back to the page the user was on, without any query or fragment.
+   * Supabase appends its own fragment on return, and handing it a URL that
+   * already had one would produce something neither side can parse.
+   */
+  const returnTo = `${location.origin}${location.pathname}`;
+  location.assign(
+    `${url}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(returnTo)}`,
+  );
 }
 
-export async function verifyCode(email: string, code: string): Promise<AccountUser> {
-  const body = await postJson('/api/auth/verify', { email, code });
+/**
+ * Pick up the session Supabase leaves in the URL fragment after a redirect.
+ *
+ * Returns the user when a sign-in just completed, `null` otherwise. Call once
+ * on load, before anything reads the session.
+ *
+ * The fragment is stripped immediately and unconditionally. Tokens in a URL
+ * are tokens in the back button, in `document.referrer` on the next
+ * navigation, and in whatever the user pastes when they share a link — so the
+ * window in which they are visible is kept to the shortest thing achievable,
+ * and `replaceState` is used so the tokenful entry does not stay in history.
+ */
+export function captureRedirectSession(): AccountUser | null {
+  const raw = location.hash.startsWith('#') ? location.hash.slice(1) : '';
+  if (!raw || !/(^|&)(access_token|error|error_description)=/.test(raw)) return null;
 
-  const user = (body as { user?: AccountUser }).user;
-  const accessToken = (body as { accessToken?: string }).accessToken ?? '';
-  const refreshToken = (body as { refreshToken?: string }).refreshToken ?? '';
-  const expiresIn = (body as { expiresIn?: number }).expiresIn ?? 3600;
+  const params = new URLSearchParams(raw);
+  history.replaceState(null, '', `${location.pathname}${location.search}`);
 
-  if (!user || !accessToken) throw new AccountError('Signing in did not return a session.', 502);
+  const accessToken = params.get('access_token') ?? '';
+  if (!accessToken) {
+    // Supabase reports refusals here too — a cancelled consent screen, or a
+    // provider that is not enabled on the project.
+    lastRedirectError = params.get('error_description') ?? params.get('error');
+    return null;
+  }
 
-  writeSession({ accessToken, refreshToken, expiresAt: Date.now() + expiresIn * 1000, user });
+  /*
+   * The user is claimed from the fragment, which is untrusted input. It is
+   * used for the greeting only — every request that matters sends the bearer
+   * token, and the server resolves identity from Supabase rather than from
+   * anything this function returns.
+   */
+  const user: AccountUser = {
+    id: params.get('provider_id') ?? 'signed-in',
+    email: '',
+  };
+
+  writeSession({
+    accessToken,
+    refreshToken: params.get('refresh_token') ?? '',
+    expiresAt: Date.now() + Number(params.get('expires_in') ?? 3600) * 1000,
+    user,
+  });
+
   return user;
+}
+
+let lastRedirectError: string | null = null;
+
+/** Why the last redirect failed, if it did. Read once and cleared. */
+export function takeRedirectError(): string | null {
+  const error = lastRedirectError;
+  lastRedirectError = null;
+  return error;
+}
+
+/**
+ * Ask the server who the token belongs to, and record it.
+ *
+ * The fragment does not carry the email, and the greeting should say something
+ * truer than "signed in". This is also the first real check that the token
+ * works at all.
+ */
+export async function refreshIdentity(): Promise<AccountUser | null> {
+  const session = readSession();
+  if (!session) return null;
+
+  try {
+    const body = await authedJson('/api/account/me', { method: 'GET' });
+    const user = (body as { user?: AccountUser | null }).user;
+    if (!user) return null;
+
+    writeSession({ ...session, user });
+    return user;
+  } catch {
+    return null;
+  }
 }
 
 /**

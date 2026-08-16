@@ -1,9 +1,11 @@
 /**
  * Server for the built app.
  *
- * Training data still lives entirely in the browser — there is no database and
- * nothing about a session is stored here. The only server-side logic is the
- * Gemini plan proxy, which exists solely so the API key never reaches a client.
+ * The browser is still the source of truth: everything works with no account,
+ * and a signed-out user's training never leaves their device. What this server
+ * adds is optional — a Gemini proxy so the API key never reaches a client, and
+ * a per-account backup so clearing a browser is not the end of a training
+ * history.
  */
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -80,11 +82,12 @@ app.get('/health', (_req, res) => {
     // that can only fail. Reports presence, never the key itself.
     gemini: Boolean(process.env.GEMINI_API_KEY),
     /*
-     * Whether accounts exist on this deploy, and nothing more. Every call that
-     * needs the anon key is proxied, so the key never leaves the server and
-     * `connect-src 'self'` survives sign-in.
+     * The URL is public and the browser needs it: the OAuth step is a
+     * navigation it performs itself. The anon key is not included — the
+     * authorize endpoint does not need it, and every call that does is made
+     * from this process.
      */
-    auth: { configured: identity.configured },
+    auth: { configured: identity.configured, url: identity.url },
   });
 });
 
@@ -134,55 +137,17 @@ function rateLimited(key) {
 /* ------------------------------------------------------------- accounts */
 
 /**
- * Sign-in, proxied so the browser only ever talks to this origin.
+ * Sign-in is Google OAuth, so most of it does not happen here.
  *
- * Rate-limited by IP because these routes send email and are the one part of
- * the API an unauthenticated caller can reach. Supabase has its own limits;
- * this stops us relaying a flood to them in the first place.
+ * The browser navigates to Supabase's authorize endpoint itself and comes back
+ * with tokens in the URL fragment — that step needs the user to interact with
+ * Google and therefore cannot be proxied. What remains on this server is the
+ * part that must be: verifying bearer tokens, and refreshing a session.
+ *
+ * The endpoints that emailed a sign-in code were removed with that flow. An
+ * unauthenticated route that makes a third party send mail to an arbitrary
+ * address is a spam relay the moment nothing in the UI needs it.
  */
-app.post('/api/auth/code', async (req, res) => {
-  if (rateLimited(`auth:${req.ip ?? 'unknown'}`)) {
-    return res.status(429).json({ error: 'Too many attempts. Wait a minute and try again.' });
-  }
-
-  const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
-  if (!email || email.length > 320 || !email.includes('@')) {
-    return res.status(400).json({ error: 'Enter an email address.' });
-  }
-
-  try {
-    await auth.requestCode(email);
-    // Deliberately the same answer whether or not an account exists, so this
-    // cannot be used to find out who has one.
-    return res.json({ ok: true });
-  } catch (error) {
-    return res
-      .status(error instanceof auth.AuthError ? error.status : 502)
-      .json({ error: error?.message ?? 'Could not send a code.' });
-  }
-});
-
-app.post('/api/auth/verify', async (req, res) => {
-  if (rateLimited(`auth:${req.ip ?? 'unknown'}`)) {
-    return res.status(429).json({ error: 'Too many attempts. Wait a minute and try again.' });
-  }
-
-  const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
-  const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
-  if (!email || !code) {
-    return res.status(400).json({ error: 'Enter the code from your email.' });
-  }
-
-  try {
-    const session = await auth.verifyCode(email, code);
-    return res.json(sessionResponse(session));
-  } catch (error) {
-    return res
-      .status(error instanceof auth.AuthError ? error.status : 502)
-      .json({ error: error?.message ?? 'That code did not work.' });
-  }
-});
-
 app.post('/api/auth/refresh', async (req, res) => {
   const token = typeof req.body?.refreshToken === 'string' ? req.body.refreshToken : '';
   if (!token) return res.status(400).json({ error: 'No refresh token.' });

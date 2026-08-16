@@ -4,9 +4,9 @@ import {
   currentUser,
   pullState,
   pushState,
-  requestCode,
+  signInWithGoogle,
   signOut,
-  verifyCode,
+  takeRedirectError,
 } from '@/services/account';
 import { parseState } from '@/state/schema';
 import { card, div, el, eyebrow, text } from '../dom';
@@ -34,30 +34,27 @@ import type { ViewContext } from '../views/context';
  * `state/ephemeral.ts`.
  */
 
-type Stage = 'idle' | 'code-sent';
-
 interface AccountUi {
   available: boolean | null;
-  stage: Stage;
-  email: string;
-  code: string;
   busy: boolean;
   error: string | null;
 }
 
 const ui: AccountUi = {
   available: null,
-  stage: 'idle',
-  email: '',
-  code: '',
   busy: false,
   error: null,
 };
 
 /** Probe once per load, then redraw if accounts turn out to exist. */
 export function initAccountCard(render: () => void): void {
+  // A refusal reported in the returning URL fragment — a cancelled consent
+  // screen, or Google not enabled on the project — is surfaced rather than
+  // leaving the user on a page that simply did not change.
+  ui.error = takeRedirectError();
+
   void accountsAvailable().then((available) => {
-    if (ui.available === available) return;
+    if (ui.available === available && !ui.error) return;
     ui.available = available;
     render();
   });
@@ -118,72 +115,20 @@ function renderSignedOut(context: ViewContext): HTMLElement {
     eyebrow('Account'),
     text(
       'prose',
-      'Everything is stored on this device. Sign in with an email code to keep a copy, so clearing your browser does not lose your training history. Optional — the app works exactly the same without it.',
+      'Everything is stored on this device. Sign in to keep a copy, so clearing your browser does not lose your training history. Optional — the app works exactly the same without it.',
     ),
 
-    ui.stage === 'idle'
-      ? div('gen__group', [
-          el('input', {
-            class: 'gen__input',
-            attrs: {
-              type: 'email',
-              inputmode: 'email',
-              autocomplete: 'email',
-              placeholder: 'you@example.com',
-              value: ui.email,
-              'aria-label': 'Email address',
-            },
-            on: {
-              input: (event) => {
-                ui.email = (event.target as HTMLInputElement).value;
-              },
-            },
-          }),
-          el('button', {
-            class: 'button button--primary',
-            text: ui.busy ? 'Sending…' : 'Email me a code',
-            attrs: { type: 'button', disabled: ui.busy },
-            on: { click: () => void sendCode(context) },
-          }),
-        ])
-      : div('gen__group', [
-          text('club__hint', `Code sent to ${ui.email}. It expires shortly.`),
-          el('input', {
-            class: 'gen__input',
-            attrs: {
-              type: 'text',
-              inputmode: 'numeric',
-              autocomplete: 'one-time-code',
-              placeholder: '123456',
-              value: ui.code,
-              'aria-label': 'Sign-in code',
-            },
-            on: {
-              input: (event) => {
-                ui.code = (event.target as HTMLInputElement).value;
-              },
-            },
-          }),
-          el('button', {
-            class: 'button button--primary',
-            text: ui.busy ? 'Checking…' : 'Sign in',
-            attrs: { type: 'button', disabled: ui.busy },
-            on: { click: () => void submitCode(context) },
-          }),
-          el('button', {
-            class: 'button button--ghost',
-            text: 'Use a different email',
-            attrs: { type: 'button' },
-            on: {
-              click: () => {
-                ui.stage = 'idle';
-                ui.code = '';
-                ui.error = null;
-                context.render();
-              },
-            },
-          }),
-        ]),
+    el('button', {
+      class: 'button button--primary',
+      text: ui.busy ? 'Opening Google…' : 'Continue with Google',
+      attrs: { type: 'button', disabled: ui.busy },
+      on: { click: () => void startSignIn(context) },
+    }),
+
+    text(
+      'club__hint',
+      'Takes you to Google and back. Your training data is never sent to Google — it only confirms who you are.',
+    ),
 
     ui.error ? div('notice notice--warn', [text('notice__body', ui.error)]) : null,
   ]);
@@ -191,32 +136,13 @@ function renderSignedOut(context: ViewContext): HTMLElement {
 
 /* ----------------------------------------------------------------- actions */
 
-async function sendCode(context: ViewContext): Promise<void> {
+async function startSignIn(context: ViewContext): Promise<void> {
   if (ui.busy) return;
   await run(context, async () => {
-    await requestCode(ui.email.trim());
-    ui.stage = 'code-sent';
-    ui.code = '';
-    toast('Check your email for a code');
-  });
-}
-
-async function submitCode(context: ViewContext): Promise<void> {
-  if (ui.busy) return;
-  await run(context, async () => {
-    await verifyCode(ui.email.trim(), ui.code.trim());
-    ui.stage = 'idle';
-    ui.code = '';
-
-    /*
-     * First thing after signing in: push what is already here.
-     *
-     * The device is the source of truth, and someone who has been training for
-     * months before making an account must not have that overwritten by the
-     * empty state of a fresh one. Restoring is a separate, explicit action.
-     */
-    await pushState(context.state);
-    toast('Signed in — this device is backed up');
+    // Navigates away on success; nothing after this runs. The busy state is
+    // for the moment before the browser leaves, and for the case where it
+    // cannot.
+    await signInWithGoogle();
   });
 }
 

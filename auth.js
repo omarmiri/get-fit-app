@@ -6,11 +6,10 @@
  *
  * ## What Supabase owns, and what it does not
  *
- * It owns the email flow, the one-time-code handling and session refresh. It
- * does NOT own training data: sessions, plans and preferences live in
- * `store.js` next to everything else durable this app keeps. Running a second
- * database for one JSON blob per user would buy a second thing to operate and
- * a second thing to be down.
+ * It owns the Google handshake and session refresh. It does NOT own training
+ * data: sessions, plans and preferences live in `kv.js` next to everything
+ * else durable this app keeps. Running a second database for one JSON blob per
+ * user would buy a second thing to operate and a second thing to be down.
  *
  * ## Why verification is a network call
  *
@@ -42,10 +41,9 @@ function env(...names) {
 const SUPA_URL = env('SUPABASE_URL', 'SUPABASE-URL').replace(/\/$/, '');
 
 /*
- * The anon key is designed to be public — it ships to the browser and is
- * useless without a user token. It is read here so the client can be handed it
- * from /health rather than having a deploy-specific value pasted into version
- * control.
+ * The anon key is designed to be public, but it never leaves this process:
+ * every call that needs it is made server-side, and the one thing the browser
+ * does itself — the OAuth navigation — does not require it.
  */
 const SUPA_ANON = env('SUPABASE_ANON_KEY', 'SUPABASE-ANON-KEY');
 
@@ -168,32 +166,39 @@ export function requireUser(req, res, next) {
 /* ------------------------------------------------------------ sign-in flow */
 
 /**
- * Sign-in is proxied, not called from the browser.
+ * Sign-in is Google OAuth, and the browser drives it.
  *
- * `local-atlas` calls Supabase's auth REST API directly from the page, which
- * is reasonable for an app that already loads third-party scripts. This one
- * loads nothing from anywhere and holds `connect-src 'self'`, and giving that
- * up for sign-in would be the single biggest hole punched in the policy. So
- * the three calls the flow needs go through this server instead.
+ * ## Why not the emailed code this used to be
  *
- * Two things fall out of that, both good. The anon key never reaches the
- * browser — it is not secret, but not shipping it is strictly better — and the
- * CSP stays exactly as strict as it was before accounts existed.
+ * A six-digit code needs Supabase's email template to render `{{ .Token }}`,
+ * and editing templates requires paid custom SMTP. The built-in sender is also
+ * rate-limited to a handful of messages an hour, which is not a sign-in
+ * system. Google costs nothing on either side.
  *
- * The flow is a six-digit emailed code rather than a magic link. A link has to
- * redirect back into the app, and this app is installed to a home screen where
- * that round-trip lands in a browser tab rather than in the PWA. A code is
- * typed where the user already is.
+ * ## What this gives up, honestly
+ *
+ * A redirect. Codes were chosen precisely to avoid one, because this app is
+ * installed to a home screen and a redirect lands in a browser tab rather than
+ * in the PWA. That is still true — but the tab and the PWA share an origin and
+ * therefore share localStorage, so signing in via the tab leaves the installed
+ * app signed in. Slightly awkward, not broken.
+ *
+ * ## What is left on the server
+ *
+ * Less than before, deliberately. OAuth requires the user to interact with
+ * Google, so the authorize step cannot be proxied — the browser navigates
+ * there itself and comes back with tokens in the URL fragment. What stays here
+ * is the part that must: verifying a bearer token, and trading a refresh token
+ * for a new session. The endpoints that sent email are gone, because an
+ * unauthenticated route that makes a third party send mail to any address is a
+ * spam relay once nothing in the UI uses it.
  */
 
-/** Ask Supabase to email a sign-in code. */
-export async function requestCode(email) {
-  return post('/auth/v1/otp', { email, create_user: true });
-}
-
-/** Exchange an emailed code for a session. */
-export async function verifyCode(email, token) {
-  return post('/auth/v1/verify', { email, token, type: 'email' });
+/** Where the browser must navigate to start Google sign-in. */
+export function authorizeUrl(redirectTo) {
+  if (!configured()) return '';
+  const target = encodeURIComponent(redirectTo);
+  return `${SUPA_URL}/auth/v1/authorize?provider=google&redirect_to=${target}`;
 }
 
 /** Trade a refresh token for a fresh session. */
@@ -204,10 +209,9 @@ export async function refreshSession(refreshToken) {
 /**
  * One shape for every call to the identity provider.
  *
- * Upstream messages are passed through rather than replaced: "Email rate limit
- * exceeded" and "Token has expired or is invalid" are both things the user can
- * act on, and flattening them into "sign-in failed" would remove the only
- * useful information in the response.
+ * Upstream messages are passed through rather than replaced: "Refresh token is
+ * not valid" is something the caller can act on, and flattening it into
+ * "sign-in failed" would remove the only useful information in the response.
  */
 async function post(path, body) {
   if (!configured()) {
@@ -236,10 +240,8 @@ async function post(path, body) {
      * through as itself; only a genuine upstream failure becomes 502.
      *
      * This was `status === 400 ? 400 : 502`, which was wrong against the real
-     * service: Supabase answers a mistyped one-time code with 403, so every
-     * wrong code was reported as a bad gateway. The user still saw the right
-     * message, but the logs blamed the server for someone's typo — and a
-     * rate-limit 429 was flattened the same way.
+     * service: Supabase answers a stale token with 403, so those were reported
+     * as bad gateways and a rate-limit 429 was flattened the same way.
      */
     const status = response.status >= 400 && response.status < 500 ? response.status : 502;
     throw new AuthError(String(message), status);
@@ -259,11 +261,12 @@ export class AuthError extends Error {
 /**
  * Public configuration for the client.
  *
- * Deliberately only whether accounts exist. The anon key stays on the server
- * because every call that needs it is proxied. There is no service-role key
- * anywhere in this app, and nothing here should ever become the place one gets
- * added.
+ * The URL is needed now: OAuth is a navigation the browser performs itself, so
+ * it has to know where to go. The anon key still stays here — the authorize
+ * endpoint does not need it, and the only calls that do are made server-side.
+ * There is no service-role key anywhere in this app, and nothing here should
+ * ever become the place one gets added.
  */
 export function info() {
-  return { configured: configured() };
+  return { configured: configured(), url: SUPA_URL };
 }
