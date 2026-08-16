@@ -132,9 +132,23 @@ describe('the prompt handed to the user', () => {
     }
   });
 
-  it('asks the model to ask about equipment when the user has not said', () => {
-    expect(buildPrompt({})).toContain('Ask me what equipment I have');
-    expect(buildPrompt({ gym: 'Full commercial gym' })).not.toContain('Ask me what equipment I have');
+  it('tells the model to assume and state, not to stop and ask', () => {
+    /*
+     * The original wording told the model to ask what equipment was available
+     * before writing anything. That fails on any tool answering in one shot
+     * rather than holding a conversation, which is most of them outside a chat
+     * window — the person gets a question they cannot reply to instead of a
+     * plan. Stating an assumption is correctable; asking is a dead end.
+     */
+    const prompt = buildPrompt({});
+
+    expect(prompt).toContain('Do not stop to ask');
+    expect(prompt).toContain('say what you assumed');
+    expect(prompt).not.toContain('Ask me what equipment I have');
+  });
+
+  it('says nothing about assumptions when the gym is described', () => {
+    expect(buildPrompt({ gym: 'Full commercial gym' })).not.toContain('Do not stop to ask');
   });
 
   it('names crossed-off equipment rather than claiming the rest is present', () => {

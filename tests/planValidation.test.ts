@@ -138,6 +138,61 @@ describe('validatePlan — catalogue references', () => {
   });
 });
 
+describe('validatePlan — a week that is not a week', () => {
+  it('rejects a plan where every day is empty', () => {
+    /*
+     * Real output from Perplexity, given a prompt that told it to ask about
+     * equipment first. It expressed the question *as a plan*: seven rest days
+     * labelled "Awaiting Equipment". That parsed, validated with only two soft
+     * warnings, and would have been adopted as a training week.
+     *
+     * Falling short of the aerobic target is a judgement call and warns.
+     * Prescribing nothing whatsoever is a different kind of thing.
+     */
+    const plan = healthyPlan();
+    const result = validatePlan({
+      ...plan,
+      days: plan.days.map((d) => ({
+        dayKey: d.dayKey,
+        label: 'Awaiting Equipment',
+        type: 'rest' as const,
+        sub: '',
+        note: '',
+        outline: ['Rest'],
+        aerobic: false,
+      })),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(errorsOf(result).some((i) => i.message.includes('Every day in this plan is empty'))).toBe(true);
+  });
+
+  it('accepts a week with rest days as long as something is prescribed', () => {
+    // The check must not punish a legitimately light week — only an empty one.
+    // Rest days are built rather than overridden: `exactOptionalPropertyTypes`
+    // makes an absent `minutes` and one set to `undefined` different things.
+    const plan = healthyPlan();
+    const result = validatePlan({
+      ...plan,
+      days: plan.days.map((d) =>
+        d.dayKey === 'mon'
+          ? d
+          : {
+              dayKey: d.dayKey,
+              label: 'Rest',
+              type: 'rest' as const,
+              sub: '',
+              note: '',
+              outline: ['Rest'],
+              aerobic: false,
+            },
+      ),
+    });
+
+    expect(errorsOf(result).some((i) => i.message.includes('Every day in this plan is empty'))).toBe(false);
+  });
+});
+
 describe('validatePlan — day shape', () => {
   it('rejects a strength day with no exercises', () => {
     const plan = healthyPlan();

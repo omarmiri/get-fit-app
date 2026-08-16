@@ -82,6 +82,31 @@ export function validatePlan(plan: UserPlan, context: ValidationContext = {}): P
 
   issues.push(...validateCustomExercises(plan));
 
+  /*
+   * A week that prescribes nothing at all is not a light week — it is not a
+   * plan, and it blocks.
+   *
+   * The guideline checks below are warnings on purpose: running fewer aerobic
+   * minutes than the target is the user's call to make. This is a different
+   * kind of thing. It exists because a model asked what equipment was
+   * available and expressed the question *as a plan* — seven rest days
+   * labelled "Awaiting Equipment", which parsed, validated and would have
+   * been adopted as a training week.
+   *
+   * The message names the likely cause, because the user did nothing wrong and
+   * has no other way to know what happened.
+   */
+  const prescribesNothing = [...byDay.values()].every(
+    (day) => (day.exerciseIds?.length ?? 0) === 0 && !day.minutes,
+  );
+  if (byDay.size > 0 && prescribesNothing) {
+    issues.push({
+      severity: 'error',
+      message:
+        'Every day in this plan is empty — no movements and no minutes. Some models reply with a request for more information instead of a plan. Describe your gym above and ask again.',
+    });
+  }
+
   // Guideline checks. Warnings, not errors — the user may knowingly run a
   // lighter week, and the app should not refuse to show them their own plan.
   if (weeklyAerobicMinutes < GOALS.minutes) {

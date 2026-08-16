@@ -85,9 +85,20 @@ export function buildPrompt(context: PromptContext, siteUrl?: string): string {
       ? person.join('\n')
       : '- (I have not filled in my details — assume a general adult beginner and stay conservative.)';
 
+  /*
+   * Deliberately not "ask me first".
+   *
+   * That was the original wording, and Perplexity showed why it fails: asked
+   * to find out about equipment before writing, it expressed the *question* as
+   * a plan — seven rest days labelled "Awaiting Equipment". A tool that
+   * answers in one shot cannot hold the conversation the instruction assumes,
+   * so the instruction has to yield something usable on the first pass.
+   *
+   * Stating an assumption is correctable. Asking is a dead end.
+   */
   const gymPrompt = context.gym
     ? ''
-    : '\nI have not described my gym above. Ask me what equipment I have before writing the plan.\n';
+    : '\nI have not described my gym. Do not stop to ask and do not reply with questions — assume a typical commercial gym, write the full week, and say what you assumed in the summary so I can correct you.\n';
 
   return `Please write me a one-week training plan as a JSON file for an app called Rack & File.
 
@@ -150,9 +161,15 @@ You are most likely reading this because someone asked you to write them a
 training plan for this app. Everything you need is on this page. Emit **one
 JSON object** in the format below and nothing else the user has to edit by hand.
 
-Ask the user what equipment they have before you write the plan, unless they
-have already told you. The app does not know what is in their gym and cannot
-tell you — that is why it asks you to describe equipment in plain English.`;
+If the person has not told you what equipment they have, do not stop to ask —
+some tools reading this cannot hold a conversation. Assume a typical commercial
+gym (dumbbells, adjustable benches, cable machines, treadmills, a squat rack)
+and **say in your summary what you assumed**, so they can correct it and ask
+again. A plan built on a stated assumption is useful; a request for information
+they cannot answer is not.
+
+The app does not know what is in their gym and cannot tell you — that is why it
+asks you to describe equipment in plain English.`;
 }
 
 function envelopeSection(): string {
