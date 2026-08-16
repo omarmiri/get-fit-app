@@ -85,6 +85,49 @@ describe('a refused redirect', () => {
   });
 });
 
+describe('a failure reported in the query string', () => {
+  /*
+   * The case this originally missed entirely. Supabase reports success in the
+   * fragment but provider-exchange failures in the query string, because the
+   * latter happens server-side before there are any tokens to put in a
+   * fragment. Reading only the fragment meant a real error landed on the page
+   * and did nothing.
+   */
+  it('reports an error that arrived as a query parameter', () => {
+    history.replaceState(
+      null,
+      '',
+      '/?error=server_error&error_code=unexpected_failure&error_description=Unable+to+exchange+external+code',
+    );
+
+    expect(captureRedirectSession()).toBeNull();
+    expect(takeRedirectError()).toContain('Unable to exchange external code');
+  });
+
+  it('prefers the description over the bare error code', () => {
+    // "server_error" tells the user nothing they can act on; the description
+    // is what points at the provider credentials.
+    history.replaceState(null, '', '/?error=server_error&error_description=Something+specific');
+
+    captureRedirectSession();
+    expect(takeRedirectError()).toBe('Something specific');
+  });
+
+  it('strips the auth parameters so a refresh does not replay it', () => {
+    history.replaceState(null, '', '/?error=server_error&error_description=Nope');
+    captureRedirectSession();
+
+    expect(location.search).toBe('');
+  });
+
+  it('keeps query parameters that have nothing to do with sign-in', () => {
+    history.replaceState(null, '', '/?ref=newsletter&error=server_error&error_description=Nope');
+    captureRedirectSession();
+
+    expect(location.search).toBe('?ref=newsletter');
+  });
+});
+
 describe('an ordinary page load', () => {
   it('does nothing when there is no fragment', () => {
     expect(captureRedirectSession()).toBeNull();

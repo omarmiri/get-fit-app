@@ -155,24 +155,54 @@ export async function signInWithGoogle(): Promise<void> {
  * Returns the user when a sign-in just completed, `null` otherwise. Call once
  * on load, before anything reads the session.
  *
- * The fragment is stripped immediately and unconditionally. Tokens in a URL
- * are tokens in the back button, in `document.referrer` on the next
- * navigation, and in whatever the user pastes when they share a link — so the
- * window in which they are visible is kept to the shortest thing achievable,
- * and `replaceState` is used so the tokenful entry does not stay in history.
+ * ## Two places to look, not one
+ *
+ * Supabase reports success in the URL *fragment* and provider failures in the
+ * *query string*, because the two happen at different stages: a fragment is
+ * built by the redirect that carries tokens, while a failure to exchange
+ * Google's code for those tokens happens server-side before there are any.
+ *
+ * This originally read only the fragment, so a `?error=server_error` landed on
+ * the page and did nothing at all — precisely the silent failure this function
+ * exists to prevent.
+ *
+ * ## Why the URL is always cleaned
+ *
+ * Tokens in a URL are tokens in the back button, in `document.referrer` on the
+ * next navigation, and in whatever the user pastes when they share a link, so
+ * the window in which they are visible is kept as short as achievable.
+ * `replaceState` is used so the entry carrying them does not stay in history.
+ * Errors are stripped for a smaller reason: a refresh should not replay a
+ * failure the user has already been shown.
  */
 export function captureRedirectSession(): AccountUser | null {
-  const raw = location.hash.startsWith('#') ? location.hash.slice(1) : '';
-  if (!raw || !/(^|&)(access_token|error|error_description)=/.test(raw)) return null;
+  const fragment = location.hash.startsWith('#') ? location.hash.slice(1) : '';
+  const hashParams = new URLSearchParams(fragment);
+  const queryParams = new URLSearchParams(location.search);
 
-  const params = new URLSearchParams(raw);
-  history.replaceState(null, '', `${location.pathname}${location.search}`);
+  const hasAuthFragment = /(^|&)(access_token|error|error_description)=/.test(fragment);
+  const hasAuthQuery = queryParams.has('error') || queryParams.has('error_description');
+  if (!hasAuthFragment && !hasAuthQuery) return null;
 
-  const accessToken = params.get('access_token') ?? '';
+  /*
+   * Read before cleaning. `cleanUrl` deletes these keys from `queryParams`, so
+   * reading afterwards returns null for the very thing being reported.
+   *
+   * `error_description` is the useful half — "Unable to exchange external
+   * code" points straight at the provider credentials, where the bare `error`
+   * says only "server_error".
+   */
+  const failure =
+    queryParams.get('error_description') ??
+    hashParams.get('error_description') ??
+    queryParams.get('error') ??
+    hashParams.get('error');
+
+  cleanUrl(queryParams, hasAuthFragment);
+
+  const accessToken = hashParams.get('access_token') ?? '';
   if (!accessToken) {
-    // Supabase reports refusals here too — a cancelled consent screen, or a
-    // provider that is not enabled on the project.
-    lastRedirectError = params.get('error_description') ?? params.get('error');
+    lastRedirectError = failure;
     return null;
   }
 
@@ -183,18 +213,34 @@ export function captureRedirectSession(): AccountUser | null {
    * anything this function returns.
    */
   const user: AccountUser = {
-    id: params.get('provider_id') ?? 'signed-in',
+    id: hashParams.get('provider_id') ?? 'signed-in',
     email: '',
   };
 
   writeSession({
     accessToken,
-    refreshToken: params.get('refresh_token') ?? '',
-    expiresAt: Date.now() + Number(params.get('expires_in') ?? 3600) * 1000,
+    refreshToken: hashParams.get('refresh_token') ?? '',
+    expiresAt: Date.now() + Number(hashParams.get('expires_in') ?? 3600) * 1000,
     user,
   });
 
   return user;
+}
+
+/**
+ * Remove what the redirect added, and only that.
+ *
+ * A query string can hold parameters that are nothing to do with sign-in — a
+ * campaign tag, a deep link — and eating those would be a rude way to tidy up.
+ */
+function cleanUrl(queryParams: URLSearchParams, dropFragment: boolean): void {
+  for (const key of ['error', 'error_code', 'error_description', 'state', 'code']) {
+    queryParams.delete(key);
+  }
+
+  const search = queryParams.toString();
+  const hash = dropFragment ? '' : location.hash;
+  history.replaceState(null, '', `${location.pathname}${search ? `?${search}` : ''}${hash}`);
 }
 
 let lastRedirectError: string | null = null;
