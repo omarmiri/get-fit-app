@@ -6,7 +6,9 @@ A personal training log built around one seven-day plan. Mobile-first, installab
 
 **Bring your own plan.** Ask ChatGPT, Claude, Gemini or anything else for a training week and load it in — paste the reply, or open the file it gave you. The format is published at [`/llms.txt`](https://get-fit-app.onrender.com/llms.txt), so any model that can read a page can write a plan this app understands. See [Bringing a plan from an LLM](#bringing-a-plan-from-an-llm).
 
-All data lives in the browser on the device you use it on. There is no database, no account, and nothing leaves the phone. **Export a backup from the Plan tab now and then** — clearing browser data erases everything.
+All data lives in the browser on the device you use it on. There is no account by default and nothing leaves the phone — the whole app works signed out, which is the point. **Export a backup from the Plan tab now and then**, because clearing browser data erases everything.
+
+Signing in with Google is optional and buys exactly one thing: a copy of your data, so clearing your browser is not the end of your training history. Health context is never part of that — it is typed per plan, used once, and never stored anywhere.
 
 ---
 
@@ -354,6 +356,65 @@ Both routes also cost something the remaining two do not — a working network
 and a server. Paste and file import work on a phone in a basement gym. And on
 Android, Drive appears in the system file picker anyway, so the file route
 already covers the case the integration was meant to serve.
+
+## Keeping the free tiers awake
+
+Two services here go to sleep, for different reasons and on different clocks.
+
+**Render** spins a free web service down after ~15 minutes idle, and the next
+request waits ~50 seconds. `keepalive.js` self-pings between 8am and 8pm New
+York time — the window exists because free instance hours are capped at 750/month
+and a month is ~730. A self-ping cannot wake a service that is already asleep, so
+`.github/workflows/keepalive.yml` is the external cron that actually matters.
+
+**Supabase** pauses a free project after about a week of inactivity, and this
+app is unusually exposed to it: Supabase is used for identity and nothing else,
+while every session, plan and preference lives in Upstash. With nobody signing
+in, the Supabase database sees no traffic at all — so it will pause, and the
+failure is quiet. The account card still renders; sign-in simply stops working,
+and unpausing is a manual visit to a dashboard nobody is watching.
+
+`startSupabaseHeartbeat` calls a `beat()` function shortly after startup and
+every six hours thereafter. Startup is the real schedule: this process is
+restarted daily by Render's overnight spin-down and by every deploy, so a timer
+measured in days would be reset before it ever fired.
+
+Run this once in the Supabase SQL editor:
+
+```sql
+create table public.heartbeat (
+  id smallint primary key default 1,
+  beat_at timestamptz not null default now(),
+  constraint heartbeat_single_row check (id = 1)
+);
+
+insert into public.heartbeat (id) values (1);
+
+-- RLS on with no policies: the table itself is unreachable by the anon key.
+alter table public.heartbeat enable row level security;
+
+-- The only thing the public key can do is bump one timestamp.
+create or replace function public.beat()
+returns timestamptz
+language sql
+security definer
+set search_path = public
+as $$
+  update public.heartbeat set beat_at = now() where id = 1 returning beat_at;
+$$;
+
+grant execute on function public.beat() to anon;
+```
+
+A write rather than a read on purpose. Supabase does not define "activity"
+precisely enough to bet a silent week-long outage on a `select` counting, and
+the function keeps the exposed surface to exactly one statement — the table
+stays unreadable and unwritable directly.
+
+If the function is missing, the server logs
+`[heartbeat] supabase returned 404 — is the beat() function created?` rather
+than failing quietly, because a keep-alive that is not working is
+indistinguishable from one that is until the project pauses.
 
 ## Roadmap notes
 

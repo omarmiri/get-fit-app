@@ -314,6 +314,45 @@ export class AuthError extends Error {
 }
 
 /**
+ * Which sign-in providers the project actually has enabled.
+ *
+ * Asked of Supabase rather than assumed, because "accounts are configured" and
+ * "someone can sign in" are different claims and this app only ever checked
+ * the first. A project with the URL and key set but Google switched off looks
+ * completely healthy and cannot sign anybody in.
+ *
+ * Cached for an hour: it changes when someone edits a dashboard, not on a
+ * schedule, and `/health` is hit every ten minutes by the keep-alive.
+ */
+const PROVIDER_TTL_MS = 60 * 60 * 1000;
+let providerCache = { at: 0, providers: null };
+
+export async function enabledProviders() {
+  if (!configured()) return null;
+  if (providerCache.providers && Date.now() - providerCache.at < PROVIDER_TTL_MS) {
+    return providerCache.providers;
+  }
+
+  try {
+    const response = await fetch(`${SUPA_URL}/auth/v1/settings`, { headers: { apikey: SUPA_ANON } });
+    if (!response.ok) return null;
+
+    const body = await response.json().catch(() => null);
+    const external = body?.external ?? {};
+    const providers = Object.keys(external)
+      .filter((name) => external[name] === true)
+      .sort();
+
+    providerCache = { at: Date.now(), providers };
+    return providers;
+  } catch {
+    // A probe failure is not a configuration answer, so report "unknown"
+    // rather than "none" — the latter would be a claim this cannot support.
+    return null;
+  }
+}
+
+/**
  * Public configuration for the client.
  *
  * The URL is needed now: OAuth is a navigation the browser performs itself, so

@@ -18,7 +18,7 @@ import helmet from 'helmet';
 import { AccountError, loadState, meterPlanGeneration, saveState } from './account.js';
 import * as auth from './auth.js';
 import { GeminiError, generatePlan } from './gemini.js';
-import { startKeepAlive } from './keepalive.js';
+import { startKeepAlive, startSupabaseHeartbeat } from './keepalive.js';
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(rootDir, 'dist');
@@ -72,8 +72,16 @@ app.use(
 
 app.use(compression());
 
-app.get('/health', (_req, res) => {
+app.get('/health', async (_req, res) => {
   const identity = auth.info();
+  /*
+   * Asked of Supabase, not assumed. "Configured" and "can actually sign
+   * someone in" are different claims, and a project with Google switched off
+   * satisfies the first while failing the second — silently, which is the
+   * expensive way for this to be wrong. `null` means the probe could not
+   * answer, which is distinct from "none enabled".
+   */
+  const providers = await auth.enabledProviders();
 
   res.json({
     ok: true,
@@ -87,7 +95,7 @@ app.get('/health', (_req, res) => {
      * authorize endpoint does not need it, and every call that does is made
      * from this process.
      */
-    auth: { configured: identity.configured, url: identity.url },
+    auth: { configured: identity.configured, url: identity.url, providers },
   });
 });
 
@@ -325,11 +333,22 @@ const server = app.listen(port, () => {
 // external cron in .github/workflows/keepalive.yml does that.
 const stopKeepAlive = startKeepAlive();
 
+/*
+ * Supabase pauses a free project after about a week of inactivity, and this
+ * app would otherwise give it none: identity is all it is used for, and every
+ * training record lives in Upstash. Restarts are the schedule here — see the
+ * note in keepalive.js.
+ */
+const stopHeartbeat = startSupabaseHeartbeat(
+  Object.assign({ anonKey: process.env.SUPABASE_ANON_KEY ?? '' }, auth.info()),
+);
+
 // Render sends SIGTERM on deploy and on scale-down; closing cleanly avoids
 // dropping in-flight responses.
 for (const signal of ['SIGTERM', 'SIGINT']) {
   process.on(signal, () => {
     stopKeepAlive?.();
+    stopHeartbeat?.();
     server.close(() => process.exit(0));
   });
 }

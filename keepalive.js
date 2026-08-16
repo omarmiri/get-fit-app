@@ -128,3 +128,98 @@ export function startKeepAlive({ log = console.log } = {}) {
 
   return () => clearInterval(timer);
 }
+
+/* ------------------------------------------------------------- Supabase */
+
+/**
+ * Keeping the Supabase project from being paused for inactivity.
+ *
+ * ## Why this app needs it more than most
+ *
+ * Supabase pauses a free project after about a week with no activity. Most
+ * apps never notice, because the app itself is constantly querying. This one
+ * uses Supabase for identity and nothing else — every session, plan and
+ * preference lives in Upstash — so with no users signing in, the Supabase
+ * database sees no traffic at all. Not a little: none.
+ *
+ * The failure is quiet, which is what makes it worth pre-empting. A paused
+ * project does not make the app look broken; the account card still renders
+ * and sign-in simply stops working, and unpausing is a manual visit to a
+ * dashboard nobody is watching.
+ *
+ * ## Why on startup rather than on a long timer
+ *
+ * A once-a-week interval would almost never fire. This process is not
+ * long-lived: Render spins the free instance down overnight and restarts it on
+ * every deploy, so a timer measured in days would be reset before reaching
+ * zero. Beating once at startup turns the frequent restarts into the schedule,
+ * and the slow interval below only matters if the process does stay up.
+ *
+ * Ten minutes' delay on the first beat keeps it clear of the cold-start rush,
+ * where the instance is already busy serving whoever woke it.
+ */
+const HEARTBEAT_DELAY_MS = 10 * 60 * 1000;
+const HEARTBEAT_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const HEARTBEAT_TIMEOUT_MS = 15_000;
+
+/**
+ * Start beating against the Supabase project.
+ *
+ * Calls a `beat()` function rather than writing to a table directly, so the
+ * only thing the public anon key can do is bump one timestamp — see the SQL in
+ * README. No-ops without a project configured, so local development and tests
+ * make no outbound requests.
+ *
+ * Returns a stop function, or `null` when inactive.
+ */
+export function startSupabaseHeartbeat({ url, anonKey, log = console.log } = {}) {
+  if (!url || !anonKey) return null;
+  if (process.env.KEEP_ALIVE === 'false') return null;
+
+  const target = `${url}/rest/v1/rpc/beat`;
+
+  const beat = async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), HEARTBEAT_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(target, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          apikey: anonKey,
+          authorization: `Bearer ${anonKey}`,
+          'content-type': 'application/json',
+        },
+        body: '{}',
+      });
+
+      if (!response.ok) {
+        /*
+         * Worth saying out loud rather than swallowing. A 404 here means the
+         * `beat` function was never created, which means the project is not
+         * actually being kept alive — and the whole point of this is that the
+         * consequence would otherwise be invisible for a week.
+         */
+        log(`[heartbeat] supabase returned ${response.status} — is the beat() function created?`);
+      }
+    } catch (error) {
+      log(`[heartbeat] failed: ${error?.message ?? 'unknown error'}`);
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
+
+  const first = setTimeout(() => void beat(), HEARTBEAT_DELAY_MS);
+  first.unref?.();
+
+  const timer = setInterval(() => void beat(), HEARTBEAT_INTERVAL_MS);
+  timer.unref?.();
+
+  log(`[heartbeat] supabase every ${HEARTBEAT_INTERVAL_MS / 3_600_000}h, first in 10 min`);
+
+  return () => {
+    clearTimeout(first);
+    clearInterval(timer);
+  };
+}
