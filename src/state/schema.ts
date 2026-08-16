@@ -29,7 +29,7 @@ import { isWeightUnit } from '@/domain/units';
  *   add a step whenever a persisted shape changes.
  */
 
-export const CURRENT_SCHEMA_VERSION = 10;
+export const CURRENT_SCHEMA_VERSION = 11;
 
 /**
  * Ceiling on saved plans.
@@ -292,6 +292,7 @@ function parsePreferences(raw: unknown): Preferences {
     ...(profile === undefined ? {} : { profile }),
     ...(gym.length === 0 ? {} : { gym }),
     ...(raw['onboarded'] === true || profile !== undefined ? { onboarded: true } : {}),
+    ...(raw['welcomed'] === true ? { welcomed: true } : {}),
   };
 }
 
@@ -362,12 +363,24 @@ export function parseState(raw: unknown): ParseResult {
 
   const inForce = plans.find((plan) => plan.id === activePlanId) ?? null;
 
+  const prefs = parsePreferences(raw['prefs']);
+
+  /*
+   * Anyone already using the app has been past the welcome by definition.
+   *
+   * The flag did not exist before schema 11, so without this every existing
+   * user would meet a new screen standing in front of an app they were in the
+   * middle of using. Logged training, a saved plan or a completed profile are
+   * all proof enough.
+   */
+  const usedAlready = ordered.length > 0 || active !== null || plans.length > 0 || prefs.onboarded === true;
+
   return {
     state: {
       schemaVersion: CURRENT_SCHEMA_VERSION,
       sessions: ordered,
       active,
-      prefs: parsePreferences(raw['prefs']),
+      prefs: usedAlready ? { ...prefs, welcomed: true } : prefs,
       plans,
       activePlanId,
       exerciseArchive: parseArchive(raw['exerciseArchive'], inForce, [

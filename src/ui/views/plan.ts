@@ -24,6 +24,7 @@ export function renderPlanView(context: ViewContext): Child[] {
     renderGymCard(context),
     renderEquipmentCard(context),
     renderPlanLibrary(context),
+    renderStartOver(context),
     renderPlanInputs(() => {
       /*
        * Deliberately no re-render. These inputs feed the prompt and the
@@ -447,6 +448,35 @@ function renderEquipmentCard(context: ViewContext): HTMLElement {
           },
         })
       : null,
+  ]);
+}
+
+/**
+ * A way back to the welcome screen.
+ *
+ * Small and near the bottom on purpose. It is not a reset — nothing is
+ * deleted, no plan is dropped — it just re-asks the question the app asks on
+ * first run, for someone whose situation has changed enough to want a
+ * different answer.
+ */
+function renderStartOver(context: ViewContext): HTMLElement {
+  return card([
+    eyebrow('Change how you train'),
+    text(
+      'prose',
+      'Go back to the opening question — bring a plan from an LLM, generate one, or take the built-in week. Your saved plans and logged sessions are untouched.',
+    ),
+    el('button', {
+      class: 'button button--ghost',
+      text: 'Choose again',
+      attrs: { type: 'button' },
+      on: {
+        click: () => {
+          context.store.setWelcomed(false);
+          context.render();
+        },
+      },
+    }),
   ]);
 }
 

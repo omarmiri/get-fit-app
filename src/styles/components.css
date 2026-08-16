@@ -1308,6 +1308,27 @@
   color: var(--dimmer);
 }
 
+/* ---- welcome ----
+   The seven-day preview on the built-in option. A plain list rather than
+   anything clever: the point is to let someone read what they are agreeing to
+   before they tap, not to sell it. */
+.welcome__days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin: var(--space-3) 0;
+  padding: 0;
+  list-style: none;
+}
+
+.welcome__day {
+  padding: 2px var(--space-2);
+  border: var(--border);
+  border-radius: var(--radius);
+  color: var(--dim);
+  font-size: 12px;
+}
+
 /* ---- plan library ----
    The saved plans, with the built-in rotation always first and never
    deletable. The active row is marked by the accent bar rather than by colour

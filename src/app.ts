@@ -11,6 +11,7 @@ import type { UiState, ViewContext } from '@/ui/views/context';
 import { renderHistoryView } from '@/ui/views/history';
 import { renderPlanView } from '@/ui/views/plan';
 import { renderTodayView } from '@/ui/views/today';
+import { renderWelcomeView } from '@/ui/views/welcome';
 import { renderWeekStrip } from '@/ui/components/weekStrip';
 import { initAccountCard } from '@/ui/components/accountCard';
 import { captureRedirectSession, refreshIdentity } from '@/services/account';
@@ -146,11 +147,23 @@ export class App {
     const state = this.#store.getState();
     const context = this.#context(state);
 
-    this.#applyAccent();
-    this.#paintWeekStrip(context);
-    this.#paintNav();
+    /*
+     * The welcome screen replaces the whole shell rather than sitting inside a
+     * tab. Week strip and tab bar are chrome for an app you are already using;
+     * showing them around a screen that asks which plan you want implies the
+     * choice has already been made.
+     */
+    const welcoming = state.prefs.welcomed !== true;
+    this.#weekStrip.parentElement?.toggleAttribute('hidden', welcoming);
+    this.#nav.toggleAttribute('hidden', welcoming);
 
-    replaceChildren(this.#view, this.#viewChildren(context));
+    this.#applyAccent();
+    if (!welcoming) {
+      this.#paintWeekStrip(context);
+      this.#paintNav();
+    }
+
+    replaceChildren(this.#view, welcoming ? renderWelcomeView(context) : this.#viewChildren(context));
 
     if (this.#scrollToTop) window.scrollTo(0, 0);
     this.#scrollToTop = false;

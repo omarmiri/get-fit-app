@@ -115,7 +115,13 @@ export class AppStore {
         ? [...this.#state.plans, plan]
         : this.#state.plans.map((saved, i) => (i === existing ? plan : saved));
 
-    this.#commit({ ...this.#state, plans, activePlanId: plan.id });
+    this.#commit({
+      ...this.#state,
+      plans,
+      activePlanId: plan.id,
+      // Adopting a plan answers the welcome screen's only question.
+      prefs: { ...this.#state.prefs, welcomed: true },
+    });
   }
 
   /**
@@ -168,6 +174,17 @@ export class AppStore {
       ...this.#state,
       prefs: { ...this.#state.prefs, profile, onboarded: true },
     });
+  }
+
+  /**
+   * Record that the user has chosen how they want to train.
+   *
+   * Set by picking the built-in week, and implicitly by adopting any plan —
+   * choosing one *is* answering the question the welcome screen asks, so
+   * making them then dismiss the screen would be asking twice.
+   */
+  setWelcomed(welcomed: boolean): void {
+    this.#commit({ ...this.#state, prefs: { ...this.#state.prefs, welcomed } });
   }
 
   /** Record that onboarding has been offered, whether or not it was filled in. */

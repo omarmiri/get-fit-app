@@ -520,6 +520,20 @@ export interface Preferences {
   readonly profile?: UserProfile;
   /** True once onboarding has been shown, so it is not offered again. */
   readonly onboarded?: boolean;
+  /**
+   * True once the user has chosen how they want to train.
+   *
+   * Distinct from `onboarded`, which is about starting weights and is asked
+   * the first time someone opens a session. This one is asked earlier and
+   * answers a different question: which plan are you following at all.
+   *
+   * It exists because the app used to answer that question for you. It opened
+   * on a built-in week nobody had chosen, with no explanation of where it came
+   * from, and the two features that would let you replace it were three taps
+   * deep in a settings tab. Choosing the built-in week is still a perfectly
+   * good answer — it just has to be an answer, not a default.
+   */
+  readonly welcomed?: boolean;
   /*
    * Health context deliberately does not live here.
    *
