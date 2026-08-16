@@ -14,6 +14,8 @@ import type {
 import { isDayKey } from '@/data/plan';
 import { isValidIsoDate } from '@/domain/dates';
 import { clampMinutes, clampNumber, clampReps, clampWeight } from '@/domain/limits';
+import type { GymProfile } from '@/domain/gymProfile';
+import { EQUIPMENT, VENUES, hasAnswers } from '@/domain/gymProfile';
 import { parseCustomExercise } from '@/domain/planFormat';
 import { isWeightUnit } from '@/domain/units';
 
@@ -29,7 +31,7 @@ import { isWeightUnit } from '@/domain/units';
  *   add a step whenever a persisted shape changes.
  */
 
-export const CURRENT_SCHEMA_VERSION = 11;
+export const CURRENT_SCHEMA_VERSION = 12;
 
 /**
  * Ceiling on saved plans.
@@ -269,6 +271,8 @@ function parsePreferences(raw: unknown): Preferences {
    */
   void raw['conditions'];
 
+  const gymProfile = parseGymProfile(raw['gymProfile']);
+
   const rawGym = raw['gym'];
   const gym = typeof rawGym === 'string' ? rawGym.trim().slice(0, MAX_GYM_LENGTH) : '';
 
@@ -291,9 +295,43 @@ function parsePreferences(raw: unknown): Preferences {
     ...(Object.keys(preferredStations).length === 0 ? {} : { preferredStations }),
     ...(profile === undefined ? {} : { profile }),
     ...(gym.length === 0 ? {} : { gym }),
+    ...(gymProfile === undefined ? {} : { gymProfile }),
     ...(raw['onboarded'] === true || profile !== undefined ? { onboarded: true } : {}),
     ...(raw['welcomed'] === true ? { welcomed: true } : {}),
   };
+}
+
+/**
+ * Parse the gym answers.
+ *
+ * Every field is optional and unknown values are dropped rather than coerced —
+ * an equipment id this version does not recognise came from a newer build or a
+ * hand-edited backup, and guessing what it meant would put invented answers in
+ * front of the user.
+ */
+function parseGymProfile(raw: unknown): GymProfile | undefined {
+  if (!isRecord(raw)) return undefined;
+
+  const venue = VENUES.find((option) => option.id === raw['venue'])?.id;
+
+  const rawEquipment = raw['equipment'];
+  const equipment = Array.isArray(rawEquipment)
+    ? EQUIPMENT.filter((option) => rawEquipment.includes(option.id)).map((option) => option.id)
+    : [];
+
+  const outdoors = typeof raw['outdoors'] === 'boolean' ? raw['outdoors'] : undefined;
+  const days = clampNumber(raw['daysPerWeek'], { min: 1, max: 7 }, 0);
+  const minutes = clampNumber(raw['sessionMinutes'], { min: 10, max: 240 }, 0);
+
+  const profile: GymProfile = {
+    ...(venue === undefined ? {} : { venue }),
+    ...(equipment.length === 0 ? {} : { equipment }),
+    ...(outdoors === undefined ? {} : { outdoors }),
+    ...(days > 0 ? { daysPerWeek: Math.round(days) } : {}),
+    ...(minutes > 0 ? { sessionMinutes: Math.round(minutes) } : {}),
+  };
+
+  return hasAnswers(profile) ? profile : undefined;
 }
 
 /**

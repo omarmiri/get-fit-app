@@ -1,3 +1,5 @@
+import type { GymProfile } from '@/domain/gymProfile';
+
 /**
  * Domain model for Rack & File.
  *
@@ -499,16 +501,25 @@ export interface Preferences {
    */
   readonly missingStations?: readonly string[];
   /**
-   * Free-text description of where the user trains and what it has.
+   * Where the user trains and what it has, as prose.
    *
-   * Deliberately prose rather than structured data. The app does not need to
-   * parse it — its job is to be pasted into the prompt the user hands their
-   * LLM, which is the thing that actually needs to know whether there is a
-   * squat rack. Structuring it would mean maintaining an equipment ontology
-   * broad enough for every gym on earth, to serve a consumer that reads
-   * English perfectly well.
+   * Still prose, and still for the same reason: this is what gets pasted into
+   * the prompt, and a language model reads English better than any schema this
+   * app could invent. What changed is where the sentences come from — they are
+   * generated from `gymProfile` rather than typed into an empty box, because
+   * an empty box stayed empty and the prompt ended up telling the model to
+   * guess.
+   *
+   * Remains hand-editable. No fixed set of questions covers "the squat racks
+   * are always taken after 5pm", which is exactly the sort of thing that makes
+   * a plan usable.
    */
   readonly gym?: string;
+  /**
+   * The answers behind `gym`, kept so the questions can be re-opened
+   * pre-filled rather than asked again from scratch.
+   */
+  readonly gymProfile?: GymProfile;
   /**
    * Per-exercise station preference, remembered across sessions.
    *

@@ -3,6 +3,7 @@ import { PLAN_ORDER } from '@/data/plan';
 import { card, div, el, eyebrow, text } from '../dom';
 import { toast } from '../toast';
 import { renderAccountCard } from '../components/accountCard';
+import { renderGymSetup } from '../components/gymSetup';
 import { renderPlanGenerator } from '../components/planGenerator';
 import { renderPlanImport } from '../components/planImport';
 import { renderPlanInputs } from '../components/planInputs';
@@ -40,10 +41,11 @@ export function renderWelcomeView(context: ViewContext): Child[] {
       el('h1', { text: 'How do you want to train?' }),
       text(
         'spine__sub',
-        'Pick one to get started. You can change it whenever you like, and nothing here is permanent.',
+        'Tell us where you train, then pick how you want your week written. You can change any of it later, and nothing here is permanent.',
       ),
     ]),
 
+    renderGymSetup(context),
     renderBuiltInCard(context),
     renderPlanInputs(() => {
       /* No re-render: redrawing on each keystroke would lose the caret. */

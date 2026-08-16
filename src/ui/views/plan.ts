@@ -13,6 +13,7 @@ import { renderPlanGenerator } from '../components/planGenerator';
 import { renderPlanImport } from '../components/planImport';
 import { renderAccountCard } from '../components/accountCard';
 import { renderPlanInputs } from '../components/planInputs';
+import { renderGymSetup } from '../components/gymSetup';
 import { renderPlanLibrary } from '../components/planLibrary';
 import type { ViewContext } from './context';
 
@@ -21,7 +22,7 @@ export function renderPlanView(context: ViewContext): Child[] {
   return [
     div('spine', [eyebrow('Seven-day rotation'), el('h1', { text: 'The plan' })]),
     renderRotation(context),
-    renderGymCard(context),
+    renderGymSetup(context),
     renderEquipmentCard(context),
     renderPlanLibrary(context),
     renderStartOver(context),
@@ -347,45 +348,6 @@ function eraseAll(context: ViewContext): void {
 }
 
 /* -------------------------------------------------------------------- gym */
-
-/**
- * Where you train, in your own words.
- *
- * Free text rather than a structured venue picker, because the app does not
- * need to understand it — this is the paragraph that gets pasted into the
- * prompt you hand your LLM, and that reader parses English better than any
- * schema the app could impose. It is also the honest shape of the data: "the
- * squat racks are always busy after 5" is a real constraint on a plan and fits
- * nowhere in a list of checkboxes.
- */
-function renderGymCard(context: ViewContext): HTMLElement {
-  return card([
-    eyebrow('Your gym'),
-    text(
-      'prose',
-      'Describe where you train and what it has. This gets included when you copy a prompt for your LLM, so the plan it writes uses equipment you can actually reach.',
-    ),
-    el('textarea', {
-      class: 'gen__input gen__input--area',
-      // A textarea's initial value is its child text, not a `value` attribute.
-      text: context.state.prefs.gym ?? '',
-      attrs: {
-        rows: 4,
-        autocomplete: 'off',
-        placeholder:
-          'e.g. Big commercial gym. Full dumbbell rack to 100 lb, cables, most machines, squat rack and a pool. No sled or turf.',
-        'aria-label': 'Describe your gym and its equipment',
-      },
-      on: {
-        change: (event) => {
-          context.store.setGym((event.target as HTMLTextAreaElement).value);
-          toast('Gym details saved');
-        },
-      },
-    }),
-    text('club__hint', 'Stored on this device with everything else. Nothing is sent anywhere on its own.'),
-  ]);
-}
 
 /**
  * The equipment vocabulary, and which of it your gym is missing.

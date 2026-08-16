@@ -9,7 +9,9 @@ import type {
   UserProfile,
   WeightUnit,
 } from '@/types';
+import type { GymProfile } from '@/domain/gymProfile';
 import { activePlan } from '@/data/catalogue';
+import { describeGym } from '@/domain/gymProfile';
 import { todayIso } from '@/domain/dates';
 import { clampMinutes, clampReps, clampWeight } from '@/domain/limits';
 import { type KeyValueStore, type SaveFailure, debounce, saveState } from './storage';
@@ -209,6 +211,24 @@ export class AppStore {
   setPreferredStation(exerciseId: string, stationId: string): void {
     const preferredStations = { ...this.#state.prefs.preferredStations, [exerciseId]: stationId };
     this.#commit({ ...this.#state, prefs: { ...this.#state.prefs, preferredStations } });
+  }
+
+  /**
+   * Save the gym answers, and rewrite the prose they produce.
+   *
+   * The generated sentences replace `gym` wholesale, so a later answer
+   * overwrites a hand-edit. That is the honest behaviour for a field whose
+   * source is the questions — and why the editable box sits below them and
+   * says so.
+   */
+  setGymProfile(gymProfile: GymProfile): void {
+    const described = describeGym(gymProfile);
+    const { gym: _previous, ...rest } = this.#state.prefs;
+
+    this.#commit({
+      ...this.#state,
+      prefs: { ...rest, gymProfile, ...(described ? { gym: described } : {}) },
+    });
   }
 
   /**

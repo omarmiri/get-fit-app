@@ -1308,6 +1308,60 @@
   color: var(--dimmer);
 }
 
+/* ---- option buttons ----
+   Used by the gym questions. Wrapping rather than a select: on a phone a
+   native picker hides the options behind a tap, and the whole point here is
+   that someone can see what they are being asked before answering. */
+.choices__wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.optionbtn {
+  flex: 1 1 45%;
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border);
+  border-radius: var(--radius);
+  background: var(--iron-0);
+  color: var(--dim);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.optionbtn.is-on {
+  border-color: var(--pc);
+  color: var(--chalk);
+}
+
+.optionbtn__label {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.optionbtn__hint {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--dimmer);
+}
+
+/* Equipment ticks are short labels, so they size to content rather than
+   stretching to a half-width grid. */
+.optionbtn--chip {
+  flex: 0 0 auto;
+  padding: var(--space-1) var(--space-3);
+  min-height: 36px;
+  font-size: 12px;
+}
+
+.choices__button.is-on {
+  border-color: var(--pc);
+  color: var(--chalk);
+}
+
 /* ---- welcome ----
    The seven-day preview on the built-in option. A plain list rather than
    anything clever: the point is to let someone read what they are agreeing to
