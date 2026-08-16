@@ -155,12 +155,29 @@ export function startKeepAlive({ log = console.log } = {}) {
  * zero. Beating once at startup turns the frequent restarts into the schedule,
  * and the slow interval below only matters if the process does stay up.
  *
- * Ten minutes' delay on the first beat keeps it clear of the cold-start rush,
- * where the instance is already busy serving whoever woke it.
+ * The first beat is almost immediate — a few seconds, just enough to let the
+ * server finish binding its port. An earlier version waited ten minutes to stay
+ * clear of the cold-start rush, which was the wrong trade: this instance spins
+ * down after about fifteen minutes idle, so a process that lived briefly would
+ * never beat at all, and a keep-alive that quietly does not run is worse than
+ * none. One small POST during startup costs nothing worth protecting.
  */
-const HEARTBEAT_DELAY_MS = 10 * 60 * 1000;
+const HEARTBEAT_DELAY_MS = 5_000;
 const HEARTBEAT_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const HEARTBEAT_TIMEOUT_MS = 15_000;
+
+/**
+ * The last beat's outcome, so `/health` can report it.
+ *
+ * Without this the only evidence a heartbeat works is the project not being
+ * paused a week later, which is not evidence anyone can act on. `status` is
+ * `0` when the request never completed.
+ */
+let lastBeat = null;
+
+export function lastHeartbeat() {
+  return lastBeat;
+}
 
 /**
  * Start beating against the Supabase project.
@@ -194,6 +211,8 @@ export function startSupabaseHeartbeat({ url, anonKey, log = console.log } = {})
         body: '{}',
       });
 
+      lastBeat = { at: Date.now(), ok: response.ok, status: response.status };
+
       if (!response.ok) {
         /*
          * Worth saying out loud rather than swallowing. A 404 here means the
@@ -204,6 +223,7 @@ export function startSupabaseHeartbeat({ url, anonKey, log = console.log } = {})
         log(`[heartbeat] supabase returned ${response.status} — is the beat() function created?`);
       }
     } catch (error) {
+      lastBeat = { at: Date.now(), ok: false, status: 0 };
       log(`[heartbeat] failed: ${error?.message ?? 'unknown error'}`);
     } finally {
       clearTimeout(timeout);
@@ -216,7 +236,7 @@ export function startSupabaseHeartbeat({ url, anonKey, log = console.log } = {})
   const timer = setInterval(() => void beat(), HEARTBEAT_INTERVAL_MS);
   timer.unref?.();
 
-  log(`[heartbeat] supabase every ${HEARTBEAT_INTERVAL_MS / 3_600_000}h, first in 10 min`);
+  log(`[heartbeat] supabase every ${HEARTBEAT_INTERVAL_MS / 3_600_000}h, first in ${HEARTBEAT_DELAY_MS / 1000}s`);
 
   return () => {
     clearTimeout(first);

@@ -24,3 +24,28 @@ export interface KeepAliveOptions {
  * `RENDER_EXTERNAL_URL`, or `KEEP_ALIVE=false`.
  */
 export function startKeepAlive(options?: KeepAliveOptions): (() => void) | null;
+
+export interface HeartbeatResult {
+  /** Epoch ms of the attempt. */
+  readonly at: number;
+  readonly ok: boolean;
+  /** HTTP status, or 0 when the request never completed. */
+  readonly status: number;
+}
+
+/** The last Supabase beat this process attempted, or `null` if none yet. */
+export function lastHeartbeat(): HeartbeatResult | null;
+
+export interface SupabaseHeartbeatOptions {
+  url?: string;
+  anonKey?: string;
+  log?: (message: string) => void;
+}
+
+/**
+ * Start beating against the Supabase project so it is not paused for
+ * inactivity. Returns a stop function, or `null` when inactive.
+ */
+export function startSupabaseHeartbeat(
+  options?: SupabaseHeartbeatOptions,
+): (() => void) | null;

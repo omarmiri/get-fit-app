@@ -18,7 +18,7 @@ import helmet from 'helmet';
 import { AccountError, loadState, meterPlanGeneration, saveState } from './account.js';
 import * as auth from './auth.js';
 import { GeminiError, generatePlan } from './gemini.js';
-import { startKeepAlive, startSupabaseHeartbeat } from './keepalive.js';
+import { lastHeartbeat, startKeepAlive, startSupabaseHeartbeat } from './keepalive.js';
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(rootDir, 'dist');
@@ -96,6 +96,12 @@ app.get('/health', async (_req, res) => {
      * from this process.
      */
     auth: { configured: identity.configured, url: identity.url, providers },
+    /*
+     * The last Supabase beat, so a keep-alive that is silently not working is
+     * observable now rather than inferred from the project being paused a week
+     * from now. `null` means none has run yet this process.
+     */
+    heartbeat: lastHeartbeat(),
   });
 });
 
