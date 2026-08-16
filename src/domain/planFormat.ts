@@ -160,6 +160,7 @@ export function parseCustomExercise(raw: unknown): Exercise | null {
 
   const repMetric = raw['repMetric'] === 'seconds' ? 'seconds' : 'reps';
   const loaded = raw['loaded'] === true;
+  const inverseLoad = raw['inverseLoad'] === true;
 
   // Seconds-based holds get wider, longer defaults than rep-based lifts.
   const defaultMin = repMetric === 'seconds' ? 20 : 8;
@@ -200,6 +201,8 @@ export function parseCustomExercise(raw: unknown): Exercise | null {
     // Only meaningful on a loaded movement — an opening weight for a plank is
     // a category error, and silently dropping it beats rendering it.
     ...(loaded && openingWeight ? { openingWeight } : {}),
+    // Only meaningful where there is a number to invert.
+    ...(loaded && inverseLoad ? { inverseLoad: true } : {}),
   };
 }
 

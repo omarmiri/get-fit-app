@@ -489,6 +489,78 @@ const BIRD_DOG: Exercise = {
   },
 };
 
+/* ------------------------------------------------------- assisted movements */
+
+/*
+ * The first two built-ins where a bigger number means an easier set.
+ *
+ * Both live on counterweighted machines: the stack takes your bodyweight off,
+ * so progress is the number going *down* and `inverseLoad` tells the
+ * progression engine to run that way. Without it an easy set would earn more
+ * assistance — see `domain/progression.ts`.
+ *
+ * No `bodyweightFactor`: the estimate it feeds is a fraction of bodyweight to
+ * lift, which is the wrong quantity entirely here. Someone with no history
+ * starts by finding a setting that lets them make the reps, which is a thing
+ * the machine tells them faster than the app could.
+ */
+const ASSISTED_PULLUP: Exercise = {
+  id: 'assistedpullup',
+  name: 'Assisted pull-up',
+  summary:
+    'Kneel or stand on the pad and pull yourself up to the bar, with the machine taking some of your weight.',
+  alternative: 'Lat pulldown',
+  sets: 3,
+  repRange: '6–10',
+  repMin: 6,
+  repMax: 10,
+  defaultReps: 8,
+  repMetric: 'reps',
+  loaded: true,
+  inverseLoad: true,
+  restSeconds: 90,
+  muscles: ['Lats', 'Biceps', 'Upper back'],
+  stations: [{ stationId: 'assistedpullup' }, { stationId: 'latpulldownmachine', loadFactor: 0.5 }],
+  cues: {
+    setup:
+      'Set the assist, grip slightly wider than your shoulders, and kneel or stand on the pad with your arms straight.',
+    execute:
+      'Pull your chest toward the bar and drive your elbows down to your sides, then lower all the way to a straight-arm hang.',
+    avoid: 'Stopping halfway down — the bottom of the rep is where most of the strength is built.',
+  },
+  tips: [
+    'The number is how much help you are getting, so a lower setting is harder. Progress is that number coming down.',
+    'If you cannot make six reps, add assistance rather than cutting the range short.',
+  ],
+};
+
+const ASSISTED_DIP: Exercise = {
+  id: 'assisteddip',
+  name: 'Assisted dip',
+  summary: 'Hold yourself up on two parallel bars and lower until your elbows bend to about 90 degrees.',
+  alternative: 'Incline push-up',
+  sets: 3,
+  repRange: '6–10',
+  repMin: 6,
+  repMax: 10,
+  defaultReps: 8,
+  repMetric: 'reps',
+  loaded: true,
+  inverseLoad: true,
+  restSeconds: 90,
+  muscles: ['Chest', 'Triceps', 'Shoulders'],
+  stations: [{ stationId: 'dipstation' }, { stationId: 'chestpressmachine', loadFactor: 0.6 }],
+  cues: {
+    setup:
+      'Set the assist, grip the bars and start with your arms straight and your shoulders down away from your ears.',
+    execute:
+      'Lower under control until your elbows reach about 90 degrees, then press back up to straight arms.',
+    avoid:
+      'Dropping until you feel a stretch across the front of the shoulder — depth past 90 degrees is where dips hurt people.',
+  },
+  tips: ['Leaning forward works the chest more; staying upright works the triceps more.'],
+};
+
 /* ---------------------------------------------------------------- groupings */
 
 export const STRENGTH_A: readonly Exercise[] = [
@@ -512,7 +584,16 @@ export const STRENGTH_B: readonly Exercise[] = [
 export const CORE: readonly Exercise[] = [PLANK, DEAD_BUG, BIRD_DOG];
 
 /** Every exercise the app knows about, in a stable order. */
-export const ALL_EXERCISES: readonly Exercise[] = [...STRENGTH_A, ...STRENGTH_B, ...CORE];
+/**
+ * Movements the built-in plan does not use but the app knows.
+ *
+ * They exist so an imported plan can reference them by id and inherit real
+ * cues, station mappings and — for the assisted pair — the load direction,
+ * rather than having to define all of that itself.
+ */
+export const EXTRAS: readonly Exercise[] = [ASSISTED_PULLUP, ASSISTED_DIP];
+
+export const ALL_EXERCISES: readonly Exercise[] = [...STRENGTH_A, ...STRENGTH_B, ...CORE, ...EXTRAS];
 
 const BY_ID = new Map<string, Exercise>(ALL_EXERCISES.map((e) => [e.id, e]));
 

@@ -96,25 +96,33 @@ export function recommend(
   const hardest = hardestEffort(last.efforts);
 
   if (isStalled(blocks, unit)) {
-    const deloaded = roundToUsableIncrement(weight * (1 - DELOAD_FRACTION), unit);
+    // A deload makes the movement easier, which on an assisted machine means
+    // *more* counterweight — the opposite arithmetic to a barbell.
+    const factor = exercise.inverseLoad ? 1 + DELOAD_FRACTION : 1 - DELOAD_FRACTION;
+    const deloaded = Math.max(0, roundToUsableIncrement(weight * factor, unit));
+
     return {
-      weight: Math.max(0, deloaded),
+      weight: deloaded,
       reps: exercise.repMin,
       unit,
       kind: 'deload',
-      reason: `Stuck at ${format(weight, unit)} for ${STAGNATION_SESSIONS} sessions. Drop to ${format(deloaded, unit)} and build back up.`,
+      reason: exercise.inverseLoad
+        ? `Stuck at ${format(weight, unit)} assist for ${STAGNATION_SESSIONS} sessions. Take more help — ${format(deloaded, unit)} — and build back down.`
+        : `Stuck at ${format(weight, unit)} for ${STAGNATION_SESSIONS} sessions. Drop to ${format(deloaded, unit)} and build back up.`,
     };
   }
 
   // Every set reached the top of the range, and none of them was maximal.
   if (topReps >= exercise.repMax && hardest !== 'hard') {
-    const next = increaseFrom(weight, unit);
+    const next = harderThan(exercise, weight, unit);
     return {
       weight: next,
       reps: exercise.repMin,
       unit,
       kind: 'add-weight',
-      reason: `${exercise.repMax} reps at ${format(weight, unit)} last time${hardest === 'easy' ? ', and it felt easy' : ''}. Go to ${format(next, unit)}.`,
+      reason: exercise.inverseLoad
+        ? `${exercise.repMax} reps at ${format(weight, unit)} assist last time${hardest === 'easy' ? ', and it felt easy' : ''}. Drop the assist to ${format(next, unit)}.`
+        : `${exercise.repMax} reps at ${format(weight, unit)} last time${hardest === 'easy' ? ', and it felt easy' : ''}. Go to ${format(next, unit)}.`,
     };
   }
 
@@ -209,6 +217,34 @@ export function increaseFrom(weight: number, unit: WeightUnit): number {
   const step = unit === 'lb' ? 5 : 2.5;
   const raised = roundToUsableIncrement(weight * (1 + INCREASE_FRACTION), unit);
   return raised > weight ? raised : roundForDisplay(weight + step, unit);
+}
+
+/** Next weight down: the mirror of `increaseFrom`, floored at zero. */
+export function decreaseFrom(weight: number, unit: WeightUnit): number {
+  const step = unit === 'lb' ? 5 : 2.5;
+  const lowered = roundToUsableIncrement(weight * (1 - INCREASE_FRACTION), unit);
+  const next = lowered < weight ? lowered : roundForDisplay(weight - step, unit);
+  return Math.max(0, next);
+}
+
+/**
+ * The load that makes this movement *harder*.
+ *
+ * On an assisted machine the stack is counterweight, so harder means less of
+ * it. Everywhere the engine wants to progress someone it asks for this rather
+ * than for "more weight", which is the distinction that stops assisted work
+ * progressing backwards.
+ *
+ * Zero is a real answer here and worth reaching: no assistance at all is an
+ * unassisted pull-up.
+ */
+export function harderThan(exercise: Exercise, weight: number, unit: WeightUnit): number {
+  return exercise.inverseLoad ? decreaseFrom(weight, unit) : increaseFrom(weight, unit);
+}
+
+/** The load that makes it easier — what a deload wants. */
+export function easierThan(exercise: Exercise, weight: number, unit: WeightUnit): number {
+  return exercise.inverseLoad ? increaseFrom(weight, unit) : decreaseFrom(weight, unit);
 }
 
 /**
@@ -393,11 +429,18 @@ export function adjustAfterSet(
     };
   }
 
-  const delta = rampJump(exercise, effort, unit);
-  const weight = clampWeight(lastWeight + delta);
+  const jump = rampJump(exercise, effort, unit);
+  // On an assisted machine the ramp runs downward: less counterweight is more
+  // work. Floored at zero, which is a real destination rather than a limit —
+  // no assistance is an unassisted rep.
+  const weight = exercise.inverseLoad
+    ? Math.max(0, clampWeight(lastWeight - jump))
+    : clampWeight(lastWeight + jump);
 
-  // The clamp can swallow the increase at the top of the range.
-  if (weight <= lastWeight) {
+  const moved = exercise.inverseLoad ? weight < lastWeight : weight > lastWeight;
+
+  // The clamp can swallow the change at either end of the range.
+  if (!moved) {
     return {
       weight: lastWeight,
       delta: 0,
@@ -406,13 +449,18 @@ export function adjustAfterSet(
     };
   }
 
+  const size = Math.abs(weight - lastWeight);
+
   return {
     weight,
     delta: weight - lastWeight,
     kind: 'add-weight',
-    reason:
-      effort === 'easy'
-        ? `Last set felt easy — up ${format(weight - lastWeight, unit)} to ${format(weight, unit)}.`
+    reason: exercise.inverseLoad
+      ? effort === 'easy'
+        ? `Last set felt easy — ${format(size, unit)} less help, down to ${format(weight, unit)}.`
+        : `Last set was on target — a little less help, ${format(weight, unit)}. Take more back if that is too much.`
+      : effort === 'easy'
+        ? `Last set felt easy — up ${format(size, unit)} to ${format(weight, unit)}.`
         : `Last set was on target — nudged up to ${format(weight, unit)}. Dial it back if that is too much.`,
   };
 }

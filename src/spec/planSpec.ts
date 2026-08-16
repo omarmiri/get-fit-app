@@ -248,6 +248,7 @@ it. A defined movement renders exactly like a built-in one.
 | \`muscles\` | string[] | Primary muscles worked. |
 | \`tips\` | string[] | Up to 6 extra coaching notes. |
 | \`openingWeight\` | \`{ value, unit }\` | See below. |
+| \`inverseLoad\` | boolean | **Set this for assisted machines and band-assisted work**, where a higher number means *easier*. See below. |
 
 Write all three cues. They are the difference between a movement someone
 performs correctly and one they perform approximately. If you leave them out
@@ -281,6 +282,21 @@ Bias it low. Starting too light costs one set; starting too heavy on an
 unfamiliar movement costs weeks. The app rounds it down to a loadable
 increment and presents it as a floor to work up from. It is ignored on
 movements where \`loaded\` is \`false\`.
+
+**Assisted movements need \`inverseLoad: true\`.** On an assisted pull-up or dip
+machine the stack is counterweight — 80 lb is *easier* than 40, and getting
+stronger means the number going down. Band-assisted work is the same. Without
+this flag the app progresses those movements backwards: an easy set earns more
+assistance. With it, everything flips correctly — progression, deloads, and the
+direction the opening estimate rounds.
+
+\`\`\`json
+{ "name": "Assisted pull-up", "loaded": true, "inverseLoad": true,
+  "openingWeight": { "value": 80, "unit": "lb" } }
+\`\`\`
+
+Bias an assisted opening weight *high*, not low — more help is the cautious
+mistake there, the mirror of everything above.
 
 **Reps are a range, not a number.** Give \`repMin\` and \`repMax\`. The app shows
 the range and progresses the user through it before adding load.

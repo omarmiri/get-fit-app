@@ -250,6 +250,20 @@ export interface Exercise {
   readonly repMetric: RepMetric;
   /** Whether this movement is normally loaded. Bodyweight holds are not. */
   readonly loaded: boolean;
+  /**
+   * True when a higher number makes the movement *easier*.
+   *
+   * Assisted pull-up and dip machines are counterweighted: the stack takes
+   * your bodyweight off, so 80 lb is easier than 40, and getting stronger
+   * means the number going *down*. Band-assisted work is the same idea.
+   *
+   * Without this the progression engine works confidently backwards — an easy
+   * set earns more assistance, which is a reason to add weight applied in the
+   * direction that removes the difficulty. It also flips which way the
+   * starting-weight estimate should round: down is the safe direction for a
+   * barbell and the dangerous one here.
+   */
+  readonly inverseLoad?: boolean;
   readonly restSeconds: number;
   readonly cues: ExerciseCues;
   /** Roadmap: freeform coaching notes, rendered as a list under the cues. */

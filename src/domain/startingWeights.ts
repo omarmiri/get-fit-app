@@ -73,7 +73,7 @@ export function startingWeight(
   const authored = exercise.openingWeight;
   if (authored && authored.value > 0) {
     const converted = convertWeight(authored.value, authored.unit, unit);
-    return floorToIncrement(converted * (option?.loadFactor ?? 1), unit);
+    return safeIncrement(converted * (option?.loadFactor ?? 1), unit, exercise.inverseLoad === true);
   }
 
   if (!profile) return null;
@@ -88,7 +88,27 @@ export function startingWeight(
   // per-hand number rather than the machine equivalent.
   const adjusted = scaled * (option?.loadFactor ?? 1);
 
-  return floorToIncrement(adjusted, unit);
+  return safeIncrement(adjusted, unit, exercise.inverseLoad === true);
+}
+
+/**
+ * Round in whichever direction is the cautious one.
+ *
+ * The whole file rounds *down*, because on a barbell less weight is the safe
+ * mistake. On an assisted machine the number is counterweight, so down means
+ * *less help* — the same rounding that protects a novice on a leg press is the
+ * one that drops them onto an unassisted pull-up. Erring light means erring
+ * upward there.
+ */
+function safeIncrement(value: number, unit: WeightUnit, inverse: boolean): number {
+  return inverse ? ceilToIncrement(value, unit) : floorToIncrement(value, unit);
+}
+
+/** Round up to a loadable increment — the cautious direction for assisted work. */
+export function ceilToIncrement(value: number, unit: WeightUnit): number {
+  const step = unit === 'lb' ? 5 : 2.5;
+  const ceiled = Math.ceil(value / step) * step;
+  return Math.max(0, roundToUsableIncrement(ceiled, unit));
 }
 
 /**
