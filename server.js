@@ -249,9 +249,10 @@ app.post('/api/plan/generate', auth.attachUser, async (req, res) => {
    */
   if (auth.configured()) {
     if (!req.user) {
-      return res
-        .status(401)
-        .json({ error: 'Sign in to generate a plan here, or write one with your own LLM.', code: 'auth_required' });
+      return res.status(401).json({
+        error: 'Sign in to generate a plan here, or write one with your own LLM.',
+        code: 'auth_required',
+      });
     }
     try {
       await meterPlanGeneration(req.user.id);

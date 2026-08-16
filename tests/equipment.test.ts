@@ -115,4 +115,3 @@ describe('plan station references', () => {
     expect(PLAN.thu.modalityStations).toContain('uprightbike');
   });
 });
-

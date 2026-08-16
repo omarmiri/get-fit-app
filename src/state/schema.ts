@@ -415,8 +415,7 @@ function parseLibrary(raw: Record<string, unknown>): {
   }
 
   const rawActive = raw['activePlanId'];
-  const activePlanId =
-    typeof rawActive === 'string' && seen.has(rawActive) ? rawActive : null;
+  const activePlanId = typeof rawActive === 'string' && seen.has(rawActive) ? rawActive : null;
 
   return { plans, activePlanId };
 }

@@ -46,6 +46,4 @@ export interface SupabaseHeartbeatOptions {
  * Start beating against the Supabase project so it is not paused for
  * inactivity. Returns a stop function, or `null` when inactive.
  */
-export function startSupabaseHeartbeat(
-  options?: SupabaseHeartbeatOptions,
-): (() => void) | null;
+export function startSupabaseHeartbeat(options?: SupabaseHeartbeatOptions): (() => void) | null;

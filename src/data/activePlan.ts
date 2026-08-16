@@ -75,8 +75,7 @@ function resolveDay(day: UserPlanDay, plan: UserPlan): PlanDay | null {
    * actually reads before starting, and "how do I do the cardio" is not an
    * optional detail.
    */
-  const withModality =
-    day.modality && !day.modalityStations?.length ? [...outline, day.modality] : outline;
+  const withModality = day.modality && !day.modalityStations?.length ? [...outline, day.modality] : outline;
 
   return {
     key: day.dayKey,

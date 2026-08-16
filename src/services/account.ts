@@ -146,9 +146,7 @@ export async function signInWithGoogle(): Promise<void> {
    * already had one would produce something neither side can parse.
    */
   const returnTo = `${location.origin}${location.pathname}`;
-  location.assign(
-    `${url}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(returnTo)}`,
-  );
+  location.assign(`${url}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(returnTo)}`);
 }
 
 /**

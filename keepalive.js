@@ -236,7 +236,9 @@ export function startSupabaseHeartbeat({ url, anonKey, log = console.log } = {})
   const timer = setInterval(() => void beat(), HEARTBEAT_INTERVAL_MS);
   timer.unref?.();
 
-  log(`[heartbeat] supabase every ${HEARTBEAT_INTERVAL_MS / 3_600_000}h, first in ${HEARTBEAT_DELAY_MS / 1000}s`);
+  log(
+    `[heartbeat] supabase every ${HEARTBEAT_INTERVAL_MS / 3_600_000}h, first in ${HEARTBEAT_DELAY_MS / 1000}s`,
+  );
 
   return () => {
     clearTimeout(first);

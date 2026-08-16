@@ -147,7 +147,9 @@ export function trendableExercises(state: AppState): readonly Exercise[] {
       if (set.weight > 0) logged.add(set.exerciseId);
     }
   }
-  return catalogueFor(exerciseSourceOf(state)).filter((exercise) => isTrendable(exercise) && logged.has(exercise.id));
+  return catalogueFor(exerciseSourceOf(state)).filter(
+    (exercise) => isTrendable(exercise) && logged.has(exercise.id),
+  );
 }
 
 /** Consecutive days ending today (or yesterday) with a logged session. */

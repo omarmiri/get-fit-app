@@ -1,9 +1,4 @@
-import {
-  getConditionsText,
-  getNotes,
-  setConditionsText,
-  setNotes,
-} from '@/state/ephemeral';
+import { getConditionsText, getNotes, setConditionsText, setNotes } from '@/state/ephemeral';
 import { card, div, el, eyebrow, text } from '../dom';
 
 /**

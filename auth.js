@@ -288,7 +288,10 @@ async function post(path, body) {
 
   if (!response.ok) {
     const message =
-      payload?.error_description ?? payload?.msg ?? payload?.message ?? `Sign-in failed (${response.status}).`;
+      payload?.error_description ??
+      payload?.msg ??
+      payload?.message ??
+      `Sign-in failed (${response.status}).`;
 
     /*
      * A 4xx from the identity provider is about the request, so it is passed

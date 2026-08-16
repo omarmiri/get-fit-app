@@ -21,13 +21,13 @@ npm run dev
 
 Then open http://localhost:5173.
 
-| Command          | What it does                                              |
-| ---------------- | --------------------------------------------------------- |
-| `npm run dev`    | Vite dev server with hot reload                           |
-| `npm run build`  | Typecheck, then build to `dist/`                          |
-| `npm start`      | Serve the built `dist/` on port 3000 — what Render runs   |
-| `npm test`       | Run the test suite                                        |
-| `npm run verify` | Typecheck, lint, test and build — run this before pushing |
+| Command          | What it does                                                       |
+| ---------------- | ------------------------------------------------------------------ |
+| `npm run dev`    | Vite dev server with hot reload                                    |
+| `npm run build`  | Typecheck, then build to `dist/`                                   |
+| `npm start`      | Serve the built `dist/` on port 3000 — what Render runs            |
+| `npm test`       | Run the test suite                                                 |
+| `npm run verify` | Typecheck, lint, format-check, test and build — everything CI runs |
 
 `npm start` requires a build first; it exits with a clear message if `dist/` is missing.
 
@@ -250,10 +250,10 @@ form.
 
 Two ways in, both landing on the same parser and the same validator:
 
-| Route | For |
-| --- | --- |
-| **Copy prompt → paste the answer** | The normal path. The prompt carries the full format plus your gym, profile and health context. |
-| **Open a plan file** | Phones, and whatever the model handed you as a download. On Android this covers Google Drive too, since Drive mounts in the system file picker. |
+| Route                              | For                                                                                                                                             |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Copy prompt → paste the answer** | The normal path. The prompt carries the full format plus your gym, profile and health context.                                                  |
+| **Open a plan file**               | Phones, and whatever the model handed you as a download. On Android this covers Google Drive too, since Drive mounts in the system file picker. |
 
 Both work offline and neither involves a third party.
 
@@ -267,7 +267,7 @@ Three things stay with the app, and the format gives an author no way to
 override them:
 
 - **Progression.** Loads after the first session come from your logged history
-  via `domain/progression.ts`. An author may name an *opening* weight for a
+  via `domain/progression.ts`. An author may name an _opening_ weight for a
   movement you have never done; it is used once, rounded down like every other
   starting estimate, and then never consulted again. The model says
   _dumbbell floor press, 8–12_; the app decides _30 lb_ from your own history.
@@ -309,7 +309,7 @@ deterministic checks either way.
   back-to-back strength days, equipment you have marked absent, defined
   movements that no day uses, weighted movements naming no equipment.
 
-The app cannot vouch for the *training advice* in a file someone's chatbot
+The app cannot vouch for the _training advice_ in a file someone's chatbot
 wrote, and does not try to. What it guarantees is that the file will not break
 the app, will not silently lose a day, and will not prescribe nothing on a day
 claiming to be a workout — and that you see everything it noticed before you

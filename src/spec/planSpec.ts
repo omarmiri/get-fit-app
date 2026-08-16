@@ -293,8 +293,7 @@ function rulesSection(): string {
 
 function catalogueSection(): string {
   const exercises = ALL_EXERCISES.map(
-    (exercise) =>
-      `| \`${exercise.id}\` | ${exercise.name} | ${(exercise.muscles ?? []).join(', ') || '—'} |`,
+    (exercise) => `| \`${exercise.id}\` | ${exercise.name} | ${(exercise.muscles ?? []).join(', ') || '—'} |`,
   ).join('\n');
 
   const stations = ALL_STATIONS.map(
@@ -362,7 +361,11 @@ function exampleSection(): string {
         type: 'strength',
         sub: 'Full body · 45 min',
         note: 'Rest 60–90 seconds between sets. Stop each set one or two reps before your form breaks down.',
-        outline: ['Five minutes easy on any machine to warm up', 'Four movements, three sets each', 'Stretch for five minutes'],
+        outline: [
+          'Five minutes easy on any machine to warm up',
+          'Four movements, three sets each',
+          'Stretch for five minutes',
+        ],
         aerobic: false,
         exerciseFormat: 'sets',
         exerciseIds: ['legpress', 'db-floor-press', 'seatedrow', 'plank'],
