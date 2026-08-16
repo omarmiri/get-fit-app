@@ -151,6 +151,26 @@ describe('the prompt handed to the user', () => {
     expect(buildPrompt({ gym: 'Full commercial gym' })).not.toContain('Do not stop to ask');
   });
 
+  it('passes on the movements someone actually wants to do', () => {
+    /*
+     * Adherence is the whole game: the best-designed week is worthless if it
+     * is full of movements the person dreads. Free text rather than a
+     * checklist, because the useful answers are ones no list would contain.
+     */
+    const prompt = buildPrompt({
+      gym: 'A gym',
+      likes: 'kettlebell swings and rowing, working up to a pull-up, no burpees',
+    });
+
+    expect(prompt).toContain('Movements I enjoy or want to avoid');
+    expect(prompt).toContain('working up to a pull-up');
+    expect(prompt).toContain('no burpees');
+  });
+
+  it('says nothing about movements when none were named', () => {
+    expect(buildPrompt({ gym: 'A gym' })).not.toContain('Movements I enjoy');
+  });
+
   it('names crossed-off equipment rather than claiming the rest is present', () => {
     const prompt = buildPrompt({ gym: 'A gym', missingEquipment: ['Squat rack', 'Pool — laps'] });
 

@@ -231,6 +231,14 @@ export class AppStore {
     });
   }
 
+  /** Movements the user wants included or avoided, in their own words. */
+  setLikes(likes: string): void {
+    const trimmed = likes.trim();
+    const { likes: _previous, ...rest } = this.#state.prefs;
+
+    this.#commit({ ...this.#state, prefs: trimmed ? { ...rest, likes: trimmed } : rest });
+  }
+
   /**
    * Where the user trains, in their own words.
    *

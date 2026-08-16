@@ -41,6 +41,8 @@ import { PLAN_FORMAT_VERSION, PLAN_KIND } from '../domain/planFormat';
 export interface PromptContext {
   /** Where they train, in their own words. */
   readonly gym?: string;
+  /** Movements they want included or avoided, in their own words. */
+  readonly likes?: string;
   readonly age?: number;
   readonly bodyweight?: number;
   readonly bodyweightUnit?: string;
@@ -76,6 +78,7 @@ export function buildPrompt(context: PromptContext, siteUrl?: string): string {
   if (context.conditions?.length) person.push(`- Health context: ${context.conditions.join(', ')}`);
   if (context.notes) person.push(`- This week: ${context.notes}`);
   if (context.gym) person.push(`- Where I train: ${context.gym}`);
+  if (context.likes) person.push(`- Movements I enjoy or want to avoid: ${context.likes}`);
   if (context.missingEquipment?.length) {
     person.push(`- My gym does NOT have: ${context.missingEquipment.join(', ')}`);
   }

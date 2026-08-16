@@ -31,7 +31,7 @@ import { isWeightUnit } from '@/domain/units';
  *   add a step whenever a persisted shape changes.
  */
 
-export const CURRENT_SCHEMA_VERSION = 12;
+export const CURRENT_SCHEMA_VERSION = 13;
 
 /**
  * Ceiling on saved plans.
@@ -273,6 +273,9 @@ function parsePreferences(raw: unknown): Preferences {
 
   const gymProfile = parseGymProfile(raw['gymProfile']);
 
+  const rawLikes = raw['likes'];
+  const likes = typeof rawLikes === 'string' ? rawLikes.trim().slice(0, MAX_GYM_LENGTH) : '';
+
   const rawGym = raw['gym'];
   const gym = typeof rawGym === 'string' ? rawGym.trim().slice(0, MAX_GYM_LENGTH) : '';
 
@@ -296,6 +299,7 @@ function parsePreferences(raw: unknown): Preferences {
     ...(profile === undefined ? {} : { profile }),
     ...(gym.length === 0 ? {} : { gym }),
     ...(gymProfile === undefined ? {} : { gymProfile }),
+    ...(likes.length === 0 ? {} : { likes }),
     ...(raw['onboarded'] === true || profile !== undefined ? { onboarded: true } : {}),
     ...(raw['welcomed'] === true ? { welcomed: true } : {}),
   };

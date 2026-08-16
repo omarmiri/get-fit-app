@@ -521,6 +521,20 @@ export interface Preferences {
    */
   readonly gymProfile?: GymProfile;
   /**
+   * Movements the user actually wants to do, in their own words.
+   *
+   * Free text, and deliberately not a checklist. The useful answers here are
+   * things no fixed list would contain — "I want to work up to a pull-up",
+   * "kettlebell swings, and please no burpees", "I like rowing more than
+   * running". A model can use all of that; a set of checkboxes could not
+   * express any of it.
+   *
+   * Kept, unlike health context, because it is a preference rather than a
+   * medical detail and having to retype it every time would be the reason it
+   * ends up empty.
+   */
+  readonly likes?: string;
+  /**
    * Per-exercise station preference, remembered across sessions.
    *
    * Once you have swapped an exercise to the machine you actually like, the

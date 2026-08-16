@@ -227,6 +227,7 @@ async function copyPrompt(context: ViewContext): Promise<void> {
   const prompt = buildPrompt(
     {
       ...(prefs.gym ? { gym: prefs.gym } : {}),
+      ...(prefs.likes ? { likes: prefs.likes } : {}),
       ...(profile
         ? {
             age: profile.age,

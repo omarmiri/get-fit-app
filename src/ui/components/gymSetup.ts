@@ -51,10 +51,10 @@ export function renderGymSetup(context: ViewContext): HTMLElement {
   };
 
   return card([
-    eyebrow('Where do you train?'),
+    eyebrow('Your training setup'),
     text(
       'prose',
-      'This is what makes a generated plan usable — it decides which movements are even possible. Nothing here is required, and you can change it later.',
+      'This is what makes a generated plan usable — it decides which movements are even possible, and which ones you will actually keep doing. Nothing here is required, and you can change it later.',
     ),
 
     div('gen__group', [
@@ -131,7 +131,43 @@ export function renderGymSetup(context: ViewContext): HTMLElement {
       (value) => `${value}`,
     ),
 
+    renderLikes(context),
     renderSummary(context, describeGym(profile)),
+  ]);
+}
+
+/**
+ * Movements the user actually wants to do.
+ *
+ * Free text rather than a checklist, because the useful answers are the ones
+ * no list would contain: "I want to work up to a pull-up", "kettlebell swings
+ * and please no burpees", "I would rather row than run". A model can act on
+ * every one of those. A set of checkboxes could not express any of them.
+ *
+ * Adherence is the whole game — the best-designed week is worthless if it is
+ * full of movements someone dreads — so this is asked plainly rather than
+ * inferred from what they log.
+ */
+function renderLikes(context: ViewContext): HTMLElement {
+  return div('gen__group', [
+    eyebrow('Movements you enjoy, or would rather avoid'),
+    el('textarea', {
+      class: 'gen__input gen__input--area',
+      text: context.state.prefs.likes ?? '',
+      attrs: {
+        rows: 3,
+        autocomplete: 'off',
+        placeholder:
+          'e.g. I like kettlebell swings and rowing, want to work up to a pull-up, and would rather not run',
+        'aria-label': 'Movements you enjoy or want to avoid',
+      },
+      on: {
+        change: (event) => {
+          context.store.setLikes((event.target as HTMLTextAreaElement).value);
+        },
+      },
+    }),
+    text('club__hint', 'Included in the prompt. The plan you keep doing beats the plan that looks best.'),
   ]);
 }
 
