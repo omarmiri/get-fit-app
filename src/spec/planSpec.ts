@@ -55,6 +55,18 @@ export interface PromptContext {
 }
 
 /**
+ * Where a finished plan can be posted, for a model able to make the call.
+ *
+ * Only the push id travels here. The poll token that reads the session stays
+ * in the browser — see the note on the two ids in `sessions.js`.
+ */
+export interface DropTarget {
+  readonly pushId: string;
+  /** Absolute, because the model is not on this origin. */
+  readonly endpoint: string;
+}
+
+/**
  * A ready-to-paste prompt for whichever LLM the user prefers.
  *
  * Carries the full contract inline rather than only linking to it. A link
@@ -67,7 +79,7 @@ export interface PromptContext {
  * The user's own details go at the top, where they are least likely to be lost
  * in a long document.
  */
-export function buildPrompt(context: PromptContext, siteUrl?: string): string {
+export function buildPrompt(context: PromptContext, siteUrl?: string, drop?: DropTarget): string {
   const person: string[] = [];
 
   if (context.age) person.push(`- Age: ${context.age}`);
@@ -108,13 +120,59 @@ export function buildPrompt(context: PromptContext, siteUrl?: string): string {
 ABOUT ME
 ${about}
 ${gymPrompt}
-Reply with the JSON only, in a single code block. The complete format follows.${
+${deliverySection(drop)}The complete format follows.${
     siteUrl ? ` The current version of this specification is also at ${siteUrl}/llms.txt.` : ''
   }
 
 ---
 
 ${buildLlmsTxt()}`;
+}
+
+/**
+ * How the finished plan gets back to the app.
+ *
+ * ## Why this asks for both
+ *
+ * Most chat products cannot POST. Browsing tools fetch, code sandboxes have no
+ * network, and a model in a plain chat window given only an endpoint will
+ * either refuse, print a curl command, or — the expensive one — announce that
+ * it has sent the plan when nothing was sent. The user then waits for
+ * something that is never coming and concludes the app is broken.
+ *
+ * So the instruction asks for the push *and* requires the JSON in the reply
+ * either way. A tool-capable client does both and the app picks it up
+ * instantly; a plain chat window does the half it can, and the user pastes.
+ * Neither path is a failure mode, and the app is never the one guessing which
+ * happened — it either received a push or it did not, and the screen says so
+ * rather than trusting anything the model claims.
+ *
+ * The honesty instruction is there for the same reason. A model that quietly
+ * imagines it made a network call is worse than one that says it cannot.
+ */
+function deliverySection(drop?: DropTarget): string {
+  if (!drop) return 'Reply with the JSON only, in a single code block. ';
+
+  return `DELIVERING THE PLAN
+
+Two things, in this order:
+
+1. If — and only if — you can make HTTP requests, POST the plan JSON to:
+
+   ${drop.endpoint}
+
+   Send it as the request body with \`Content-Type: application/json\`, either
+   as the plan object itself or wrapped as {"plan": {...}}. A 201 means the app
+   has it. If you get a 4xx, the response body says what was wrong with the
+   plan — fix it and post the corrected version.
+
+   If you cannot make HTTP requests, skip this step and say so plainly. Do not
+   say you have sent it when you have not.
+
+2. Either way, reply with the JSON in a single code block, so I can paste it in
+   myself if the POST did not happen.
+
+`;
 }
 
 /** Machine-readable catalogue, emitted to `/catalog.json`. */

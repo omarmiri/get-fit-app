@@ -3,6 +3,7 @@ import { ALL_STATIONS, stationName } from '@/data/equipment';
 import { type PlanValidation, validatePlan } from '@/domain/planValidation';
 import { parsePortablePlan } from '@/domain/planFormat';
 import { buildPrompt } from '@/spec/planSpec';
+import { clearDrop, currentDrop, dropEndpoint, openDrop, pollDrop } from '@/services/planDrop';
 import { conditionsList, getNotes } from '@/state/ephemeral';
 import { card, div, el, eyebrow, text } from '../dom';
 import { toast } from '../toast';
@@ -36,6 +37,10 @@ interface ImportState {
   error: string | null;
   /** Whether the paste box is showing, so the card stays compact until needed. */
   open: boolean;
+  /** The push id currently in the copied prompt, if a session is open. */
+  pushId: string | null;
+  /** Highest version already seen, so an arrival is announced exactly once. */
+  seenVersion: number;
 }
 
 const state: ImportState = {
@@ -44,7 +49,54 @@ const state: ImportState = {
   validation: null,
   error: null,
   open: false,
+  pushId: currentDrop()?.pushId ?? null,
+  seenVersion: 0,
 };
+
+/**
+ * Watching for a pushed plan.
+ *
+ * Only runs while a card that shows the session is on screen, and stops the
+ * moment one arrives — this is not a background sync, it is a screen waiting
+ * for a specific thing to happen.
+ */
+let watcher: ReturnType<typeof setInterval> | null = null;
+const POLL_MS = 4000;
+
+function stopWatching(): void {
+  if (watcher !== null) {
+    clearInterval(watcher);
+    watcher = null;
+  }
+}
+
+function startWatching(context: ViewContext): void {
+  if (watcher !== null || !state.pushId) return;
+
+  watcher = setInterval(() => {
+    void (async () => {
+      try {
+        const plans = await pollDrop();
+        const latest = plans.at(-1);
+        if (!latest || latest.version <= state.seenVersion) return;
+
+        state.seenVersion = latest.version;
+        stopWatching();
+        /*
+         * A pushed plan goes through the same validator as a pasted one. The
+         * server already parsed it — that is how it was stored — but it has no
+         * opinion on whether the plan suits *this* device's equipment, which
+         * is what `validatePlan` answers.
+         */
+        reviewPlan(context, latest.plan);
+        toast(latest.version > 1 ? `Version ${latest.version} arrived` : 'Your plan arrived');
+      } catch {
+        // A failed poll is not worth surfacing: the next one is four seconds
+        // away, and the paste box is right there either way.
+      }
+    })();
+  }, POLL_MS);
+}
 
 /** Reset between visits so a stale candidate is not offered on the next open. */
 export function resetPlanImport(): void {
@@ -53,6 +105,7 @@ export function resetPlanImport(): void {
   state.validation = null;
   state.error = null;
   state.open = false;
+  stopWatching();
 }
 
 export function renderPlanImport(context: ViewContext): HTMLElement {
@@ -86,6 +139,8 @@ export function renderPlanImport(context: ViewContext): HTMLElement {
       renderFileButton(context),
     ]),
 
+    state.pushId && !state.candidate ? renderWaiting(context) : null,
+
     state.open ? renderPasteBox(context) : null,
 
     state.error ? div('notice notice--warn', [text('notice__body', state.error)]) : null,
@@ -108,6 +163,55 @@ export function renderPlanImport(context: ViewContext): HTMLElement {
           },
         })
       : null,
+  ]);
+}
+
+/**
+ * What the app is waiting for, and what to do if it never comes.
+ *
+ * ## Why this screen carries the whole design
+ *
+ * Most chat products cannot make HTTP requests, and a model asked to POST from
+ * one will sometimes say it did. If the app trusted that, the user would sit
+ * looking at a spinner for a plan that was never sent. So the app never asks
+ * the model whether it worked — it either received a push or it did not, and
+ * this card says which, with the paste box one tap away the entire time.
+ *
+ * That is what makes it safe to ask for the push at all. The optimistic path
+ * costs nothing when it fails, because the fallback was never hidden.
+ */
+function renderWaiting(context: ViewContext): HTMLElement {
+  startWatching(context);
+
+  return div('notice', [
+    text('notice__body', `Waiting for your plan. The prompt you copied asks your LLM to send it here.`),
+
+    // Shown because a model occasionally drops or mangles the id, and the user
+    // can then read it off the screen and correct it themselves.
+    div('gen__group', [
+      text('prose', `Session ${state.pushId ?? ''}`),
+      el('button', {
+        class: 'button button--ghost',
+        text: 'Start a new session',
+        attrs: { type: 'button' },
+        on: {
+          click: () => {
+            // Someone whose chat has gone wrong wants a clean id rather than a
+            // diagnosis of what the last one did.
+            clearDrop();
+            stopWatching();
+            state.pushId = null;
+            state.seenVersion = 0;
+            context.render();
+          },
+        },
+      }),
+    ]),
+
+    text(
+      'prose',
+      'If your LLM says it cannot send HTTP requests — most chat apps cannot — paste its reply below instead. Nothing is lost either way.',
+    ),
   ]);
 }
 
@@ -207,6 +311,18 @@ function review(context: ViewContext, input: string): void {
     return;
   }
 
+  reviewPlan(context, plan);
+}
+
+/**
+ * Everything a plan goes through once it is a plan, whichever way it arrived.
+ *
+ * Pushed and pasted plans meet here. A pushed one has already been through the
+ * same parser on the server — that is how it was stored — but parsing answers
+ * "is this a plan", and this answers "does it suit the gym this person
+ * actually trains in", which is a question only the device can settle.
+ */
+function reviewPlan(context: ViewContext, plan: UserPlan): void {
   const missing = context.state.prefs.missingStations ?? [];
   const validation = validatePlan(plan, { missingStationIds: missing });
 
@@ -214,7 +330,7 @@ function review(context: ViewContext, input: string): void {
   state.validation = validation;
   state.error = validation.ok
     ? null
-    : 'That plan has problems the app cannot work with. The details are below — ask your LLM to fix them and paste the new version.';
+    : 'That plan has problems the app cannot work with. The details are below — ask your LLM to fix them and send the new version.';
 
   context.render();
 }
@@ -223,6 +339,21 @@ async function copyPrompt(context: ViewContext): Promise<void> {
   const prefs = context.state.prefs;
   const profile = prefs.profile;
   const missing = new Set(prefs.missingStations ?? []);
+
+  /*
+   * Opening a session is best-effort. If it fails — offline, or the server is
+   * down — the prompt is still built and still works; it simply asks for the
+   * JSON without offering anywhere to post it. Refusing to copy a prompt
+   * because a convenience could not be arranged would be the wrong trade.
+   */
+  let drop: { pushId: string; endpoint: string } | undefined;
+  try {
+    const session = await openDrop();
+    drop = { pushId: session.pushId, endpoint: dropEndpoint(session.pushId) };
+    state.pushId = session.pushId;
+  } catch {
+    state.pushId = null;
+  }
 
   const prompt = buildPrompt(
     {
@@ -247,10 +378,14 @@ async function copyPrompt(context: ViewContext): Promise<void> {
         : {}),
     },
     location.origin,
+    drop,
   );
 
   try {
     await navigator.clipboard.writeText(prompt);
+    // Watching starts when the waiting card renders, not here — that way the
+    // clipboard failing below still leaves a session being watched.
+    context.render();
     toast(prefs.gym ? 'Prompt copied — paste it to your LLM' : 'Prompt copied. Tip: describe your gym above');
   } catch {
     /*
