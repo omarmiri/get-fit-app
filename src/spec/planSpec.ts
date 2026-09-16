@@ -80,32 +80,6 @@ export interface DropTarget {
  * in a long document.
  */
 /**
- * The short version, for someone who has connected the MCP server.
- *
- * The full prompt carries the whole contract inline — about 15kb — because a
- * plain chat model has no way to go and read it. A connected client does: it
- * calls `get_plan_format` itself. So the paste shrinks to the part the tools
- * cannot supply, which is the person and their session id.
- *
- * This is the actual payoff of connecting the server. Submitting without a
- * paste is convenient; not having to paste a specification into a chat window
- * every time is the thing people will notice.
- */
-export function buildBriefPrompt(context: PromptContext, pushId: string): string {
-  return `Please write me a one-week training plan for Rack & File.
-
-ABOUT ME
-${describe(context)}
-
-Use the rack-and-file tools: call get_plan_format for the specification, then
-submit_plan with sessionId "${pushId}" once the plan is written. If submit_plan
-rejects it, the error says what is wrong — fix it and submit again.
-
-If you do not have those tools available, say so and reply with the plan as
-JSON instead, and I will paste it in.`;
-}
-
-/**
  * The person, as bullet points, for whichever prompt is being built.
  *
  * Their own details go first in both, where they are least likely to be lost
@@ -130,6 +104,51 @@ function describe(context: PromptContext): string {
   return person.length > 0
     ? person.join('\n')
     : '- (I have not filled in my details — assume a general adult beginner and stay conservative.)';
+}
+
+/**
+ * The short version, for someone who has connected the MCP server.
+ *
+ * The full prompt carries the whole contract inline — about 15kb — because a
+ * plain chat model has no way to go and read it. A connected client does: it
+ * calls `get_plan_format` itself. So the paste shrinks to the part the tools
+ * cannot supply, which is the person and their session id.
+ *
+ * ## Why it names the site three times
+ *
+ * The first version of this said only "use the rack-and-file tools", which
+ * assumed the one thing it had no business assuming: that they were already
+ * there. A model without the connector could not find the app, could not find
+ * the format, and — because this prompt deliberately omits the specification —
+ * could not fall back to writing JSON either. It would have invented a shape
+ * and produced a file the parser rejects, which is a worse failure than
+ * refusing, because it looks like success until the import fails.
+ *
+ * So the prompt now degrades honestly through three rungs, and says where to
+ * go at each one: call the tools, or fetch the spec and reply with JSON, or
+ * say plainly that neither is possible so the user can reach for the long
+ * prompt instead. A model that can do none of it should say so rather than
+ * guess.
+ */
+export function buildBriefPrompt(context: PromptContext, pushId: string, siteUrl: string): string {
+  return `Please write me a one-week training plan for Rack & File (${siteUrl}).
+
+ABOUT ME
+${describe(context)}
+
+HOW TO SEND IT BACK
+
+If you have the rack-and-file tools — the MCP connector at ${siteUrl}/mcp —
+call get_plan_format for the specification, then submit_plan with sessionId
+"${pushId}". If submit_plan rejects the plan, the error says exactly what is
+wrong: fix it and submit again.
+
+If you do not have those tools but can fetch a URL, read ${siteUrl}/llms.txt
+for the format, then reply with the plan as JSON in a single code block and I
+will paste it in myself.
+
+If you can do neither, say so plainly rather than guessing at the format — I
+will paste you a longer prompt that carries the whole specification inline.`;
 }
 
 export function buildPrompt(context: PromptContext, siteUrl?: string, drop?: DropTarget): string {

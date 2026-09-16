@@ -398,7 +398,9 @@ async function copyPrompt(context: ViewContext, brief = false): Promise<void> {
    * prompt rather than handing someone an id-shaped hole.
    */
   const prompt =
-    brief && drop ? buildBriefPrompt(person, drop.pushId) : buildPrompt(person, location.origin, drop);
+    brief && drop
+      ? buildBriefPrompt(person, drop.pushId, location.origin)
+      : buildPrompt(person, location.origin, drop);
 
   try {
     await navigator.clipboard.writeText(prompt);
