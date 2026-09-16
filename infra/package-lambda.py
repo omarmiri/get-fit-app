@@ -38,6 +38,7 @@ SOURCES = [
     "server.js",
     "account.js",
     "auth.js",
+    "googleAuth.js",
     "keepalive.js",
     "kv.js",
     "mcp.js",

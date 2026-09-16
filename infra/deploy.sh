@@ -14,6 +14,8 @@
 #
 #   SUPABASE_URL=https://xxx.supabase.co
 #   SUPABASE_ANON_KEY=eyJ...
+#   GOOGLE_CLIENT_ID=...apps.googleusercontent.com
+#   GOOGLE_CLIENT_SECRET=...
 #
 # or pass them inline for a one-off:
 #
@@ -59,6 +61,13 @@ fi
 params=()
 if [ -n "${SUPABASE_URL:-}" ]; then
   params+=("SupabaseUrl=${SUPABASE_URL}" "SupabaseAnonKey=${SUPABASE_ANON_KEY:-}")
+fi
+
+# With these, the app runs the Google half of sign-in itself and the consent
+# screen names this domain instead of the Supabase project's hostname. Without
+# them, sign-in falls back to Supabase's own authorize endpoint and still works.
+if [ -n "${GOOGLE_CLIENT_ID:-}" ]; then
+  params+=("GoogleClientId=${GOOGLE_CLIENT_ID}" "GoogleClientSecret=${GOOGLE_CLIENT_SECRET:-}")
 fi
 
 echo "==> Building"

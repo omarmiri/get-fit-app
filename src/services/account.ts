@@ -102,6 +102,8 @@ export function signOut(): void {
 
 interface AuthConfig {
   readonly configured: boolean;
+  /** Whether the server runs the Google half itself. See `googleAuth.js`. */
+  readonly google?: boolean;
   readonly url: string;
 }
 
@@ -117,13 +119,17 @@ async function loadConfig(): Promise<AuthConfig> {
 
   try {
     const response = await fetch('/health', { cache: 'no-store' });
-    if (!response.ok) return (config = { configured: false, url: '' });
+    if (!response.ok) return (config = { configured: false, url: '', google: false });
 
     const body: unknown = await response.json();
-    const auth = (body as { auth?: { configured?: boolean; url?: string } })?.auth;
-    config = { configured: auth?.configured === true, url: auth?.url ?? '' };
+    const auth = (body as { auth?: { configured?: boolean; url?: string; google?: boolean } })?.auth;
+    config = {
+      configured: auth?.configured === true,
+      url: auth?.url ?? '',
+      google: auth?.google === true,
+    };
   } catch {
-    config = { configured: false, url: '' };
+    config = { configured: false, url: '', google: false };
   }
   return config;
 }
@@ -137,15 +143,34 @@ async function loadConfig(): Promise<AuthConfig> {
  * nothing after it runs.
  */
 export async function signInWithGoogle(): Promise<void> {
-  const { configured, url } = await loadConfig();
-  if (!configured || !url) throw new AccountError('Accounts are not set up on this server.', 503);
+  const { configured, url, google } = await loadConfig();
+  if (!configured) throw new AccountError('Accounts are not set up on this server.', 503);
 
   /*
    * Come back to the page the user was on, without any query or fragment.
-   * Supabase appends its own fragment on return, and handing it a URL that
-   * already had one would produce something neither side can parse.
+   * Both routes append their own fragment on return, and handing either a URL
+   * that already had one would produce something neither side can parse.
    */
   const returnTo = `${location.origin}${location.pathname}`;
+
+  /*
+   * Two doorways, same destination.
+   *
+   * When the server can run the Google half itself, use it — the consent
+   * screen then names this app's domain instead of the Supabase project's
+   * hostname, which is the whole reason that path exists. See `googleAuth.js`.
+   *
+   * Otherwise go to Supabase directly, which still works. A deploy without
+   * Google credentials should offer a sign-in that says the wrong hostname
+   * rather than no sign-in at all.
+   */
+  if (google) {
+    const path = location.pathname || '/';
+    location.assign(`/auth/google?returnTo=${encodeURIComponent(path)}`);
+    return;
+  }
+
+  if (!url) throw new AccountError('Accounts are not set up on this server.', 503);
   location.assign(`${url}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(returnTo)}`);
 }
 

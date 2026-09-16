@@ -20,6 +20,7 @@ import helmet from 'helmet';
 
 import { AccountError, loadState, saveState } from './account.js';
 import * as auth from './auth.js';
+import * as google from './googleAuth.js';
 import { lastHeartbeat, startSupabaseHeartbeat } from './keepalive.js';
 import { handleMcpRequest } from './mcp.js';
 import { DropError, createSession, pushPlan, readSession } from './sessions.js';
@@ -108,7 +109,13 @@ app.get('/health', async (_req, res) => {
      * authorize endpoint does not need it, and every call that does is made
      * from this process.
      */
-    auth: { configured: identity.configured, url: identity.url, providers },
+    /*
+     * `google` is whether this app runs the Google half itself. When it does,
+     * the client sends people to /auth/google and the consent screen names
+     * this domain; when it does not, it falls back to Supabase's own authorize
+     * endpoint, which works but names the project hostname.
+     */
+    auth: { configured: identity.configured, url: identity.url, providers, google: google.configured() },
     /*
      * The last Supabase beat, so a keep-alive that is silently not working is
      * observable now rather than inferred from the project being paused a week
@@ -215,6 +222,74 @@ app.put('/api/account/state', auth.attachUser, auth.requireUser, async (req, res
     }
     console.error(`[account] save failed: ${error?.message ?? 'unknown'}`);
     return res.status(502).json({ error: 'Could not save to your backup.' });
+  }
+});
+
+/* ------------------------------------------------------------ sign-in */
+
+/**
+ * Start Google sign-in on this domain.
+ *
+ * The redirect URI is built from the request rather than configured, so one
+ * build works on localhost and in production. It cannot be used to redirect
+ * somewhere else: Google matches it exactly against its own allow-list, and
+ * `returnTo` below is confined to this origin regardless of what is asked for.
+ */
+app.get('/auth/google', async (req, res) => {
+  const origin = `${req.protocol}://${req.get('host')}`;
+
+  /*
+   * An open redirect is the classic bug in this shape of endpoint — accept an
+   * arbitrary `returnTo` and the sign-in link becomes a way to bounce someone
+   * to an attacker's page carrying a real session. Only the path is taken, and
+   * only when it is a path: anything protocol-relative or absolute is
+   * discarded rather than repaired.
+   */
+  const asked = typeof req.query.returnTo === 'string' ? req.query.returnTo : '/';
+  const path = asked.startsWith('/') && !asked.startsWith('//') ? asked : '/';
+  const returnTo = `${origin}${path}`;
+
+  try {
+    const url = await google.beginSignIn({ redirectUri: `${origin}/auth/callback`, returnTo });
+    return res.redirect(url);
+  } catch (error) {
+    const message = error instanceof google.GoogleAuthError ? error.message : 'Could not start sign-in.';
+    console.error(`[google] begin failed: ${error?.message ?? 'unknown'}`);
+    return res.redirect(google.failureUrl(returnTo, message));
+  }
+});
+
+/**
+ * Where Google comes back to.
+ *
+ * Always ends in a redirect, never in a rendered error: the browser is
+ * mid-navigation and the only useful outcome is landing back on the app,
+ * either signed in or told why not. `account.ts` reads both shapes.
+ */
+app.get('/auth/callback', async (req, res) => {
+  const origin = `${req.protocol}://${req.get('host')}`;
+  const fallback = `${origin}/`;
+
+  // Google reports a refusal — a closed window, a declined consent — here
+  // rather than by failing the exchange, so it has to be checked first.
+  if (typeof req.query.error === 'string') {
+    return res.redirect(google.failureUrl(fallback, 'Sign-in was cancelled.'));
+  }
+
+  try {
+    const { session, returnTo } = await google.completeSignIn({
+      code: typeof req.query.code === 'string' ? req.query.code : '',
+      state: typeof req.query.state === 'string' ? req.query.state : '',
+    });
+
+    // No-store: this response carries a session in its Location header.
+    res.setHeader('Cache-Control', 'no-store');
+    return res.redirect(google.successUrl(returnTo || fallback, session));
+  } catch (error) {
+    const message =
+      error instanceof google.GoogleAuthError ? error.message : 'Could not finish signing you in.';
+    console.error(`[google] callback failed: ${error?.message ?? 'unknown'}`);
+    return res.redirect(google.failureUrl(fallback, message));
   }
 });
 

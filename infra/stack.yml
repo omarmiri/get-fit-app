@@ -39,9 +39,20 @@ Parameters:
     Type: String
     Default: ''
     NoEcho: true
+  GoogleClientId:
+    Type: String
+    Default: ''
+    Description: >-
+      Optional. With the secret below, the app runs Google sign-in itself so the
+      consent screen names this domain rather than the Supabase project's.
+  GoogleClientSecret:
+    Type: String
+    Default: ''
+    NoEcho: true
 
 Conditions:
   HasAuth: !Not [!Equals [!Ref SupabaseUrl, '']]
+  HasGoogle: !Not [!Equals [!Ref GoogleClientId, '']]
 
 Resources:
   # ------------------------------------------------------------------ store
@@ -123,6 +134,8 @@ Resources:
           SERVE_STATIC: 'false'
           SUPABASE_URL: !If [HasAuth, !Ref SupabaseUrl, !Ref 'AWS::NoValue']
           SUPABASE_ANON_KEY: !If [HasAuth, !Ref SupabaseAnonKey, !Ref 'AWS::NoValue']
+          GOOGLE_CLIENT_ID: !If [HasGoogle, !Ref GoogleClientId, !Ref 'AWS::NoValue']
+          GOOGLE_CLIENT_SECRET: !If [HasGoogle, !Ref GoogleClientSecret, !Ref 'AWS::NoValue']
       Code:
         # Replaced by the deploy script; a stack created from this template
         # alone comes up with a function that returns 501 until first deploy.
@@ -315,6 +328,15 @@ Resources:
             ViewerProtocolPolicy: https-only
             AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
             Compress: true
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+          # Sign-in. Never cached — /auth/callback carries a session in its
+          # Location header, and a cached redirect would hand one person's
+          # session to the next visitor.
+          - PathPattern: /auth/*
+            TargetOriginId: api
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS]
             CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
             OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
           - PathPattern: /health

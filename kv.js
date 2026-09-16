@@ -31,7 +31,13 @@
  */
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  DeleteCommand,
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+  UpdateCommand,
+} from '@aws-sdk/lib-dynamodb';
 
 const TABLE = process.env.DYNAMO_TABLE ?? '';
 
@@ -109,6 +115,22 @@ export async function kvSet(key, value, ttlMs = null) {
       },
     }),
   );
+}
+
+/**
+ * Remove a record.
+ *
+ * Deleting something already absent is a success, not an error — every caller
+ * so far wants "make sure this is gone", and a single-use token being consumed
+ * twice is a race to tolerate rather than a fault to report.
+ */
+export async function kvDelete(key) {
+  if (!TABLE) {
+    memory.delete(key);
+    return;
+  }
+
+  await docs().send(new DeleteCommand({ TableName: TABLE, Key: { pk: key } }));
 }
 
 /**
