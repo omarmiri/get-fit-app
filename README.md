@@ -337,6 +337,58 @@ It also cost money per user and needed metering, quotas and an abuse story,
 all to duplicate something every user already has a subscription to. Bringing
 your own LLM is the better feature, and it is now the only one.
 
+## Deploying to AWS
+
+```bash
+./infra/deploy.sh
+```
+
+Everything lives in one CloudFormation stack, `infra/stack.yml`: a CloudFront
+distribution in front of an S3 bucket for the built site, an API Gateway and
+Lambda for `/api` and `/health`, and a DynamoDB table for sessions and account
+backups. The script builds, packages, applies the stack, uploads and
+invalidates. It is safe to run repeatedly.
+
+Sign-in is off unless Supabase is configured, and everything except the account
+backup works without it:
+
+```bash
+SUPABASE_URL=https://xxx.supabase.co SUPABASE_ANON_KEY=... ./infra/deploy.sh
+```
+
+### Why the split
+
+The app already had a seam down the middle — a built PWA that is pure static
+files, and a small API that is the only part needing a process. CloudFront
+serves the first and forwards the second, which is the same division
+`express.static` was doing by hand while being a rather poor CDN.
+
+`SERVE_STATIC=false` is what tells `server.js` it is only the API now, so a
+missing `dist/` is the expected arrangement rather than a failed build. Running
+`npm start` locally still serves both, exactly as before.
+
+Two things must agree across that split, and both are easy to miss:
+
+- **The CSP.** Helmet sets it in `server.js`, but once the HTML comes from S3
+  the browser never reaches Express for the document. The same directives are
+  restated as a CloudFront response headers policy in the stack.
+- **The SPA fallback.** `server.js` returns the shell for unmatched
+  navigations; CloudFront does it with a custom error response. Change one and
+  change the other.
+
+### What it costs
+
+Nothing, at this app's traffic. CloudFront and Lambda both have perpetual free
+tiers far beyond it, DynamoDB on-demand bills against a 25GB allowance, the
+Route 53 hosted zone is already paid for by the other miriogames.com sites, and
+the `*.miriogames.com` certificate is free. Two deliberate choices keep it that
+way: log retention is capped at 14 days, and rate limiting uses the DynamoDB
+counter rather than AWS WAF, which would cost more per month than the rest of
+the stack combined.
+
+The DynamoDB table is `Retain` on stack deletion. It holds people's training
+history, and a backup a `delete-stack` can erase is not a backup.
+
 ### Why there is no cloud-storage integration
 
 There was briefly a Google Drive route: paste a share link, and a server proxy

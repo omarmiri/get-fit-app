@@ -1,0 +1,310 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Rack & File — static site on CloudFront/S3 with a Lambda API and a DynamoDB store.
+
+# Everything this app needs on AWS, in one stack that can be deleted again.
+#
+# ## The shape, and why
+#
+# The app already had a seam down the middle: a built PWA that is pure static
+# files, and a small API that is the only part needing a process. CloudFront
+# serves the first from S3 and forwards the second to Lambda, which is the same
+# split the Express server was doing by hand — `express.static` was acting as a
+# rather poor CDN.
+#
+# ## What it costs
+#
+# Nothing, at this app's traffic. The CloudFront and Lambda perpetual free
+# tiers (1TB + 10M requests, 1M requests + 400k GB-seconds) are far beyond it,
+# DynamoDB on-demand bills per request against a 25GB free allowance, the
+# hosted zone is already paid for by the other miriogames.com sites, and the
+# wildcard certificate is free and already issued.
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: fitness.miriogames.com
+  HostedZoneId:
+    Type: String
+    Default: Z06506521RDAKCEF2NL56
+  CertificateArn:
+    Type: String
+    # The existing *.miriogames.com wildcard. CloudFront requires us-east-1,
+    # which is where this one already lives.
+    Default: arn:aws:acm:us-east-1:843573859394:certificate/22179ac9-9a8a-43ef-9336-82b7cfc7f53c
+  SupabaseUrl:
+    Type: String
+    Default: ''
+    Description: Optional. Enables sign-in; identity only, no training data.
+  SupabaseAnonKey:
+    Type: String
+    Default: ''
+    NoEcho: true
+
+Conditions:
+  HasAuth: !Not [!Equals [!Ref SupabaseUrl, '']]
+
+Resources:
+  # ------------------------------------------------------------------ store
+
+  Table:
+    Type: AWS::DynamoDB::Table
+    # Retained on stack delete: this table holds people's training history, and
+    # a backup that a `cloudformation delete-stack` can erase is not a backup.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: rackfile
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      # Sessions and rate-limit counters set this; account backups do not, and
+      # an item with no `ttl` attribute is simply never swept.
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # ----------------------------------------------------------------- api
+
+  ApiRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: store
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Scoped to this one table. The API has no reason to see another.
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource: !GetAtt Table.Arn
+
+  ApiFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: rackfile-api
+      Runtime: nodejs22.x
+      # The Lambda Web Adapter runs the Express app unmodified: `Handler` names
+      # the npm script's entry point rather than a Lambda handler signature, and
+      # the wrapper below turns the function into a normal HTTP server the
+      # adapter proxies to. No serverless-express refactor, one server.js.
+      Handler: run.sh
+      MemorySize: 512
+      # Generous because a cold start builds the DynamoDB client and reads the
+      # bundled parser; steady-state responses are milliseconds.
+      Timeout: 30
+      Role: !GetAtt ApiRole.Arn
+      Layers:
+        - arn:aws:lambda:us-east-1:753240598075:layer:LambdaAdapterLayerX86:28
+      Environment:
+        Variables:
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/bootstrap
+          # The adapter's default; server.js reads PORT.
+          PORT: '8080'
+          NODE_ENV: production
+          DYNAMO_TABLE: !Ref Table
+          # Tells server.js the static files are served elsewhere, so a missing
+          # dist/ is the expected arrangement rather than a fatal error.
+          SERVE_STATIC: 'false'
+          SUPABASE_URL: !If [HasAuth, !Ref SupabaseUrl, !Ref 'AWS::NoValue']
+          SUPABASE_ANON_KEY: !If [HasAuth, !Ref SupabaseAnonKey, !Ref 'AWS::NoValue']
+      Code:
+        # Replaced by the deploy script; a stack created from this template
+        # alone comes up with a function that returns 501 until first deploy.
+        ZipFile: |
+          exports.handler = async () => ({ statusCode: 501, body: 'Not deployed yet.' });
+
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ApiFunction}
+      # Long enough to debug last week's problem, short enough that the log
+      # group never becomes the only line on the bill.
+      RetentionInDays: 14
+
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: rackfile-api
+      ProtocolType: HTTP
+      # Every path goes to the one Express app, which owns its own routing.
+      Target: !GetAtt ApiFunction.Arn
+
+  ApiInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ApiFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
+
+  # -------------------------------------------------------------- static
+
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub rackfile-site-${AWS::AccountId}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: cloudfront.amazonaws.com }
+            Action: s3:GetObject
+            Resource: !Sub ${SiteBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: rackfile-s3
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # The security headers Express used to set.
+  #
+  # This is the migration step most easily missed. Helmet sets the policy in
+  # server.js, but once the HTML comes from S3 the browser never reaches
+  # Express for the document — so without this, the app ships with no CSP at
+  # all and nothing reports it.
+  SecurityHeaders:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: rackfile-security
+        SecurityHeadersConfig:
+          ContentSecurityPolicy:
+            Override: true
+            # Same directives as the helmet config. 'unsafe-inline' is allowed
+            # for styles only, because element-level style attributes set the
+            # plate accent colours.
+            ContentSecurityPolicy: >-
+              default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
+              img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self';
+              connect-src 'self'; manifest-src 'self'; worker-src 'self';
+              frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+          ContentTypeOptions: { Override: true }
+          FrameOptions: { Override: true, FrameOption: DENY }
+          ReferrerPolicy: { Override: true, ReferrerPolicy: no-referrer }
+          StrictTransportSecurity:
+            Override: true
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: true
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: Rack & File
+        Aliases: [!Ref DomainName]
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CertificateArn
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+        HttpVersion: http2and3
+        PriceClass: PriceClass_100
+        DefaultRootObject: index.html
+
+        Origins:
+          - Id: s3
+            DomainName: !GetAtt SiteBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+            S3OriginConfig: {}
+          - Id: api
+            DomainName: !Sub ${HttpApi}.execute-api.${AWS::Region}.amazonaws.com
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+
+        DefaultCacheBehavior:
+          TargetOriginId: s3
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          # Managed-CachingOptimized. Safe as the default because the only
+          # long-lived objects are the fingerprinted ones under /assets; the
+          # shell, service worker and manifest are uploaded with no-cache, and
+          # CloudFront honours that.
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          ResponseHeadersPolicyId: !Ref SecurityHeaders
+
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: api
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            Compress: true
+            # Managed-CachingDisabled.
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            # Managed-AllViewerExceptHostHeader. Forwards Authorization, which
+            # the drop poll and every account route depend on.
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+          - PathPattern: /health
+            TargetOriginId: api
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD]
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+
+        # The SPA fallback server.js used to do, scoped the same way: a
+        # navigation to an unknown path gets the shell, and 200 rather than 404
+        # so the history API behaves.
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+
+  DnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        # Fixed CloudFront zone id, the same for every distribution.
+        HostedZoneId: Z2FDTNDATAQYW2
+        DNSName: !GetAtt Distribution.DomainName
+
+Outputs:
+  SiteUrl:
+    Value: !Sub https://${DomainName}
+  BucketName:
+    Value: !Ref SiteBucket
+  DistributionId:
+    Value: !Ref Distribution
+  FunctionName:
+    Value: !Ref ApiFunction
+  TableName:
+    Value: !Ref Table

@@ -28,7 +28,20 @@ const distDir = path.join(rootDir, 'dist');
 const indexFile = path.join(distDir, 'index.html');
 const port = Number(process.env.PORT) || 3000;
 
-if (!existsSync(indexFile)) {
+/*
+ * Whether this process is also the web server.
+ *
+ * Running on Render it was: one process served the built files and the API
+ * together. Behind CloudFront it is not — S3 serves the static files and this
+ * process only ever sees `/api` and `/health`, so a missing `dist/` is the
+ * expected arrangement rather than a broken deploy, and the Lambda bundle is
+ * smaller for not carrying a copy of the site it will never serve.
+ *
+ * Defaults to serving, so `npm start` locally behaves exactly as before.
+ */
+const serveStatic = process.env.SERVE_STATIC !== 'false';
+
+if (serveStatic && !existsSync(indexFile)) {
   console.error(`No build found at ${distDir}. Run "npm run build" first.`);
   process.exit(1);
 }
@@ -295,40 +308,42 @@ app.get('/api/sessions/:pushId', async (req, res) => {
  * manifest, the icons — must revalidate, or a deployed fix would never reach a
  * phone that already has the old copy.
  */
-app.use(
-  express.static(distDir, {
-    index: 'index.html',
-    etag: true,
-    lastModified: true,
-    maxAge: 0,
-    setHeaders(res, filePath) {
-      const relative = path.relative(distDir, filePath).replace(/\\/g, '/');
+if (serveStatic) {
+  app.use(
+    express.static(distDir, {
+      index: 'index.html',
+      etag: true,
+      lastModified: true,
+      maxAge: 0,
+      setHeaders(res, filePath) {
+        const relative = path.relative(distDir, filePath).replace(/\\/g, '/');
 
-      if (relative.startsWith('assets/')) {
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-      } else {
-        res.setHeader('Cache-Control', 'no-cache');
-      }
-    },
-  }),
-);
+        if (relative.startsWith('assets/')) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        } else {
+          res.setHeader('Cache-Control', 'no-cache');
+        }
+      },
+    }),
+  );
 
-/**
- * SPA fallback, scoped to navigations.
- *
- * The previous version returned `index.html` for every unmatched path, so a
- * missing script or icon answered 200 with a page of HTML — which turns a
- * simple 404 into a confusing parse error. Requests that look like assets get a
- * real 404 instead.
- */
-app.use((req, res, next) => {
-  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
-  if (path.extname(req.path) !== '') return next();
-  if (!(req.headers.accept ?? '').includes('text/html')) return next();
+  /**
+   * SPA fallback, scoped to navigations.
+   *
+   * The previous version returned `index.html` for every unmatched path, so a
+   * missing script or icon answered 200 with a page of HTML — which turns a
+   * simple 404 into a confusing parse error. Requests that look like assets get a
+   * real 404 instead.
+   */
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    if (path.extname(req.path) !== '') return next();
+    if (!(req.headers.accept ?? '').includes('text/html')) return next();
 
-  res.setHeader('Cache-Control', 'no-cache');
-  return res.sendFile(indexFile);
-});
+    res.setHeader('Cache-Control', 'no-cache');
+    return res.sendFile(indexFile);
+  });
+}
 
 app.use((_req, res) => {
   res.status(404).type('text/plain').send('Not found');
