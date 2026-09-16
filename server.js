@@ -328,6 +328,27 @@ app.options('/mcp', (_req, res) => {
   res.status(204).end();
 });
 
+/*
+ * GET is how a Streamable HTTP client asks to be *sent* messages the server
+ * started. This server never starts any — every tool is one round trip, and it
+ * runs stateless because Lambda gives no instance affinity between calls.
+ *
+ * Refusing explicitly matters more here than it looks. Handed to the transport,
+ * a GET opens a stream that will never carry anything, and the invocation then
+ * sits there until API Gateway gives up 30 seconds later and answers 504 — so a
+ * client's ordinary probe looks like a broken server and costs a full timeout
+ * to find out. 405 is what the spec asks of a server without that stream, and
+ * it comes back instantly.
+ */
+app.get('/mcp', (_req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.status(405).json({
+    jsonrpc: '2.0',
+    error: { code: -32000, message: 'This server does not offer a server-initiated stream.' },
+    id: null,
+  });
+});
+
 app.all('/mcp', (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');
   void handleMcpRequest(req, res);
