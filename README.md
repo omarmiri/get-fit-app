@@ -1,10 +1,10 @@
 # Rack & File
 
-**Live: https://get-fit-app.onrender.com**
+**Live: https://fitness.miriogames.com**
 
 A personal training log built around one seven-day plan. Mobile-first, installable to the home screen, works offline in the gym.
 
-**Bring your own plan.** Ask ChatGPT, Claude, Gemini or anything else for a training week and load it in — paste the reply, or open the file it gave you. The format is published at [`/llms.txt`](https://get-fit-app.onrender.com/llms.txt), so any model that can read a page can write a plan this app understands. See [Bringing a plan from an LLM](#bringing-a-plan-from-an-llm).
+**Bring your own plan.** Ask ChatGPT, Claude, Gemini or anything else for a training week and load it in — paste the reply, or open the file it gave you. The format is published at [`/llms.txt`](https://fitness.miriogames.com/llms.txt), so any model that can read a page can write a plan this app understands. See [Bringing a plan from an LLM](#bringing-a-plan-from-an-llm).
 
 All data lives in the browser on the device you use it on. There is no account by default and nothing leaves the phone — the whole app works signed out, which is the point. **Export a backup from the Plan tab now and then**, because clearing browser data erases everything.
 
@@ -248,14 +248,38 @@ catalogue modules the parser uses — so the documentation cannot promise a fiel
 the parser rejects. `/catalog.json` carries the built-in ids in machine-readable
 form.
 
-Two ways in, both landing on the same parser and the same validator:
+Four ways in, all landing on the same parser and the same validator:
 
-| Route                              | For                                                                                                                                             |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Copy prompt → paste the answer** | The normal path. The prompt carries the full format plus your gym, profile and health context.                                                  |
-| **Open a plan file**               | Phones, and whatever the model handed you as a download. On Android this covers Google Drive too, since Drive mounts in the system file picker. |
+| Route                    | For                                                                                                                                                       |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Open a chatbot**       | One tap. Opens ChatGPT, Claude, Perplexity or Grok with a short prompt already in the box; the model fetches `/llms.txt` for the format.                    |
+| **Copy the prompt**      | Any model, including one with no network. Carries the whole 15kb contract plus your gym, profile and health context.                                       |
+| **Paste anywhere**       | The way back in. A paste event needs no permission in any browser, so Ctrl-V on the page — or long-press and Paste on a phone — opens the review card.     |
+| **Open a plan file**     | Whatever the model handed you as a download. On Android this covers Google Drive too, since Drive mounts in the system file picker.                        |
 
-Both work offline and neither involves a third party.
+Everything but the launchers works offline, and none of it involves a third
+party: the prompt is assembled on the device, and the survey answers that go
+into it are never sent anywhere.
+
+### What is not the normal path, and why
+
+There is a fifth route — an MCP server at `/mcp` and a write-only session id,
+so a model can push the finished plan straight into the waiting app. It is
+built, tested and live, and it is behind a button rather than in the default
+prompt, because no consumer chat product can currently reach it. ChatGPT,
+Claude, Perplexity, Grok, Gemini and Copilot were each tried: all of them write
+a good plan, none of them will call an MCP server or make an HTTP request, and
+some claim to have sent something they have not.
+
+Nor can the push be replaced by something smaller. A full week is six to twelve
+kilobytes of JSON, so a link the model builds, or a GET with the plan in the
+query string, comes out at twelve to twenty-four kilobytes of URL — past what a
+chat window will render as a link or a browsing tool will fetch. The plan is
+too big to travel as an address.
+
+So the default prompt asks for the one thing every product does reliably: the
+plan alone in a fenced code block, which every chat app puts a copy button on.
+One tap there, one paste here.
 
 ### The division of labour
 

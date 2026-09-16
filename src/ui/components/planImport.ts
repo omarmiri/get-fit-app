@@ -3,7 +3,7 @@ import { ALL_STATIONS, stationName } from '@/data/equipment';
 import { LLM_PROVIDERS, fitsInLink } from '@/data/llmProviders';
 import { type PlanValidation, validatePlan } from '@/domain/planValidation';
 import { parsePortablePlan } from '@/domain/planFormat';
-import { buildBriefPrompt, buildPrompt } from '@/spec/planSpec';
+import { buildBriefPrompt, buildLinkPrompt, buildPrompt } from '@/spec/planSpec';
 import { clearDrop, currentDrop, dropEndpoint, openDrop, pollDrop } from '@/services/planDrop';
 import { conditionsList, getNotes } from '@/state/ephemeral';
 import { card, div, el, eyebrow, text } from '../dom';
@@ -109,45 +109,80 @@ export function resetPlanImport(): void {
   stopWatching();
 }
 
+/**
+ * Three steps, numbered, in the order someone performs them.
+ *
+ * ## Why the numbering is worth the space
+ *
+ * This card grew a control at a time — a copy button, then launchers, then a
+ * clipboard reader, then a paste box, then a file picker — until it offered
+ * nine ways to do a three-step job, with no indication of which went with
+ * which. Someone opening it for the first time could not tell that "Copy
+ * prompt" and "Paste a plan" were two ends of the same errand rather than
+ * alternatives.
+ *
+ * Nothing has been taken away. The steps just say what the buttons are for,
+ * and each step leads with the one control most people want, with the others
+ * behind it for when it does not fit.
+ */
 export function renderPlanImport(context: ViewContext): HTMLElement {
   return card([
     eyebrow('Bring a plan from any LLM'),
     text(
       'prose',
-      'Copy a prompt, paste it into ChatGPT, Claude, Gemini or anything else, then bring the answer back here. The prompt carries the full format and your own details, so any model can write a week this app understands.',
+      'Any chatbot can write a week this app understands. It takes about a minute and nothing about you is sent anywhere by this app — the prompt is built here, on your device.',
     ),
 
-    el('button', {
-      class: 'button button--primary',
-      text: 'Copy prompt for your LLM',
-      attrs: { type: 'button' },
-      on: { click: () => void copyPrompt(context) },
-    }),
+    /* ----------------------------------------------------------- step one */
 
-    renderLaunchers(context),
-
-    /*
-     * The short prompt, for anyone who has connected the MCP server.
-     *
-     * Offered rather than detected, because the app has no way to know what a
-     * user has configured in someone else's chat client. Getting it wrong
-     * costs a paste in one direction and a confused model in the other, so the
-     * user says which they have and the wording makes the consequence clear.
-     */
-    el('button', {
-      class: 'button button--ghost',
-      text: 'Copy short prompt (connector)',
-      attrs: { type: 'button', title: 'For clients with the Rack & File connector added' },
-      on: { click: () => void copyPrompt(context, true) },
-    }),
+    eyebrow('1 · Send the prompt'),
+    div('gen__group', [
+      text('prose', 'Open one with the prompt already in it:'),
+      ...renderLaunchers(context),
+    ]),
 
     div('gen__group', [
       /*
-       * First, because it is the shortest path back: one tap where the box
-       * below takes four. The box stays for the browsers that refuse to hand
-       * over the clipboard, and for anyone who would rather see what they are
-       * importing before it is read.
+       * The launchers carry the short prompt, which needs the model to fetch
+       * the format; this one carries the whole 15kb contract and works in
+       * anything, including a model with no network at all. It is the honest
+       * answer for Gemini and Copilot, which cannot be opened with a prompt.
        */
+      el('button', {
+        class: 'button button--ghost',
+        text: 'Copy the prompt instead',
+        attrs: { type: 'button', title: 'Carries the whole format inline — paste it into any chatbot' },
+        on: { click: () => void copyPrompt(context) },
+      }),
+
+      /*
+       * Offered rather than detected, because the app has no way to know what
+       * a user has configured in someone else's chat client. No consumer
+       * product ships this connector today, so it sits last and says what it
+       * is for.
+       */
+      el('button', {
+        class: 'button button--ghost',
+        text: 'Copy short prompt (connector)',
+        attrs: { type: 'button', title: 'For clients with the Rack & File connector added' },
+        on: { click: () => void copyPrompt(context, 'connector') },
+      }),
+    ]),
+
+    /* ----------------------------------------------------------- step two */
+
+    eyebrow('2 · Copy its answer'),
+    text(
+      'prose',
+      'The plan comes back as a block of JSON. Chat apps put a copy button on that block — one tap takes exactly the plan and nothing else.',
+    ),
+
+    /* --------------------------------------------------------- step three */
+
+    eyebrow('3 · Bring it back here'),
+    text('prose', 'Paste it anywhere on this page — Ctrl-V, or long-press and Paste on a phone.'),
+
+    div('gen__group', [
       el('button', {
         class: 'button button--primary',
         text: 'Paste plan from clipboard',
@@ -157,7 +192,7 @@ export function renderPlanImport(context: ViewContext): HTMLElement {
 
       el('button', {
         class: 'button button--ghost',
-        text: state.open ? 'Hide the paste box' : 'Paste a plan',
+        text: state.open ? 'Hide the paste box' : 'Use a paste box',
         attrs: { type: 'button', 'aria-expanded': state.open },
         on: {
           click: () => {
@@ -170,6 +205,8 @@ export function renderPlanImport(context: ViewContext): HTMLElement {
       renderFileButton(context),
     ]),
 
+    // Only the connector prompt opens a session, so this only appears for
+    // someone who took that route.
     state.pushId && !state.candidate ? renderWaiting(context) : null,
 
     state.open ? renderPasteBox(context) : null,
@@ -283,22 +320,20 @@ export function watchPastedPlans(getContext: () => ViewContext): void {
 /**
  * What the app is waiting for, and what to do if it never comes.
  *
- * ## Why this screen carries the whole design
+ * Only the connector prompt reaches this, because only a client with the MCP
+ * server added has any way to push. The ordinary routes no longer open a
+ * session at all — an app visibly waiting for something that cannot arrive
+ * reads as broken, and it was the app, not the chatbot, that got the blame.
  *
- * Most chat products cannot make HTTP requests, and a model asked to POST from
- * one will sometimes say it did. If the app trusted that, the user would sit
- * looking at a spinner for a plan that was never sent. So the app never asks
- * the model whether it worked — it either received a push or it did not, and
- * this card says which, with the paste box one tap away the entire time.
- *
- * That is what makes it safe to ask for the push at all. The optimistic path
- * costs nothing when it fails, because the fallback was never hidden.
+ * Even here it never asks the model whether the push worked. A model asked to
+ * POST will sometimes say it did when it did not, so the app goes on what it
+ * received, and the paste box stays one tap away the whole time.
  */
 function renderWaiting(context: ViewContext): HTMLElement {
   startWatching(context);
 
   return div('notice', [
-    text('notice__body', `Waiting for your plan. The prompt you copied asks your LLM to send it here.`),
+    text('notice__body', 'Waiting for your plan. The short prompt asks your connector to send it straight here.'),
 
     // Shown because a model occasionally drops or mangles the id, and the user
     // can then read it off the screen and correct it themselves.
@@ -324,7 +359,7 @@ function renderWaiting(context: ViewContext): HTMLElement {
 
     text(
       'prose',
-      'If your LLM says it cannot send HTTP requests — most chat apps cannot — paste its reply below instead. Nothing is lost either way.',
+      'If it says it cannot — most chat clients cannot — just paste the reply instead. Nothing is lost either way.',
     ),
   ]);
 }
@@ -350,7 +385,7 @@ async function launch(context: ViewContext, providerId: string): Promise<void> {
   const tab = window.open('', '_blank');
   if (tab) tab.opener = null;
 
-  const prompt = await buildPromptText(context, true);
+  const prompt = await buildPromptText(context, 'link');
 
   /*
    * Copied as well as linked. These query parameters are not promised by
@@ -377,18 +412,15 @@ async function launch(context: ViewContext, providerId: string): Promise<void> {
   context.render();
 }
 
-function renderLaunchers(context: ViewContext): HTMLElement {
-  return div('gen__group', [
-    text('prose', 'Or open one with the prompt already in it:'),
-    ...LLM_PROVIDERS.map((provider) =>
-      el('button', {
-        class: 'button button--ghost',
-        text: provider.name,
-        attrs: { type: 'button' },
-        on: { click: () => void launch(context, provider.id) },
-      }),
-    ),
-  ]);
+function renderLaunchers(context: ViewContext): HTMLElement[] {
+  return LLM_PROVIDERS.map((provider) =>
+    el('button', {
+      class: 'button button--primary',
+      text: provider.name,
+      attrs: { type: 'button' },
+      on: { click: () => void launch(context, provider.id) },
+    }),
+  );
 }
 
 /**
@@ -568,18 +600,41 @@ function reviewPlan(context: ViewContext, plan: UserPlan): void {
  * the JSON without offering anywhere to post it. Refusing to produce a prompt
  * because a convenience could not be arranged would be the wrong trade.
  */
-async function buildPromptText(context: ViewContext, brief = false): Promise<string> {
+/**
+ * Which prompt, and therefore how much of the contract it has to carry.
+ *
+ * - `full` — the whole specification inline, ~15kb. For a paste.
+ * - `link` — the person and where the format lives, ~1.8kb. Small enough to
+ *   travel in a launcher URL, which is the only reason it exists.
+ * - `connector` — the person and a session id. Only honest for a client with
+ *   the MCP server added, so it is only ever built when the user says so.
+ */
+type PromptMode = 'full' | 'link' | 'connector';
+
+async function buildPromptText(context: ViewContext, mode: PromptMode = 'full'): Promise<string> {
   const prefs = context.state.prefs;
   const profile = prefs.profile;
   const missing = new Set(prefs.missingStations ?? []);
 
+  /*
+   * A session is opened only for the connector prompt.
+   *
+   * The ordinary prompt used to open one too, and then ask every model to POST
+   * to it. None of the six tested could, so the app was minting a session, and
+   * showing a card waiting on it, for a delivery that never arrived — which
+   * reads as the app being broken rather than the chatbot being limited. The
+   * machinery is intact and the endpoint is still live; it is just no longer
+   * offered to clients that have no way to use it.
+   */
   let drop: { pushId: string; endpoint: string } | undefined;
-  try {
-    const session = await openDrop();
-    drop = { pushId: session.pushId, endpoint: dropEndpoint(session.pushId) };
-    state.pushId = session.pushId;
-  } catch {
-    state.pushId = null;
+  if (mode === 'connector') {
+    try {
+      const session = await openDrop();
+      drop = { pushId: session.pushId, endpoint: dropEndpoint(session.pushId) };
+      state.pushId = session.pushId;
+    } catch {
+      state.pushId = null;
+    }
   }
 
   const person = {
@@ -604,18 +659,20 @@ async function buildPromptText(context: ViewContext, brief = false): Promise<str
       : {}),
   };
 
+  if (mode === 'link') return buildLinkPrompt(person, location.origin);
+
   /*
-   * The brief prompt is only honest if there is a session to name in it. With
-   * no drop open the tools have nothing to submit to, so fall back to the full
-   * prompt rather than handing someone an id-shaped hole.
+   * The connector prompt is only honest if there is a session to name in it.
+   * With no drop open the tools have nothing to submit to, so fall back to the
+   * full prompt rather than handing someone an id-shaped hole.
    */
-  return brief && drop
+  return mode === 'connector' && drop
     ? buildBriefPrompt(person, drop.pushId, location.origin)
     : buildPrompt(person, location.origin, drop);
 }
 
-async function copyPrompt(context: ViewContext, brief = false): Promise<void> {
-  const prompt = await buildPromptText(context, brief);
+async function copyPrompt(context: ViewContext, mode: PromptMode = 'full'): Promise<void> {
+  const prompt = await buildPromptText(context, mode);
 
   try {
     await navigator.clipboard.writeText(prompt);

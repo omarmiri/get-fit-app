@@ -107,28 +107,70 @@ function describe(context: PromptContext): string {
 }
 
 /**
- * The short version, for someone who has connected the MCP server.
+ * The prompt that travels in a launcher link.
+ *
+ * A URL holds a few thousand characters and the specification is fifteen
+ * thousand, so this is what is left when the contract has to be fetched rather
+ * than carried: the person, and directions to the format.
+ *
+ * ## Why it does not mention the connector or a session
+ *
+ * Because the model reading it demonstrably does not have either. This prompt
+ * only ever arrives by opening a chat product from a link, and every product
+ * that can be opened that way was tested: none of them can call an MCP server
+ * or make an HTTP request. Naming a session id here would ask for a delivery
+ * that cannot happen, and — worse — would leave the app watching for it.
+ *
+ * ## Why it names the site twice
+ *
+ * The first version said only "use the rack-and-file tools", which assumed the
+ * one thing it had no business assuming: that they were already there. A model
+ * without them could not find the app, could not find the format, and —
+ * because this prompt deliberately omits the specification — could not fall
+ * back to writing JSON either. It would invent a shape and produce a file the
+ * parser rejects, which is worse than refusing, because it looks like success
+ * until the import fails.
+ *
+ * So it degrades honestly: fetch the spec and answer, or say plainly that you
+ * cannot, so the user can reach for the long prompt instead.
+ */
+export function buildLinkPrompt(context: PromptContext, siteUrl: string): string {
+  return `Please write me a one-week training plan for Rack & File (${siteUrl}).
+
+ABOUT ME
+${describe(context)}
+
+HOW TO WRITE IT
+
+Fetch ${siteUrl}/llms.txt first — that page is the complete format, and it is
+short. Then reply with the plan as one JSON object in a single code block,
+with nothing else inside that block, so I can copy it in one tap. Anything you
+want to say about the plan goes outside the block.
+
+If you cannot fetch that page, say so plainly rather than guessing at the
+format — I will paste you a longer prompt that carries the whole
+specification inline.`;
+}
+
+/**
+ * The short version, for someone who really has added the connector.
  *
  * The full prompt carries the whole contract inline — about 15kb — because a
  * plain chat model has no way to go and read it. A connected client does: it
  * calls `get_plan_format` itself. So the paste shrinks to the part the tools
  * cannot supply, which is the person and their session id.
  *
- * ## Why it names the site three times
+ * ## Why this is offered rather than used by default
  *
- * The first version of this said only "use the rack-and-file tools", which
- * assumed the one thing it had no business assuming: that they were already
- * there. A model without the connector could not find the app, could not find
- * the format, and — because this prompt deliberately omits the specification —
- * could not fall back to writing JSON either. It would have invented a shape
- * and produced a file the parser rejects, which is a worse failure than
- * refusing, because it looks like success until the import fails.
+ * No consumer chat product ships this connector, and none of the six tested
+ * could call it. The one who knows whether a client has it is the person using
+ * that client, so the app asks rather than guesses — this prompt is behind a
+ * button that says what it is for, and every other route uses
+ * `buildLinkPrompt` or `buildPrompt` instead.
  *
- * So the prompt now degrades honestly through three rungs, and says where to
- * go at each one: call the tools, or fetch the spec and reply with JSON, or
- * say plainly that neither is possible so the user can reach for the long
- * prompt instead. A model that can do none of it should say so rather than
- * guess.
+ * It still degrades rather than assuming: a client that turns out not to have
+ * the tools is told where the format is, and one that can do neither is told
+ * to say so instead of guessing at a shape the parser will reject.
  */
 export function buildBriefPrompt(context: PromptContext, pushId: string, siteUrl: string): string {
   return `Please write me a one-week training plan for Rack & File (${siteUrl}).
@@ -186,7 +228,28 @@ ${buildLlmsTxt()}`;
 /**
  * How the finished plan gets back to the app.
  *
- * ## Why this asks for both
+ * ## Why the default no longer asks for a push
+ *
+ * It used to ask every model to POST the plan, on the theory that the ones
+ * which could would save the user a paste. Tested against six products, none
+ * could: ChatGPT, Claude, Perplexity, Grok, Gemini and Copilot all either
+ * declined, printed a curl command, or said they had sent something they had
+ * not. The paragraph cost a fifth of the prompt and bought nothing, and asking
+ * for an impossible thing first is not free — a model that opens by working
+ * out how to make an HTTP request is a model not yet writing a training plan.
+ *
+ * Nor can this be rescued by making the transport smaller. A full week runs to
+ * six to twelve kilobytes of JSON, so the obvious alternatives — a link the
+ * model builds, a GET with the plan in the query string — come out at twelve
+ * to twenty-four kilobytes of URL, past what any chat window will render as a
+ * link or any browsing tool will fetch. The plan is simply too big to travel
+ * as an address.
+ *
+ * So the default prompt now asks for the one thing every product does well:
+ * a clean code block. The push survives for clients that really do have the
+ * connector, where `drop` is passed and this section still describes it.
+ *
+ * ## Why that version asks for both
  *
  * Most chat products cannot POST. Browsing tools fetch, code sandboxes have no
  * network, and a model in a plain chat window given only an endpoint will
@@ -205,7 +268,22 @@ ${buildLlmsTxt()}`;
  * imagines it made a network call is worse than one that says it cannot.
  */
 function deliverySection(drop?: DropTarget): string {
-  if (!drop) return 'Reply with the JSON only, in a single code block. ';
+  if (!drop) {
+    /*
+     * "Nothing else in that block" is the whole point of this sentence.
+     *
+     * Every chat product puts a copy button on a fenced code block, and that
+     * button is the shortest path a plan has back to the app — one tap, no
+     * selection, no scrolling to find where the JSON ends. It only works if
+     * the block holds the plan and nothing else, so a model that likes to
+     * annotate its output has to be told where the annotations go.
+     */
+    return (
+      'Reply with the plan as one JSON object in a single code block, with ' +
+      'nothing else inside that block, so I can copy it in one tap. Anything ' +
+      'you want to say about the plan goes outside the block. '
+    );
+  }
 
   return `DELIVERING THE PLAN
 
