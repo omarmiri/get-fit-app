@@ -9,9 +9,18 @@
 #   ./infra/deploy.sh
 #
 # Sign-in is off unless Supabase is configured. It is identity only — no
-# training data — and everything except the account backup works without it:
+# training data — and everything except the account backup works without it.
+# Put the credentials in an untracked .env.deploy beside this repo's root:
 #
-#   SUPABASE_URL=https://xxx.supabase.co SUPABASE_ANON_KEY=... ./infra/deploy.sh
+#   SUPABASE_URL=https://xxx.supabase.co
+#   SUPABASE_ANON_KEY=eyJ...
+#
+# or pass them inline for a one-off:
+#
+#   SUPABASE_URL=... SUPABASE_ANON_KEY=... ./infra/deploy.sh
+#
+# Never set them on the Lambda directly: this stack declares the function's
+# whole Environment block, so the next deploy would wipe them.
 #
 # Stack parameters are sticky, so a later run without those variables keeps
 # whatever was set last time rather than clearing it.
@@ -33,6 +42,19 @@ STACK=rackfile
 REGION=us-east-1
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+
+# Secrets come from an untracked .env.deploy if there is one, so they are not
+# retyped — or left in shell history — on every deploy. `.env.*` is gitignored,
+# and this is the only place that reads it.
+#
+#   SUPABASE_URL=https://xxx.supabase.co
+#   SUPABASE_ANON_KEY=eyJ...
+#
+# Environment variables still win, for a one-off override or for CI.
+if [ -f .env.deploy ]; then
+  # shellcheck disable=SC1091
+  set -a && . ./.env.deploy && set +a
+fi
 
 params=()
 if [ -n "${SUPABASE_URL:-}" ]; then

@@ -400,11 +400,20 @@ backups. The script builds, packages, applies the stack, uploads and
 invalidates. It is safe to run repeatedly.
 
 Sign-in is off unless Supabase is configured, and everything except the account
-backup works without it:
+backup works without it. Put the credentials in an untracked `.env.deploy` at
+the repo root — `.env.*` is gitignored — and the deploy picks them up:
 
-```bash
-SUPABASE_URL=https://xxx.supabase.co SUPABASE_ANON_KEY=... ./infra/deploy.sh
 ```
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_ANON_KEY=eyJ...
+```
+
+**Do not set them on the Lambda directly.** The stack declares the function's
+whole `Environment` block, so the next deploy would wipe them — sign-in would
+work today and break on an unrelated deploy later, with nothing pointing at the
+cause. Editing `Default:` in the template does not work either: CloudFormation
+parameter defaults only apply when a stack is first created, and an existing
+stack keeps its previous value.
 
 ### Why the split
 
