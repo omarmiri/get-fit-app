@@ -22,6 +22,19 @@
  * before opening the link. If a parameter stops working the user lands on an
  * empty chat box with exactly the right thing already copied, which is the
  * failure this feature is meant to avoid anyway.
+ *
+ * ## Who is listed, and why one is not
+ *
+ * Tested by hand against each product. Gemini was here and is not any more:
+ * `?q=` opens the app but leaves the box empty, so the button promised the one
+ * thing its neighbours deliver and then asked for a paste anyway. A control
+ * that quietly does less than the identical control beside it is worse than no
+ * control — "Copy prompt for your LLM" already serves Gemini honestly.
+ *
+ * Perplexity prefills correctly but cannot fetch `/llms.txt`, so it answers by
+ * asking for the long prompt. It stays only while that remains worth
+ * re-testing; if it cannot read the spec it cannot use the short prompt, and
+ * the button is a round trip to a dead end.
  */
 
 export interface LlmProvider {
@@ -46,11 +59,6 @@ export const LLM_PROVIDERS: readonly LlmProvider[] = [
     id: 'perplexity',
     name: 'Perplexity',
     link: (prompt) => `https://www.perplexity.ai/search?q=${encodeURIComponent(prompt)}`,
-  },
-  {
-    id: 'gemini',
-    name: 'Gemini',
-    link: (prompt) => `https://gemini.google.com/app?q=${encodeURIComponent(prompt)}`,
   },
 ];
 

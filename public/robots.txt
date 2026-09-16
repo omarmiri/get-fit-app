@@ -1,0 +1,15 @@
+# Everything here is public: a training app's shell, and the plan format at
+# /llms.txt that any model is invited to read before writing a plan.
+#
+# This file exists mainly so that fetching /llms.txt works. S3 answers a
+# missing key with 403 rather than 404, and several crawlers read a 403 on
+# robots.txt as a blanket disallow — so its absence was quietly refusing the
+# one file the whole bring-your-own-LLM flow depends on being readable.
+User-agent: *
+Allow: /
+
+# API routes. Nothing to index, and a crawler following them only burns
+# invocations — they are not served from here in any case.
+Disallow: /api/
+Disallow: /auth/
+Disallow: /mcp
