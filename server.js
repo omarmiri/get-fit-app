@@ -21,6 +21,7 @@ import helmet from 'helmet';
 import { AccountError, loadState, saveState } from './account.js';
 import * as auth from './auth.js';
 import { lastHeartbeat, startKeepAlive, startSupabaseHeartbeat } from './keepalive.js';
+import { DropError, createSession, pushPlan, readSession } from './sessions.js';
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(rootDir, 'dist');
@@ -200,6 +201,91 @@ app.put('/api/account/state', auth.attachUser, auth.requireUser, async (req, res
     }
     console.error(`[account] save failed: ${error?.message ?? 'unknown'}`);
     return res.status(502).json({ error: 'Could not save to your backup.' });
+  }
+});
+
+/* ------------------------------------------------------------------ drops */
+
+/*
+ * How a plan written elsewhere gets here. The reasoning behind the two ids
+ * lives in `sessions.js`; what follows is only the HTTP shape of it.
+ */
+
+/** Open a session. Anonymous — a drop needs no account. */
+app.post('/api/sessions', async (_req, res) => {
+  try {
+    return res.status(201).json(await createSession());
+  } catch (error) {
+    console.error(`[drop] create failed: ${error?.message ?? 'unknown'}`);
+    return res.status(502).json({ error: 'Could not open a session.' });
+  }
+});
+
+/**
+ * The public write endpoint: where someone else's LLM puts the finished plan.
+ *
+ * Unauthenticated by design. The push id in the URL is the capability, and it
+ * only ever grants writing — see the note on the two ids in `sessions.js`.
+ *
+ * CORS is open because the caller may be a browser-based tool rather than a
+ * server, and closing it would buy nothing: the id, not the origin, is what
+ * authorises the write, and a caller that already has the id is not stopped by
+ * a preflight.
+ */
+app.options('/api/sessions/:pushId/plans', (_req, res) => {
+  res.set({
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'content-type',
+    'Access-Control-Max-Age': '86400',
+  });
+  res.status(204).end();
+});
+
+app.post('/api/sessions/:pushId/plans', async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+
+  try {
+    const result = await pushPlan(req.params.pushId, req.body);
+    /*
+     * The response talks to a language model, so it says what happened in
+     * terms the model can use on its next turn rather than just `ok: true`.
+     */
+    return res.status(201).json({
+      ok: true,
+      ...result,
+      message: `Plan received as version ${result.version}. It is waiting in the app for review.`,
+    });
+  } catch (error) {
+    if (error instanceof DropError) {
+      // Deliberately verbose: a rejected push is the one moment a model can
+      // fix its own output, and it can only do that if told what was wrong.
+      return res.status(error.status).json({ ok: false, error: error.message, code: error.code });
+    }
+    console.error(`[drop] push failed: ${error?.message ?? 'unknown'}`);
+    return res.status(502).json({ ok: false, error: 'Could not store that plan.' });
+  }
+});
+
+/**
+ * What the waiting device polls.
+ *
+ * The poll token goes in the Authorization header rather than the query
+ * string, so it stays out of access logs and out of any Referer this app's own
+ * navigations might produce.
+ */
+app.get('/api/sessions/:pushId', async (req, res) => {
+  const header = req.headers.authorization ?? '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+
+  try {
+    return res.json(await readSession(req.params.pushId, token));
+  } catch (error) {
+    if (error instanceof DropError) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
+    console.error(`[drop] read failed: ${error?.message ?? 'unknown'}`);
+    return res.status(502).json({ error: 'Could not read that session.' });
   }
 });
 
