@@ -13,7 +13,7 @@ import { renderPlanView } from '@/ui/views/plan';
 import { renderTodayView } from '@/ui/views/today';
 import { renderWelcomeView } from '@/ui/views/welcome';
 import { renderWeekStrip } from '@/ui/components/weekStrip';
-import { captureSharedPlan } from '@/ui/components/planImport';
+import { captureSharedPlan, watchPastedPlans } from '@/ui/components/planImport';
 import { initAccountCard } from '@/ui/components/accountCard';
 import { captureRedirectSession, refreshIdentity } from '@/services/account';
 import { backUpSoon, flushBackup } from '@/services/backup';
@@ -93,6 +93,15 @@ export class App {
      * later.
      */
     captureSharedPlan(this.#context(this.#store.getState()));
+
+    /*
+     * The one route in that no browser can refuse. Registered once, for the
+     * life of the app, and given a getter rather than a context because it
+     * fires long after this moment — by which time the state captured here
+     * would be stale, and a plan would be checked against the equipment the
+     * user had at startup rather than the equipment they have now.
+     */
+    watchPastedPlans(() => this.#context(this.#store.getState()));
 
     this.render();
 

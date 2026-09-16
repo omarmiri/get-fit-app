@@ -23,24 +23,33 @@
  * empty chat box with exactly the right thing already copied, which is the
  * failure this feature is meant to avoid anyway.
  *
- * ## Who is listed, and why one is not
+ * ## Who is listed, and who was removed
  *
- * Tested by hand against each product. Gemini was here and is not any more:
- * `?q=` opens the app but leaves the box empty, so the button promised the one
- * thing its neighbours deliver and then asked for a paste anyway. A control
- * that quietly does less than the identical control beside it is worse than no
- * control — "Copy prompt for your LLM" already serves Gemini honestly.
+ * Tested by hand against each product, and the list is shorter than it was
+ * because two of them failed.
+ *
+ * Gemini opens on `?q=` and leaves the box empty, so the button promised the
+ * one thing its neighbours deliver and then asked for a paste anyway. A
+ * control that quietly does less than the identical control beside it is worse
+ * than no control — "Copy prompt for your LLM" already serves Gemini honestly.
+ *
+ * Copilot has no deep link at all. `?q=`, `?prompt=`, `/chats?q=`, the
+ * `sendquery`/`autosend` pairs and the old `bing.com/chat` entry point all
+ * canonicalise to the bare origin with an empty box; a control fetch of the
+ * same shape confirmed the parameter was not being lost in transit. There is
+ * nothing here to fix, so it is gone rather than kept as a button that
+ * silently does half its job.
+ *
+ * Grok prefills correctly and writes the plan, but will not call the MCP
+ * server — which is true of every product on this list. That is a fact about
+ * the return path, not about the launcher, and it is why the launchers are now
+ * only half of this feature.
  *
  * Perplexity prefills correctly but could not fetch `/llms.txt`, so it answered
  * by asking for the long prompt. It stays pending a re-test now that
  * `robots.txt` is served — its 403 was the likeliest cause. If that was not it,
  * Perplexity goes: a launcher that reliably leads to "send me the long prompt"
  * is a round trip to a dead end.
- *
- * Grok and Copilot are untested guesses at their parameter names, added to find
- * out. Each needs two things to earn its place — the box must actually prefill,
- * and the model must be able to read `/llms.txt` — and failing either is
- * grounds for removal rather than for a caveat in the UI.
  */
 
 export interface LlmProvider {
@@ -70,11 +79,6 @@ export const LLM_PROVIDERS: readonly LlmProvider[] = [
     id: 'grok',
     name: 'Grok',
     link: (prompt) => `https://grok.com/?q=${encodeURIComponent(prompt)}`,
-  },
-  {
-    id: 'copilot',
-    name: 'Copilot',
-    link: (prompt) => `https://copilot.microsoft.com/?q=${encodeURIComponent(prompt)}`,
   },
 ];
 

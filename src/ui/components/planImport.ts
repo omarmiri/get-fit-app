@@ -228,6 +228,59 @@ export function captureSharedPlan(context: ViewContext): boolean {
 }
 
 /**
+ * Ctrl-V anywhere in the app, and the plan is in.
+ *
+ * ## Why this exists alongside the clipboard button
+ *
+ * Reading the clipboard needs a permission the browser may refuse. Being
+ * *given* the clipboard needs nothing at all: a paste event carries its own
+ * data, in every browser, with no prompt, because the user pasting is the
+ * consent. It is the only route in that cannot be denied.
+ *
+ * So this is not a fallback for the button — it is the more reliable of the
+ * two, and it is free. On a phone it is a long-press and Paste on the page
+ * itself; at a desk it is the keystroke the user was already reaching for.
+ *
+ * ## Why a failed parse says nothing
+ *
+ * Every other route in is an explicit request — a button pressed, a file
+ * chosen — and an explicit request that fails deserves an explanation. This
+ * one fires on every paste in the app, including pastes meant for something
+ * else entirely, so it stays silent unless what arrived really was a plan.
+ * A copied URL should not produce a complaint about plan format.
+ *
+ * Pastes into a field are left alone for the same reason: the paste box, the
+ * gym description and the notes all want the text themselves.
+ */
+export function watchPastedPlans(getContext: () => ViewContext): void {
+  document.addEventListener('paste', (event) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('input, textarea, select, [contenteditable]')) return;
+
+    const pasted = event.clipboardData?.getData('text/plain') ?? '';
+    if (!pasted.trim()) return;
+
+    const { plan } = parsePortablePlan(pasted);
+    if (!plan) return;
+
+    event.preventDefault();
+
+    const context = getContext();
+    // The review card lives on the Plan tab, so a paste from anywhere else
+    // has to bring the user to it — a candidate rendered on a screen nobody
+    // is looking at is the same as no candidate.
+    context.ui.tab = 'plan';
+    reviewPlan(context, plan);
+    toast('Plan found on the clipboard — review it below');
+
+    // After the paint that `reviewPlan` asked for, not before it.
+    requestAnimationFrame(() => {
+      document.querySelector('.gen__candidate')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
+}
+
+/**
  * What the app is waiting for, and what to do if it never comes.
  *
  * ## Why this screen carries the whole design
