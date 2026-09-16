@@ -12,7 +12,22 @@
 # training data — and everything except the account backup works without it:
 #
 #   SUPABASE_URL=https://xxx.supabase.co SUPABASE_ANON_KEY=... ./infra/deploy.sh
+#
+# Stack parameters are sticky, so a later run without those variables keeps
+# whatever was set last time rather than clearing it.
+#
+# Note: this targets AWS CLI v1, which has no `--no-cli-pager`. The calls below
+# redirect their output instead. Do not add that flag — v1 rejects the whole
+# command rather than ignoring the unknown option, and if this script is piped
+# anywhere the failure is easy to miss.
 set -euo pipefail
+
+# Git Bash on Windows rewrites any argument that looks like a Unix path into
+# a Windows one before the child process sees it, which turns "/index.html"
+# into something CloudFront rejects as an invalid invalidation path.
+# Exporting this switches that off for the whole script; setting it inline on
+# the one command is not enough. Harmless on Linux and macOS.
+export MSYS_NO_PATHCONV=1
 
 STACK=rackfile
 REGION=us-east-1
@@ -52,8 +67,7 @@ echo "==> Publishing the function"
 aws lambda update-function-code \
   --function-name "$FUNCTION" \
   --zip-file fileb://infra/function.zip \
-  --region "$REGION" \
-  --no-cli-pager >/dev/null
+  --region "$REGION" >/dev/null
 aws lambda wait function-updated --function-name "$FUNCTION" --region "$REGION"
 
 # Fingerprinted files first, and with a long immutable lifetime. Uploading
@@ -82,8 +96,7 @@ aws s3 sync dist "s3://$BUCKET" \
 echo "==> Invalidating"
 aws cloudfront create-invalidation \
   --distribution-id "$DIST" \
-  --paths "/" "/index.html" "/sw.js" "/manifest.webmanifest" "/llms.txt" "/catalog.json" \
-  --no-cli-pager >/dev/null
+  --paths "/" "/index.html" "/sw.js" "/manifest.webmanifest" "/llms.txt" "/catalog.json" >/dev/null
 
 echo
 echo "Done — $(read_output SiteUrl)"

@@ -219,6 +219,41 @@ Resources:
             AccessControlMaxAgeSec: 31536000
             IncludeSubdomains: true
 
+  # The SPA fallback.
+  #
+  # ## Why a function and not CustomErrorResponses
+  #
+  # The obvious way to do this is to map 403/404 to /index.html with a 200.
+  # That was the first version here, and it is wrong: those mappings apply to
+  # the whole distribution, including /api/*, so the API's legitimate 404s came
+  # back as 200 with a page of HTML. A caller could not tell "no such session"
+  # from success, and the client's poll — which branches on a 404 to drop a
+  # dead session — would have tried to parse the shell as JSON.
+  #
+  # server.js already learned this: it scopes its fallback to navigations
+  # precisely so a missing asset gets a real 404 rather than a confusing parse
+  # error. A per-behaviour function is how that same rule is expressed here, and
+  # it leaves every API response untouched because the API behaviours do not
+  # have the function attached.
+  SpaFallback:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: rackfile-spa
+      AutoPublish: true
+      FunctionConfig:
+        Runtime: cloudfront-js-2.0
+        Comment: Serve the app shell for navigations to client-side routes.
+      FunctionCode: |
+        function handler(event) {
+          var request = event.request;
+          // A path with no file extension is a navigation, not an asset.
+          // Assets keep their real 404 so a missing script fails visibly.
+          if (request.uri.indexOf('.') === -1) {
+            request.uri = '/index.html';
+          }
+          return request;
+        }
+
   Distribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -255,6 +290,9 @@ Resources:
           # CloudFront honours that.
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
           ResponseHeadersPolicyId: !Ref SecurityHeaders
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt SpaFallback.FunctionMetadata.FunctionARN
 
         CacheBehaviors:
           - PathPattern: /api/*
@@ -272,19 +310,6 @@ Resources:
             ViewerProtocolPolicy: https-only
             AllowedMethods: [GET, HEAD]
             CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
-
-        # The SPA fallback server.js used to do, scoped the same way: a
-        # navigation to an unknown path gets the shell, and 200 rather than 404
-        # so the history API behaves.
-        CustomErrorResponses:
-          - ErrorCode: 403
-            ResponseCode: 200
-            ResponsePagePath: /index.html
-            ErrorCachingMinTTL: 0
-          - ErrorCode: 404
-            ResponseCode: 200
-            ResponsePagePath: /index.html
-            ErrorCachingMinTTL: 0
 
   DnsRecord:
     Type: AWS::Route53::RecordSet
