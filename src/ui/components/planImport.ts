@@ -1,5 +1,6 @@
 import type { UserPlan } from '@/types';
 import { ALL_STATIONS, stationName } from '@/data/equipment';
+import { LLM_PROVIDERS, fitsInLink } from '@/data/llmProviders';
 import { type PlanValidation, validatePlan } from '@/domain/planValidation';
 import { parsePortablePlan } from '@/domain/planFormat';
 import { buildBriefPrompt, buildPrompt } from '@/spec/planSpec';
@@ -123,6 +124,8 @@ export function renderPlanImport(context: ViewContext): HTMLElement {
       on: { click: () => void copyPrompt(context) },
     }),
 
+    renderLaunchers(context),
+
     /*
      * The short prompt, for anyone who has connected the MCP server.
      *
@@ -226,6 +229,68 @@ function renderWaiting(context: ViewContext): HTMLElement {
     text(
       'prose',
       'If your LLM says it cannot send HTTP requests — most chat apps cannot — paste its reply below instead. Nothing is lost either way.',
+    ),
+  ]);
+}
+
+/**
+ * Open a chatbot with the prompt already in it.
+ *
+ * ## The window is opened before the work, not after
+ *
+ * `window.open` only survives a popup blocker while the browser still
+ * considers itself inside the click that caused it, and awaiting anything
+ * first ends that. Opening a blank tab synchronously and pointing it somewhere
+ * once the session exists is the standard way round it — get that order wrong
+ * and the feature works in Chrome and silently does nothing in Safari.
+ *
+ * `opener` is cleared before navigating, so the page that opens cannot reach
+ * back into this one.
+ */
+async function launch(context: ViewContext, providerId: string): Promise<void> {
+  const provider = LLM_PROVIDERS.find((p) => p.id === providerId);
+  if (!provider) return;
+
+  const tab = window.open('', '_blank');
+  if (tab) tab.opener = null;
+
+  const prompt = await buildPromptText(context, true);
+
+  /*
+   * Copied as well as linked. These query parameters are not promised by
+   * anyone and can stop working without notice; when that happens the user
+   * lands on an empty chat box with the right text already on the clipboard
+   * rather than on nothing at all.
+   */
+  try {
+    await navigator.clipboard.writeText(prompt);
+  } catch {
+    // Clipboard refused. The link is still the main path.
+  }
+
+  if (!prompt || !fitsInLink(provider, prompt)) {
+    tab?.close();
+    state.error = 'That prompt is too long to send by link. It is on your clipboard — paste it instead.';
+    context.render();
+    return;
+  }
+
+  if (tab) tab.location.href = provider.link(prompt);
+  else window.location.assign(provider.link(prompt));
+
+  context.render();
+}
+
+function renderLaunchers(context: ViewContext): HTMLElement {
+  return div('gen__group', [
+    text('prose', 'Or open one with the prompt already in it:'),
+    ...LLM_PROVIDERS.map((provider) =>
+      el('button', {
+        class: 'button button--ghost',
+        text: provider.name,
+        attrs: { type: 'button' },
+        on: { click: () => void launch(context, provider.id) },
+      }),
     ),
   ]);
 }
@@ -350,17 +415,22 @@ function reviewPlan(context: ViewContext, plan: UserPlan): void {
   context.render();
 }
 
-async function copyPrompt(context: ViewContext, brief = false): Promise<void> {
+/**
+ * Open a session and build the prompt that names it.
+ *
+ * Shared by the copy buttons and the launcher links, so that whichever route
+ * someone takes, the app is watching the same session the prompt mentions.
+ *
+ * Opening the session is best-effort. If it fails — offline, or the server is
+ * down — the full prompt is still built and still works; it simply asks for
+ * the JSON without offering anywhere to post it. Refusing to produce a prompt
+ * because a convenience could not be arranged would be the wrong trade.
+ */
+async function buildPromptText(context: ViewContext, brief = false): Promise<string> {
   const prefs = context.state.prefs;
   const profile = prefs.profile;
   const missing = new Set(prefs.missingStations ?? []);
 
-  /*
-   * Opening a session is best-effort. If it fails — offline, or the server is
-   * down — the prompt is still built and still works; it simply asks for the
-   * JSON without offering anywhere to post it. Refusing to copy a prompt
-   * because a convenience could not be arranged would be the wrong trade.
-   */
   let drop: { pushId: string; endpoint: string } | undefined;
   try {
     const session = await openDrop();
@@ -397,17 +467,24 @@ async function copyPrompt(context: ViewContext, brief = false): Promise<void> {
    * no drop open the tools have nothing to submit to, so fall back to the full
    * prompt rather than handing someone an id-shaped hole.
    */
-  const prompt =
-    brief && drop
-      ? buildBriefPrompt(person, drop.pushId, location.origin)
-      : buildPrompt(person, location.origin, drop);
+  return brief && drop
+    ? buildBriefPrompt(person, drop.pushId, location.origin)
+    : buildPrompt(person, location.origin, drop);
+}
+
+async function copyPrompt(context: ViewContext, brief = false): Promise<void> {
+  const prompt = await buildPromptText(context, brief);
 
   try {
     await navigator.clipboard.writeText(prompt);
     // Watching starts when the waiting card renders, not here — that way the
     // clipboard failing below still leaves a session being watched.
     context.render();
-    toast(prefs.gym ? 'Prompt copied — paste it to your LLM' : 'Prompt copied. Tip: describe your gym above');
+    toast(
+      context.state.prefs.gym
+        ? 'Prompt copied — paste it to your LLM'
+        : 'Prompt copied. Tip: describe your gym above',
+    );
   } catch {
     /*
      * Clipboard access can be refused outright — no permission, or an insecure
