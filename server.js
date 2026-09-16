@@ -43,6 +43,21 @@ const port = Number(process.env.PORT) || 3000;
  */
 const serveStatic = process.env.SERVE_STATIC !== 'false';
 
+/**
+ * The origin users actually type, which is not one this process can work out.
+ *
+ * Behind CloudFront the Host header reaching Express is API Gateway's, because
+ * the origin request policy forwards every viewer header *except* Host — it
+ * has to, since API Gateway routes on its own hostname. So a redirect URI
+ * derived from the request comes out as the execute-api domain, which is both
+ * wrong and, for Google sign-in, exactly the problem that flow exists to fix.
+ *
+ * Set explicitly in the stack. Falls back to deriving from the request so
+ * `npm start` on localhost needs no configuration.
+ */
+const publicOrigin = (process.env.PUBLIC_ORIGIN ?? '').replace(/\/+$/, '');
+const originOf = (req) => publicOrigin || `${req.protocol}://${req.get('host')}`;
+
 if (serveStatic && !existsSync(indexFile)) {
   console.error(`No build found at ${distDir}. Run "npm run build" first.`);
   process.exit(1);
@@ -236,7 +251,7 @@ app.put('/api/account/state', auth.attachUser, auth.requireUser, async (req, res
  * `returnTo` below is confined to this origin regardless of what is asked for.
  */
 app.get('/auth/google', async (req, res) => {
-  const origin = `${req.protocol}://${req.get('host')}`;
+  const origin = originOf(req);
 
   /*
    * An open redirect is the classic bug in this shape of endpoint — accept an
@@ -267,7 +282,7 @@ app.get('/auth/google', async (req, res) => {
  * either signed in or told why not. `account.ts` reads both shapes.
  */
 app.get('/auth/callback', async (req, res) => {
-  const origin = `${req.protocol}://${req.get('host')}`;
+  const origin = originOf(req);
   const fallback = `${origin}/`;
 
   // Google reports a refusal — a closed window, a declined consent — here

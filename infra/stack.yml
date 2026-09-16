@@ -132,6 +132,10 @@ Resources:
           # Tells server.js the static files are served elsewhere, so a missing
           # dist/ is the expected arrangement rather than a fatal error.
           SERVE_STATIC: 'false'
+          # The domain users type. Express cannot derive it: the origin request
+          # policy withholds the Host header from API Gateway, so the function
+          # only ever sees the execute-api hostname.
+          PUBLIC_ORIGIN: !Sub https://${DomainName}
           SUPABASE_URL: !If [HasAuth, !Ref SupabaseUrl, !Ref 'AWS::NoValue']
           SUPABASE_ANON_KEY: !If [HasAuth, !Ref SupabaseAnonKey, !Ref 'AWS::NoValue']
           GOOGLE_CLIENT_ID: !If [HasGoogle, !Ref GoogleClientId, !Ref 'AWS::NoValue']
