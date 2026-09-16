@@ -337,6 +337,56 @@ It also cost money per user and needed metering, quotas and an abuse story,
 all to duplicate something every user already has a subscription to. Bringing
 your own LLM is the better feature, and it is now the only one.
 
+## Connecting an LLM directly (MCP)
+
+The app exposes an MCP server at `https://fitness.miriogames.com/mcp`. Add it as
+a custom connector in a client that supports remote MCP — Claude, ChatGPT,
+Cursor, VS Code — and your LLM can send plans straight to the app.
+
+| Tool              | What it does                                                   |
+| ----------------- | -------------------------------------------------------------- |
+| `get_plan_format` | Returns the full specification, the same text as `/llms.txt`   |
+| `submit_plan`     | Sends a finished plan to a session, and explains any rejection |
+
+### It needs no sign-in
+
+The session id from the copied prompt is the capability, exactly as it is for
+the HTTP endpoint. There is no account, no OAuth flow, and no token to paste
+into a config file. That is the honest amount of authentication for an endpoint
+that only accepts a training plan addressed to an id you already hold.
+
+### There is nothing to read
+
+Every tool writes. The survey is typed on the device and never sent, so the
+server has never seen anyone's age, conditions or training history and could
+not expose them if asked. That is a property of where the data lives rather
+than a rule the MCP server enforces.
+
+It also keeps the session id worth nothing to a thief. A connector that could
+read would turn a write-only id — one that has been pasted into a third-party
+chat log — into something worth stealing.
+
+### What connecting actually buys
+
+Two things, and the second is the one people notice.
+
+A plan arrives without a copy and paste. And the prompt gets short: without a
+connector the app has to paste the entire contract, about 15kb of it, into the
+chat window every time, because a plain chat model has no way to go and read
+it. With one connected, the model calls `get_plan_format` itself and the paste
+shrinks to a sentence — which is what the "Copy short prompt" button produces.
+
+Either way a rejected plan comes back with the parser's own reason, so the model
+can correct itself on the same turn instead of the error being carried back to
+the chat by hand.
+
+### Coverage
+
+Custom connectors are a settings-menu operation and usually a paid-tier feature,
+so this is the power-user path rather than the default one. The copy-and-paste
+route is not going anywhere, and every screen that offers the push offers the
+paste box beside it.
+
 ## Deploying to AWS
 
 ```bash

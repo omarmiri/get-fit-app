@@ -79,7 +79,39 @@ export interface DropTarget {
  * The user's own details go at the top, where they are least likely to be lost
  * in a long document.
  */
-export function buildPrompt(context: PromptContext, siteUrl?: string, drop?: DropTarget): string {
+/**
+ * The short version, for someone who has connected the MCP server.
+ *
+ * The full prompt carries the whole contract inline — about 15kb — because a
+ * plain chat model has no way to go and read it. A connected client does: it
+ * calls `get_plan_format` itself. So the paste shrinks to the part the tools
+ * cannot supply, which is the person and their session id.
+ *
+ * This is the actual payoff of connecting the server. Submitting without a
+ * paste is convenient; not having to paste a specification into a chat window
+ * every time is the thing people will notice.
+ */
+export function buildBriefPrompt(context: PromptContext, pushId: string): string {
+  return `Please write me a one-week training plan for Rack & File.
+
+ABOUT ME
+${describe(context)}
+
+Use the rack-and-file tools: call get_plan_format for the specification, then
+submit_plan with sessionId "${pushId}" once the plan is written. If submit_plan
+rejects it, the error says what is wrong — fix it and submit again.
+
+If you do not have those tools available, say so and reply with the plan as
+JSON instead, and I will paste it in.`;
+}
+
+/**
+ * The person, as bullet points, for whichever prompt is being built.
+ *
+ * Their own details go first in both, where they are least likely to be lost
+ * in a long document.
+ */
+function describe(context: PromptContext): string {
   const person: string[] = [];
 
   if (context.age) person.push(`- Age: ${context.age}`);
@@ -95,10 +127,13 @@ export function buildPrompt(context: PromptContext, siteUrl?: string, drop?: Dro
     person.push(`- My gym does NOT have: ${context.missingEquipment.join(', ')}`);
   }
 
-  const about =
-    person.length > 0
-      ? person.join('\n')
-      : '- (I have not filled in my details — assume a general adult beginner and stay conservative.)';
+  return person.length > 0
+    ? person.join('\n')
+    : '- (I have not filled in my details — assume a general adult beginner and stay conservative.)';
+}
+
+export function buildPrompt(context: PromptContext, siteUrl?: string, drop?: DropTarget): string {
+  const about = describe(context);
 
   /*
    * Deliberately not "ask me first".

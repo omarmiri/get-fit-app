@@ -305,6 +305,18 @@ Resources:
             # Managed-AllViewerExceptHostHeader. Forwards Authorization, which
             # the drop poll and every account route depend on.
             OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+          # The MCP connector endpoint. Needs the same treatment as /api:
+          # never cached, and every header forwarded — the transport carries
+          # protocol state in mcp-protocol-version and content negotiation in
+          # Accept, and a stripped header there fails in ways that look like a
+          # broken client rather than a broken CDN.
+          - PathPattern: /mcp
+            TargetOriginId: api
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            Compress: true
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
           - PathPattern: /health
             TargetOriginId: api
             ViewerProtocolPolicy: https-only

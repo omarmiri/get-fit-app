@@ -50,9 +50,19 @@ export default defineConfig({
     // the server useless for no meaningful saving on a cold start.
     minify: false,
     lib: {
-      entry: fileURLToPath(new URL('./src/domain/planFormat.ts', import.meta.url)),
+      /*
+       * Two entries, for the two things the server needs from the TypeScript
+       * side: the parser that decides whether a pushed plan is a plan, and the
+       * spec generator that tells a connected LLM what one looks like. Both
+       * are read by the browser too — bundling rather than reimplementing is
+       * what keeps the server and the app from disagreeing.
+       */
+      entry: {
+        planFormat: fileURLToPath(new URL('./src/domain/planFormat.ts', import.meta.url)),
+        planSpec: fileURLToPath(new URL('./src/spec/planSpec.ts', import.meta.url)),
+      },
       formats: ['es'],
-      fileName: () => 'planFormat.mjs',
+      fileName: (_format, name) => `${name}.mjs`,
     },
   },
 });

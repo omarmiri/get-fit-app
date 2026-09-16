@@ -2,7 +2,7 @@ import type { UserPlan } from '@/types';
 import { ALL_STATIONS, stationName } from '@/data/equipment';
 import { type PlanValidation, validatePlan } from '@/domain/planValidation';
 import { parsePortablePlan } from '@/domain/planFormat';
-import { buildPrompt } from '@/spec/planSpec';
+import { buildBriefPrompt, buildPrompt } from '@/spec/planSpec';
 import { clearDrop, currentDrop, dropEndpoint, openDrop, pollDrop } from '@/services/planDrop';
 import { conditionsList, getNotes } from '@/state/ephemeral';
 import { card, div, el, eyebrow, text } from '../dom';
@@ -121,6 +121,21 @@ export function renderPlanImport(context: ViewContext): HTMLElement {
       text: 'Copy prompt for your LLM',
       attrs: { type: 'button' },
       on: { click: () => void copyPrompt(context) },
+    }),
+
+    /*
+     * The short prompt, for anyone who has connected the MCP server.
+     *
+     * Offered rather than detected, because the app has no way to know what a
+     * user has configured in someone else's chat client. Getting it wrong
+     * costs a paste in one direction and a confused model in the other, so the
+     * user says which they have and the wording makes the consequence clear.
+     */
+    el('button', {
+      class: 'button button--ghost',
+      text: 'Copy short prompt (connector)',
+      attrs: { type: 'button', title: 'For clients with the Rack & File connector added' },
+      on: { click: () => void copyPrompt(context, true) },
     }),
 
     div('gen__group', [
@@ -335,7 +350,7 @@ function reviewPlan(context: ViewContext, plan: UserPlan): void {
   context.render();
 }
 
-async function copyPrompt(context: ViewContext): Promise<void> {
+async function copyPrompt(context: ViewContext, brief = false): Promise<void> {
   const prefs = context.state.prefs;
   const profile = prefs.profile;
   const missing = new Set(prefs.missingStations ?? []);
@@ -355,31 +370,35 @@ async function copyPrompt(context: ViewContext): Promise<void> {
     state.pushId = null;
   }
 
-  const prompt = buildPrompt(
-    {
-      ...(prefs.gym ? { gym: prefs.gym } : {}),
-      ...(prefs.likes ? { likes: prefs.likes } : {}),
-      ...(profile
-        ? {
-            age: profile.age,
-            bodyweight: profile.bodyweight,
-            bodyweightUnit: profile.bodyweightUnit,
-            level: profile.level,
-          }
-        : {}),
-      // Read from ephemeral state, not preferences — health context is typed
-      // per plan and never stored. See `state/ephemeral.ts`.
-      ...(conditionsList().length > 0 ? { conditions: conditionsList() } : {}),
-      ...(getNotes() ? { notes: getNotes() } : {}),
-      // Only what they have actually crossed off. Listing all forty stations
-      // as "available" would be a claim the app cannot support.
-      ...(missing.size > 0
-        ? { missingEquipment: ALL_STATIONS.filter((s) => missing.has(s.id)).map((s) => stationName(s.id)) }
-        : {}),
-    },
-    location.origin,
-    drop,
-  );
+  const person = {
+    ...(prefs.gym ? { gym: prefs.gym } : {}),
+    ...(prefs.likes ? { likes: prefs.likes } : {}),
+    ...(profile
+      ? {
+          age: profile.age,
+          bodyweight: profile.bodyweight,
+          bodyweightUnit: profile.bodyweightUnit,
+          level: profile.level,
+        }
+      : {}),
+    // Read from ephemeral state, not preferences — health context is typed
+    // per plan and never stored. See `state/ephemeral.ts`.
+    ...(conditionsList().length > 0 ? { conditions: conditionsList() } : {}),
+    ...(getNotes() ? { notes: getNotes() } : {}),
+    // Only what they have actually crossed off. Listing all forty stations
+    // as "available" would be a claim the app cannot support.
+    ...(missing.size > 0
+      ? { missingEquipment: ALL_STATIONS.filter((s) => missing.has(s.id)).map((s) => stationName(s.id)) }
+      : {}),
+  };
+
+  /*
+   * The brief prompt is only honest if there is a session to name in it. With
+   * no drop open the tools have nothing to submit to, so fall back to the full
+   * prompt rather than handing someone an id-shaped hole.
+   */
+  const prompt =
+    brief && drop ? buildBriefPrompt(person, drop.pushId) : buildPrompt(person, location.origin, drop);
 
   try {
     await navigator.clipboard.writeText(prompt);

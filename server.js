@@ -21,6 +21,7 @@ import helmet from 'helmet';
 import { AccountError, loadState, saveState } from './account.js';
 import * as auth from './auth.js';
 import { lastHeartbeat, startSupabaseHeartbeat } from './keepalive.js';
+import { handleMcpRequest } from './mcp.js';
 import { DropError, createSession, pushPlan, readSession } from './sessions.js';
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
@@ -215,6 +216,31 @@ app.put('/api/account/state', auth.attachUser, auth.requireUser, async (req, res
     console.error(`[account] save failed: ${error?.message ?? 'unknown'}`);
     return res.status(502).json({ error: 'Could not save to your backup.' });
   }
+});
+
+/* -------------------------------------------------------------------- mcp */
+
+/*
+ * The connector entry point. Same plan drop as the HTTP endpoint below, for a
+ * client that can call tools — see `mcp.js` for why it needs no authentication
+ * and exposes nothing to read.
+ */
+app.use('/mcp', express.json({ limit: '256kb' }));
+
+app.options('/mcp', (_req, res) => {
+  res.set({
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, GET, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'content-type, mcp-session-id, mcp-protocol-version',
+    'Access-Control-Expose-Headers': 'mcp-session-id',
+    'Access-Control-Max-Age': '86400',
+  });
+  res.status(204).end();
+});
+
+app.all('/mcp', (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  void handleMcpRequest(req, res);
 });
 
 /* ------------------------------------------------------------------ drops */

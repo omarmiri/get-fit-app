@@ -20,6 +20,7 @@ relying on `.gitattributes` being right forever.
 """
 
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -39,6 +40,7 @@ SOURCES = [
     "auth.js",
     "keepalive.js",
     "kv.js",
+    "mcp.js",
     "sessions.js",
     "package.json",
     # The lockfile travels too: `npm ci` needs it, and `npm install` from a
@@ -49,6 +51,37 @@ SOURCES = [
 # What the adapter executes. `exec` so node replaces the shell and receives
 # signals directly — otherwise SIGTERM on shutdown never reaches it.
 RUN_SH = "#!/bin/sh\nexec node server.js\n"
+
+
+def check_imports() -> None:
+    """
+    Fail here rather than at runtime if a module was left out of SOURCES.
+
+    SOURCES is an explicit list because the archive should say what it ships
+    rather than sweeping up whatever is lying in the repo root — `npm start`
+    and the Lambda do not need the same files. The cost of being explicit is
+    that adding a server module and forgetting this list produces a function
+    that dies on its first invocation with ERR_MODULE_NOT_FOUND, which is a
+    slow and confusing way to learn about a one-line omission.
+
+    So every relative import in the staged files is resolved against the
+    staging directory before the zip is written.
+    """
+    missing = []
+
+    for source in STAGE.glob("*.js"):
+        text = source.read_text(encoding="utf-8")
+        for spec in re.findall(r"""from\s+['"](\.[^'"]+)['"]""", text):
+            target = (source.parent / spec).resolve()
+            if not target.exists():
+                missing.append(f"{source.name} imports {spec}")
+
+    if missing:
+        raise SystemExit(
+            "These imports would not resolve inside the archive:\n  "
+            + "\n  ".join(missing)
+            + "\n\nAdd the missing file to SOURCES in this script."
+        )
 
 
 def main() -> int:
@@ -75,6 +108,8 @@ def main() -> int:
         check=True,
         shell=os.name == "nt",
     )
+
+    check_imports()
 
     OUT.parent.mkdir(exist_ok=True)
     if OUT.exists():
