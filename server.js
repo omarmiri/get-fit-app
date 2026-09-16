@@ -20,7 +20,7 @@ import helmet from 'helmet';
 
 import { AccountError, loadState, saveState } from './account.js';
 import * as auth from './auth.js';
-import { lastHeartbeat, startKeepAlive, startSupabaseHeartbeat } from './keepalive.js';
+import { lastHeartbeat, startSupabaseHeartbeat } from './keepalive.js';
 import { DropError, createSession, pushPlan, readSession } from './sessions.js';
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
@@ -338,10 +338,6 @@ const server = app.listen(port, () => {
   console.log(`Rack & File listening on :${port}`);
 });
 
-// Keeps a warm instance warm during waking hours. Cannot wake a cold one — the
-// external cron in .github/workflows/keepalive.yml does that.
-const stopKeepAlive = startKeepAlive();
-
 /*
  * Supabase pauses a free project after about a week of inactivity, and this
  * app would otherwise give it none: identity is all it is used for, and every
@@ -356,7 +352,6 @@ const stopHeartbeat = startSupabaseHeartbeat(
 // dropping in-flight responses.
 for (const signal of ['SIGTERM', 'SIGINT']) {
   process.on(signal, () => {
-    stopKeepAlive?.();
     stopHeartbeat?.();
     server.close(() => process.exit(0));
   });

@@ -29,5 +29,15 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["src", "tests", "vite.config.ts", "vite.server.config.ts", "vitest.config.ts"]
+  "include": [
+    "src",
+    "tests",
+    /* The server's plain-JS modules are typed by hand-written declarations at
+       the root. Listed explicitly so they stay part of the project even when
+       no test happens to import the module they describe. */
+    "*.d.ts",
+    "vite.config.ts",
+    "vite.server.config.ts",
+    "vitest.config.ts"
+  ]
 }
