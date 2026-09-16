@@ -1,5 +1,5 @@
 /**
- * Per-account storage of the app's state blob, and per-account metering.
+ * Per-account storage of the app's state blob.
  *
  * ## Backup and restore, not sync
  *
@@ -20,10 +20,9 @@
  * persisted state, so there is nothing to store — see `state/ephemeral.ts`.
  */
 
-import { kvGet, kvIncrement, kvSet } from './kv.js';
+import { kvGet, kvSet } from './kv.js';
 
 const stateKey = (uid) => `fit:state:${uid}`;
-const quotaKey = (uid) => `fit:quota:plan:${uid}`;
 
 /**
  * Cap on a stored blob.
@@ -33,16 +32,6 @@ const quotaKey = (uid) => `fit:quota:plan:${uid}`;
  * writes to, and "as much as you like" is not a size.
  */
 export const MAX_STATE_BYTES = 2 * 1024 * 1024;
-
-/**
- * Plan generations allowed per account per day.
- *
- * The old IP-based limit existed because "the concern is not abuse but an
- * accidental loop". With accounts that stops being true: the key is the
- * operator's and the users are not all the operator. This is the meter that
- * replaces trust.
- */
-export const PLAN_QUOTA = { max: 20, windowMs: 24 * 60 * 60 * 1000 };
 
 /** The stored blob for an account, or `null` if there is none yet. */
 export async function loadState(uid) {
@@ -70,24 +59,6 @@ export async function saveState(uid, state) {
   }
 
   await kvSet(stateKey(uid), { state, updatedAt: Date.now() });
-}
-
-/**
- * Count one plan generation against an account's daily allowance.
- *
- * Throws when the allowance is spent. Counted before the call to Gemini rather
- * than after: a failed generation still costs a request upstream, and metering
- * only successes is how a retry loop bills the operator for a thousand errors.
- */
-export async function meterPlanGeneration(uid) {
-  const used = await kvIncrement(quotaKey(uid), PLAN_QUOTA.windowMs);
-  if (used > PLAN_QUOTA.max) {
-    throw new AccountError(
-      `That is ${PLAN_QUOTA.max} plans today, which is the daily limit. Write one with your own LLM in the meantime — the app takes those too.`,
-      429,
-    );
-  }
-  return { used, remaining: Math.max(0, PLAN_QUOTA.max - used) };
 }
 
 export class AccountError extends Error {

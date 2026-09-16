@@ -320,25 +320,22 @@ one tap away.
 every string an author controls. There is no server to repair a browser whose
 only storage key has been filled with one pathological note.
 
-## Generating a plan in-app (Gemini)
+## Why there is no in-app generator
 
-The convenience path, for when you do not want to leave the app. Set
-`GEMINI_API_KEY` in the Render environment; the app hides the control when the
-server reports no key, so it never offers a button that can only fail.
+There was one: a server-side Gemini proxy behind `/api/plan/generate`, with the
+key held in the server process and a per-account daily quota to stop users
+spending the operator's credit. It was removed.
 
-| Variable         | Purpose                                   |
-| ---------------- | ----------------------------------------- |
-| `GEMINI_API_KEY` | Required. Read server-side only.          |
-| `GEMINI_MODEL`   | Optional. Defaults to `gemini-2.5-flash`. |
+It was the only place a user's health context ever reached a server the
+operator runs. Everything else about this app keeps training data on the
+device, and that one route meant the privacy claim needed a footnote. Deleting
+it turns "your health context never leaves your device" from a policy into a
+property of the architecture — there is no longer any code path that could
+carry it off the device.
 
-**The key never reaches the browser.** `gemini.js` runs in the server process and
-`/api/plan/generate` proxies the call. Never move this to a `VITE_`-prefixed
-variable — Vite inlines those into the client bundle at build time.
-
-This path is not privileged. Gemini emits the same format documented at
-`/llms.txt`, and the response goes through the same parser and the same
-validator as a stranger's pasted file. One format, one code path, one place for
-a hole to be found by a test.
+It also cost money per user and needed metering, quotas and an abuse story,
+all to duplicate something every user already has a subscription to. Bringing
+your own LLM is the better feature, and it is now the only one.
 
 ### Why there is no cloud-storage integration
 

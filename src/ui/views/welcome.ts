@@ -4,7 +4,6 @@ import { card, div, el, eyebrow, text } from '../dom';
 import { toast } from '../toast';
 import { renderAccountCard } from '../components/accountCard';
 import { renderGymSetup } from '../components/gymSetup';
-import { renderPlanGenerator } from '../components/planGenerator';
 import { renderPlanImport } from '../components/planImport';
 import { renderPlanInputs } from '../components/planInputs';
 import type { ViewContext } from './context';
@@ -15,24 +14,24 @@ import type { ViewContext } from './context';
  * ## Why this exists
  *
  * The app used to open straight onto a seven-day rotation nobody had chosen,
- * with no indication of where it came from, while the two features that make
- * the app interesting — bring a plan from any LLM, or generate one — sat three
- * taps deep in a settings tab. Someone opening it for the first time would
- * reasonably conclude it was a fixed programme they had to follow.
+ * with no indication of where it came from, while the feature that makes the
+ * app interesting — bring a plan from whichever LLM you already use — sat
+ * three taps deep in a settings tab. Someone opening it for the first time
+ * would reasonably conclude it was a fixed programme they had to follow.
  *
  * ## What it is not
  *
- * Not a sign-up wall. Two of the three routes need no account and no network,
- * the built-in week is still one tap away, and nothing here can be failed. The
- * question is only "how do you want to train", and every answer is allowed —
- * including "just give me something sensible".
+ * Not a sign-up wall. Neither route needs an account, the built-in week is
+ * still one tap away, and nothing here can be failed. The question is only
+ * "how do you want to train", and every answer is allowed — including "just
+ * give me something sensible".
  *
  * ## Why the built-in plan is offered last
  *
  * Not because it is worst. It is the fallback the whole app is built around
  * and there is nothing wrong with it. It is last because it is the option that
- * needs no explanation, and putting it first would make the other two look
- * like advanced settings — which is exactly the problem this screen fixes.
+ * needs no explanation, and putting it first would make the other one look
+ * like an advanced setting — which is exactly the problem this screen fixes.
  */
 export function renderWelcomeView(context: ViewContext): Child[] {
   return [
@@ -51,7 +50,6 @@ export function renderWelcomeView(context: ViewContext): Child[] {
       /* No re-render: redrawing on each keystroke would lose the caret. */
     }),
     renderPlanImport(context),
-    renderPlanGenerator(context),
     renderAccountCard(context),
     renderFooter(),
   ];
