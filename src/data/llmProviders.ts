@@ -31,10 +31,16 @@
  * that quietly does less than the identical control beside it is worse than no
  * control — "Copy prompt for your LLM" already serves Gemini honestly.
  *
- * Perplexity prefills correctly but cannot fetch `/llms.txt`, so it answers by
- * asking for the long prompt. It stays only while that remains worth
- * re-testing; if it cannot read the spec it cannot use the short prompt, and
- * the button is a round trip to a dead end.
+ * Perplexity prefills correctly but could not fetch `/llms.txt`, so it answered
+ * by asking for the long prompt. It stays pending a re-test now that
+ * `robots.txt` is served — its 403 was the likeliest cause. If that was not it,
+ * Perplexity goes: a launcher that reliably leads to "send me the long prompt"
+ * is a round trip to a dead end.
+ *
+ * Grok and Copilot are untested guesses at their parameter names, added to find
+ * out. Each needs two things to earn its place — the box must actually prefill,
+ * and the model must be able to read `/llms.txt` — and failing either is
+ * grounds for removal rather than for a caveat in the UI.
  */
 
 export interface LlmProvider {
@@ -59,6 +65,16 @@ export const LLM_PROVIDERS: readonly LlmProvider[] = [
     id: 'perplexity',
     name: 'Perplexity',
     link: (prompt) => `https://www.perplexity.ai/search?q=${encodeURIComponent(prompt)}`,
+  },
+  {
+    id: 'grok',
+    name: 'Grok',
+    link: (prompt) => `https://grok.com/?q=${encodeURIComponent(prompt)}`,
+  },
+  {
+    id: 'copilot',
+    name: 'Copilot',
+    link: (prompt) => `https://copilot.microsoft.com/?q=${encodeURIComponent(prompt)}`,
   },
 ];
 

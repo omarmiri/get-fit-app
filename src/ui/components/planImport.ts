@@ -142,6 +142,19 @@ export function renderPlanImport(context: ViewContext): HTMLElement {
     }),
 
     div('gen__group', [
+      /*
+       * First, because it is the shortest path back: one tap where the box
+       * below takes four. The box stays for the browsers that refuse to hand
+       * over the clipboard, and for anyone who would rather see what they are
+       * importing before it is read.
+       */
+      el('button', {
+        class: 'button button--primary',
+        text: 'Paste plan from clipboard',
+        attrs: { type: 'button' },
+        on: { click: () => void importFromClipboard(context) },
+      }),
+
       el('button', {
         class: 'button button--ghost',
         text: state.open ? 'Hide the paste box' : 'Paste a plan',
@@ -182,6 +195,36 @@ export function renderPlanImport(context: ViewContext): HTMLElement {
         })
       : null,
   ]);
+}
+
+/**
+ * A plan arriving from the system share sheet.
+ *
+ * Android delivers a share to the manifest's `share_target` as a normal
+ * navigation with the shared text in the query string, so this is read on load
+ * in the same way, and at the same moment, as a sign-in redirect.
+ *
+ * The URL is cleaned whether or not the text turns out to be a plan. Leaving it
+ * would mean a refresh re-importing something already dealt with, and a shared
+ * plan sitting in the address bar, the back button and any link the user then
+ * shares onwards — the same reasoning as the tokens in `account.ts`.
+ *
+ * Returns whether anything was found, so the caller can decide to re-render.
+ */
+export function captureSharedPlan(context: ViewContext): boolean {
+  const params = new URLSearchParams(location.search);
+  const shared = params.get('shared');
+  if (!shared) return false;
+
+  params.delete('shared');
+  params.delete('shared_title');
+  const query = params.toString();
+  history.replaceState(null, '', `${location.pathname}${query ? `?${query}` : ''}${location.hash}`);
+
+  // The same parser as every other route in. A share that was not a plan gets
+  // the parser's own explanation rather than a guess about what it might be.
+  review(context, shared);
+  return true;
 }
 
 /**
@@ -293,6 +336,52 @@ function renderLaunchers(context: ViewContext): HTMLElement {
       }),
     ),
   ]);
+}
+
+/**
+ * Read a plan straight off the clipboard.
+ *
+ * ## Why this is a button and not automatic
+ *
+ * Reading the clipboard on focus would be the nicer trick and does not work.
+ * `readText` needs a user gesture in Safari, prompts for a permission in
+ * Chrome, and is not implemented for web pages in Firefox at all — so the
+ * version that watches for focus is the version that silently does nothing for
+ * a large share of people, with no way for them to tell why.
+ *
+ * A button is a gesture, which satisfies every one of those rules, and it
+ * still collapses the old sequence — open the box, tap the box, paste, press
+ * Check — into a single tap. That matters most on a phone, where a long-press
+ * paste into a textarea is the fiddliest part of the whole flow.
+ *
+ * Failure falls back to the paste box rather than to an apology: the clipboard
+ * may be denied, empty, or hold something else entirely, and in all three
+ * cases the useful response is the same.
+ */
+async function importFromClipboard(context: ViewContext): Promise<void> {
+  let pasted = '';
+  try {
+    pasted = await navigator.clipboard.readText();
+  } catch {
+    state.error = 'This browser would not let the app read the clipboard. Paste it into the box instead.';
+    state.open = true;
+    context.render();
+    return;
+  }
+
+  if (!pasted.trim()) {
+    state.error = "The clipboard is empty. Copy your LLM's reply first.";
+    context.render();
+    return;
+  }
+
+  /*
+   * Handed to the same parser as everything else, which already tolerates the
+   * surrounding prose and code fences an LLM reply arrives wrapped in — so
+   * there is no need to guess here whether the clipboard "looks like" a plan.
+   * If it is not one, the parser says so better than a heuristic could.
+   */
+  review(context, pasted);
 }
 
 function renderPasteBox(context: ViewContext): HTMLElement {

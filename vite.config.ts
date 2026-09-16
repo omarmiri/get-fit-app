@@ -80,6 +80,28 @@ export default defineConfig({
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
+        /*
+         * Appear in the system share sheet, so a plan can be sent here from
+         * whichever chat app it was written in — select the JSON, Share, done.
+         * That removes the clipboard from the return leg entirely, which is
+         * worth most on a phone, where long-pressing to paste several kilobytes
+         * into a textarea is the worst part of the whole flow.
+         *
+         * GET rather than POST on purpose. A POST share target only works if a
+         * service worker intercepts the request, which is a second mechanism to
+         * keep correct for no gain at this size: a plan is a few kilobytes and
+         * rides in a query string comfortably. The app reads `?shared=` on load
+         * exactly as it already reads a sign-in redirect.
+         *
+         * Android only — iOS does not implement share targets for installed web
+         * apps — so this adds a path for some people and takes nothing from
+         * anyone.
+         */
+        share_target: {
+          action: './',
+          method: 'GET',
+          params: { text: 'shared', title: 'shared_title' },
+        },
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
