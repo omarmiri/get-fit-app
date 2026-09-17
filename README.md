@@ -248,22 +248,45 @@ catalogue modules the parser uses — so the documentation cannot promise a fiel
 the parser rejects. `/catalog.json` carries the built-in ids in machine-readable
 form.
 
-Four ways in, all landing on the same parser and the same validator:
+Five ways in, all landing on the same parser and the same validator:
 
 | Route                    | For                                                                                                                                                       |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Open a chatbot**       | One tap. Opens ChatGPT, Claude, Perplexity or Grok with a short prompt already in the box; the model fetches `/llms.txt` for the format.                    |
-| **Copy the prompt**      | Any model, including one with no network. Carries the whole 15kb contract plus your gym, profile and health context.                                       |
-| **Paste anywhere**       | The way back in. A paste event needs no permission in any browser, so Ctrl-V on the page — or long-press and Paste on a phone — opens the review card.     |
+| **Tap a link**           | The normal path. The model ends its reply with **Open in Rack & File** and the week rides in the URL fragment — one tap, nothing to copy.                   |
+| **Open a chatbot**       | The other half of that. Opens ChatGPT, Claude, Perplexity or Grok with a short prompt already in the box; the model fetches `/llms.txt` for the format.     |
+| **Copy the prompt**      | Any model, including one with no network. Carries the whole contract plus your gym, profile and health context.                                            |
+| **Paste anywhere**       | When the model could not manage a link. A paste event needs no permission in any browser, so Ctrl-V on the page — or long-press and Paste — opens review.   |
 | **Open a plan file**     | Whatever the model handed you as a download. On Android this covers Google Drive too, since Drive mounts in the system file picker.                        |
 
 Everything but the launchers works offline, and none of it involves a third
 party: the prompt is assembled on the device, and the survey answers that go
 into it are never sent anywhere.
 
+### The link, and the format that makes it possible
+
+A plan in JSON is six to twelve kilobytes — too big for a URL, which is why
+the plan used to come back by copy and paste. `domain/compactPlan.ts` defines a
+line-based form of the same week that fits in about 700 characters, so a whole
+seven-day plan travels in a fragment inside a 950-character link.
+
+It is a **fragment**, not a query string, so it is never sent to the server: not
+to the access log, not to CloudFront, not through a `Referer`. The plan stays
+between the chat window and the device. The app reads it before the first
+paint, strips it from the URL, and shows the same review card every other route
+gets — nothing is adopted without a tap.
+
+The format is shaped around being typed correctly by a language model on the
+first attempt. Base64 and gzip are out, since a model cannot do either by hand.
+A positional CSV is out too: one field in the wrong slot shifts a whole day
+invisibly. So it is two positional fields and then `key=value` pairs — a key
+left out takes its default, a key invented is ignored, order does not matter.
+What it cannot carry is the prose that describes a *defined* movement, which is
+most of the bytes; `/llms.txt` says to send JSON as well when a week leans on
+movements the catalogue does not have.
+
 ### What is not the normal path, and why
 
-There is a fifth route — an MCP server at `/mcp` and a write-only session id,
+There is a sixth route — an MCP server at `/mcp` and a write-only session id,
 so a model can push the finished plan straight into the waiting app. It is
 built, tested and live, and it is behind a button rather than in the default
 prompt, because no consumer chat product can currently reach it. ChatGPT,

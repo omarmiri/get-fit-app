@@ -6,6 +6,7 @@ import { getBuiltinExercise } from '../data/exercises';
 import { getStation } from '../data/equipment';
 import { isDayKey } from '../data/plan';
 import { isWeightUnit } from './units';
+import { expandCompactPlan } from './compactPlan';
 
 /**
  * The interchange format: what an LLM writes, and how it becomes a `UserPlan`.
@@ -439,6 +440,21 @@ function decode(text: string): unknown {
     .filter(Boolean)
     .sort((a, b) => b.length - a.length);
   candidates.push(...fences);
+
+  /*
+   * Compact plans are expanded here rather than at the call sites, so that
+   * every route in accepts one: a tapped link, a paste, a shared message, a
+   * file. There is one parser and one validator, and this format is a way of
+   * writing their input rather than a second way in.
+   *
+   * Tried before JSON because the two cannot be confused — compact text has to
+   * open with the marker — and tried across the fenced blocks too, since a
+   * model that has just been shown a line-based format will often fence it.
+   */
+  for (const candidate of candidates) {
+    const compact = expandCompactPlan(candidate);
+    if (compact) return compact;
+  }
 
   // Bare object embedded in prose.
   const first = trimmed.indexOf('{');

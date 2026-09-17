@@ -14,12 +14,17 @@ import { renderPlanCandidate } from './planCandidate';
 /**
  * Bring in a plan written by whichever LLM the user prefers.
  *
- * Three steps, in the order someone actually performs them: copy a prompt,
- * take it to their chatbot, bring the answer back. The third step accepts
- * either a paste or a file, because "the answer" arrives differently depending
- * on whether they were at a desk or on a phone.
+ * Three steps, in the order someone actually performs them: send a prompt,
+ * tap the link that comes back, or — when the model could not manage a link —
+ * bring the answer back by hand.
  *
- * Both routes work offline and neither involves any third party. An earlier
+ * The link is the whole point of the arrangement. A plan in JSON is too big to
+ * put in a URL, so a compact form of the same week travels in the fragment
+ * instead and the user taps once; see `domain/compactPlan.ts`. Everything else
+ * here is what happens when that does not work, and none of it is hidden,
+ * because a model that cannot build a link will not always admit it.
+ *
+ * All of it works offline and none involves any third party. An earlier
  * version also accepted a Google Drive share link, fetched through a server
  * proxy. It was dropped: using it meant setting a file containing the user's
  * health context, age and bodyweight to "anyone with the link", which is a
@@ -171,16 +176,19 @@ export function renderPlanImport(context: ViewContext): HTMLElement {
 
     /* ----------------------------------------------------------- step two */
 
-    eyebrow('2 · Copy its answer'),
+    eyebrow('2 · Tap the link it gives you'),
     text(
       'prose',
-      'The plan comes back as a block of JSON. Chat apps put a copy button on that block — one tap takes exactly the plan and nothing else.',
+      'The reply should end with an "Open in Rack & File" link. Tapping it brings the whole week straight here — nothing to copy, nothing to paste.',
     ),
 
     /* --------------------------------------------------------- step three */
 
-    eyebrow('3 · Bring it back here'),
-    text('prose', 'Paste it anywhere on this page — Ctrl-V, or long-press and Paste on a phone.'),
+    eyebrow('3 · Or bring it back yourself'),
+    text(
+      'prose',
+      'Some models will not manage the link, and say so. Then copy the block of JSON from the reply — chat apps put a copy button on it — and paste anywhere on this page: Ctrl-V, or long-press and Paste on a phone.',
+    ),
 
     div('gen__group', [
       el('button', {
@@ -235,33 +243,82 @@ export function renderPlanImport(context: ViewContext): HTMLElement {
 }
 
 /**
- * A plan arriving from the system share sheet.
+ * A plan arriving from outside the app: a tapped link, or the system share
+ * sheet.
  *
- * Android delivers a share to the manifest's `share_target` as a normal
- * navigation with the shared text in the query string, so this is read on load
- * in the same way, and at the same moment, as a sign-in redirect.
+ * ## The three doors, and why they are one function
  *
- * The URL is cleaned whether or not the text turns out to be a plan. Leaving it
- * would mean a refresh re-importing something already dealt with, and a shared
- * plan sitting in the address bar, the back button and any link the user then
- * shares onwards — the same reasoning as the tokens in `account.ts`.
+ * `#plan=` is the one that matters. A model ends its reply with **Open in Rack
+ * & File** and the whole week rides in the fragment, so the user taps once and
+ * is looking at the review card — no copy, no app switch, no paste. It is a
+ * fragment rather than a query because a fragment is never sent to a server:
+ * not to the access log, not to CloudFront, and not through a `Referer`.
+ *
+ * `?plan=` is the same thing built slightly wrong, which a model will do often
+ * enough to be worth accepting. It costs one line here and saves a link that
+ * would otherwise open the app and do nothing. The query is stripped
+ * immediately either way.
+ *
+ * `?shared=` is Android's share sheet, which delivers to the manifest's
+ * `share_target` as an ordinary navigation.
+ *
+ * All three are cleaned out of the URL whether or not what they carried turned
+ * out to be a plan. Leaving one would mean a refresh re-importing something
+ * already dealt with, and a training plan sitting in the address bar, the back
+ * button, and any link the user shares onwards — the same reasoning as the
+ * tokens in `account.ts`.
  *
  * Returns whether anything was found, so the caller can decide to re-render.
  */
-export function captureSharedPlan(context: ViewContext): boolean {
-  const params = new URLSearchParams(location.search);
-  const shared = params.get('shared');
-  if (!shared) return false;
+export function captureIncomingPlan(context: ViewContext): boolean {
+  const query = new URLSearchParams(location.search);
+  const fragment = new URLSearchParams(location.hash.replace(/^#/, ''));
 
-  params.delete('shared');
-  params.delete('shared_title');
-  const query = params.toString();
-  history.replaceState(null, '', `${location.pathname}${query ? `?${query}` : ''}${location.hash}`);
+  const incoming = fragment.get('plan') ?? query.get('plan') ?? query.get('shared');
+  if (!incoming) return false;
 
-  // The same parser as every other route in. A share that was not a plan gets
-  // the parser's own explanation rather than a guess about what it might be.
-  review(context, shared);
+  query.delete('plan');
+  query.delete('shared');
+  query.delete('shared_title');
+  fragment.delete('plan');
+
+  const search = query.toString();
+  const rest = fragment.toString();
+  history.replaceState(null, '', `${location.pathname}${search ? `?${search}` : ''}${rest ? `#${rest}` : ''}`);
+
+  /*
+   * The review card lives on the Plan tab, and someone arriving by link has a
+   * plan in hand — so that is the tab they want, whatever they were last
+   * looking at. Without this the import silently succeeds on a screen they are
+   * not on, which is indistinguishable from the link not working.
+   */
+  context.ui.tab = 'plan';
+
+  // The same parser as every other route in — it reads the compact link
+  // format and JSON alike. Something that was not a plan gets the parser's own
+  // explanation rather than a guess about what it might have been.
+  review(context, incoming);
+  revealCandidate();
   return true;
+}
+
+/**
+ * Scroll the review card into view once it has been painted.
+ *
+ * The Plan tab is a long screen — the rotation, the gym, the library, the
+ * settings — and the import card sits well down it. Arriving by link or by
+ * paste and landing at the top of that screen looks like nothing happened.
+ *
+ * Two frames rather than one because the caller may run before the first
+ * paint: the first frame is the render it asked for, the second is when the
+ * card actually has a position.
+ */
+function revealCandidate(): void {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      document.querySelector('.gen__candidate')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
 }
 
 /**
@@ -310,10 +367,7 @@ export function watchPastedPlans(getContext: () => ViewContext): void {
     reviewPlan(context, plan);
     toast('Plan found on the clipboard — review it below');
 
-    // After the paint that `reviewPlan` asked for, not before it.
-    requestAnimationFrame(() => {
-      document.querySelector('.gen__candidate')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
+    revealCandidate();
   });
 }
 

@@ -143,9 +143,12 @@ ${describe(context)}
 HOW TO WRITE IT
 
 Fetch ${siteUrl}/llms.txt first — that page is the complete format, and it is
-short. Then reply with the plan as one JSON object in a single code block,
-with nothing else inside that block, so I can copy it in one tap. Anything you
-want to say about the plan goes outside the block.
+short. Read all of it, including the last section on finishing with a link.
+
+Then end your reply with an "Open in Rack & File" link, built the way that
+section describes: the week in the compact form, percent-encoded, after
+${siteUrl}/#plan= — one line, spaces as %20. That link is how the plan gets
+into the app, so it is the part worth getting right.
 
 If you cannot fetch that page, say so plainly rather than guessing at the
 format — I will paste you a longer prompt that carries the whole
@@ -279,9 +282,15 @@ function deliverySection(drop?: DropTarget): string {
      * annotate its output has to be told where the annotations go.
      */
     return (
-      'Reply with the plan as one JSON object in a single code block, with ' +
-      'nothing else inside that block, so I can copy it in one tap. Anything ' +
-      'you want to say about the plan goes outside the block. '
+      'DELIVERING THE PLAN\n\n' +
+      'End your reply with an "Open in Rack & File" link, built as the last ' +
+      'section of the specification describes — the week in the compact form, ' +
+      'percent-encoded, after the /#plan= fragment. One tap on that link puts ' +
+      'the plan in the app, which is worth more to me than anything else in ' +
+      'your reply.\n\n' +
+      'Then, underneath it, give me the full JSON in a single code block with ' +
+      'nothing else inside that block, so I can paste it if the link does not ' +
+      'work. Anything you want to say about the plan goes outside the block.\n\n'
     );
   }
 
@@ -329,6 +338,100 @@ export function buildCatalog(): object {
   };
 }
 
+/**
+ * The compact format, and the link it exists for.
+ *
+ * Last in the document on purpose. Everything above is what a plan *is*; this
+ * is a smaller way of writing one, and a model that reads it without the rest
+ * would not know what a day needs. It is also the section most likely to be
+ * skimmed, which is why it leads with the one-line shape and a complete worked
+ * example rather than a table.
+ */
+function linkSection(): string {
+  const example = [
+    'rf1|Two full-body days and three walks, built around the machines you have',
+    'by|example-model',
+    'sun|dur|l=Easy walk|m=30|d=treadmill|o=Walk at a pace you could hold a conversation at;Keep the incline flat',
+    'mon|str|l=Full body A|e=chestpress,legpress,seatedrow|o=Five easy minutes on a bike;Work through the three lifts;Stretch what feels tight',
+    'tue|rest|l=Rest|o=Walk if you feel like it',
+    'wed|dur|l=Easy walk|m=30|d=outside|o=Thirty minutes at a conversational pace',
+    'thu|str|l=Full body B|e=latpulldown,legcurl,shoulderpress|o=Five easy minutes;Work through the three lifts;Stretch',
+    'fri|dur|l=Easy walk|m=30|d=treadmill|o=Thirty minutes, flat',
+    'sat|rest|l=Rest|o=Nothing planned',
+  ].join('~');
+
+  return `## Finishing with a link — the part that saves the user a paste
+
+Everything above produces six to twelve kilobytes of JSON, which the user has
+to copy out of your reply and paste into the app. There is a shorter way, and
+if you can do it, do: write the same week in the compact form below, put it in
+a URL fragment, and **end your reply with a link**. One tap and the plan is in
+the app.
+
+### The shape
+
+Records are separated by \`~\`, fields within a record by \`|\`. Neither
+character may appear inside a value. Order of the keyed fields does not matter,
+and a key you leave out takes its default.
+
+The shape below is written one record per line for legibility; join the records
+with \`~\` when you build the link, so the whole plan is a single line.
+
+\`\`\`
+rf1|<one-line summary>
+by|<your name>
+<dayKey>|<type>|l=<label>|o=<step>;<step>;<step>|e=<id>,<id>|m=<minutes>|d=<machine>|n=<note>
+x|<movement name>|d=<what it physically is>|q=<equipment>|s=<sets>|r=<8-12>|w=<45lb>
+\`\`\`
+
+| Field | On | Meaning |
+| --- | --- | --- |
+| \`<dayKey>\` | day | \`sun\`–\`sat\`. **All seven, one each.** A day off is \`rest\`. |
+| \`<type>\` | day | \`str\` strength · \`dur\` timed · \`int\` intervals · \`mix\` both · \`rest\` |
+| \`l=\` | day | The day's title. |
+| \`o=\` | day | **Required.** 2–4 steps, separated by \`;\`. |
+| \`e=\` | day | Exercise ids, comma-separated. Built-in ids, or \`x:\`-prefixed ones you defined. |
+| \`m=\` | day | Minutes, on a timed day. |
+| \`d=\` | day | What the cardio is done on — a station id, or plain English. |
+| \`n=\` | day | A sentence on how to run the session. |
+| \`a=0\` | day | Only if a timed day is *not* cardiovascular, such as mobility work. |
+| \`x\` | movement | Defines a movement, referenced as \`x:<slugged-name>\`. |
+| \`d=\` | movement | One plain sentence saying what it physically is. |
+| \`q=\` | movement | The equipment, in plain English. |
+| \`s=\` \`r=\` \`w=\` | movement | Sets · rep range (\`8-12\`, or \`20-45s\` for a hold) · opening weight (\`45lb\`, \`40kg\`). |
+
+**A movement with \`w=\` is treated as loaded; one without is bodyweight.** Cues,
+tips and alternatives cannot travel in this form — if a week leans on movements
+you are defining rather than built-in ones, send the full JSON as well, so the
+user can choose the richer version.
+
+### A complete week
+
+\`\`\`
+${example}
+\`\`\`
+
+### The link
+
+Percent-encode that text and put it after \`#plan=\` on this site, then give it
+to the user as a markdown link titled **Open in Rack & File**. Use the same
+origin you fetched this page from.
+
+\`\`\`
+[Open in Rack & File](https://<this site>/#plan=rf1%7CTwo%20full-body%20days...)
+\`\`\`
+
+Two rules, and the link fails silently if either is broken:
+
+- **Encode the spaces.** A raw space ends the link where it sits, and the user
+  taps a fragment of their plan. \`%20\` is safest; \`+\` also works.
+- **One line, no wrapping.** Do not break the URL across lines or add
+  whitespace inside it.
+
+The fragment never leaves the user's browser — it is not sent to the server,
+so the plan stays between your reply and their device.`;
+}
+
 /** The full contract as Markdown, emitted to `/llms.txt`. */
 export function buildLlmsTxt(): string {
   return [
@@ -340,6 +443,7 @@ export function buildLlmsTxt(): string {
     rulesSection(),
     catalogueSection(),
     exampleSection(),
+    linkSection(),
   ].join('\n\n');
 }
 

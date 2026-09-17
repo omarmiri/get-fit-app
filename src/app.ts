@@ -13,7 +13,7 @@ import { renderPlanView } from '@/ui/views/plan';
 import { renderTodayView } from '@/ui/views/today';
 import { renderWelcomeView } from '@/ui/views/welcome';
 import { renderWeekStrip } from '@/ui/components/weekStrip';
-import { captureSharedPlan, watchPastedPlans } from '@/ui/components/planImport';
+import { captureIncomingPlan, watchPastedPlans } from '@/ui/components/planImport';
 import { initAccountCard } from '@/ui/components/accountCard';
 import { captureRedirectSession, refreshIdentity } from '@/services/account';
 import { backUpSoon, flushBackup } from '@/services/backup';
@@ -86,13 +86,13 @@ export class App {
     const returning = captureRedirectSession();
 
     /*
-     * A plan shared from another app, for the same reason and at the same
-     * moment: it arrives in the query string, and it should not survive a
-     * refresh or sit in the address bar afterwards. Read before the first
-     * paint so the review card is simply there rather than appearing a beat
-     * later.
+     * Then a plan, for the same reason and at the same moment: it arrives in
+     * the URL — tapped from a chat window, or shared from another app — and it
+     * should not survive a refresh or sit in the address bar afterwards. Read
+     * before the first paint so the review card is simply there rather than
+     * appearing a beat later.
      */
-    captureSharedPlan(this.#context(this.#store.getState()));
+    captureIncomingPlan(this.#context(this.#store.getState()));
 
     /*
      * The one route in that no browser can refuse. Registered once, for the
