@@ -33,22 +33,39 @@
     <main class="app-main" id="view" tabindex="-1"></main>
 
     <!--
-      Rest timer. `role="timer"` without a live region on purpose: announcing
-      every tick would flood a screen reader. Completion is announced once,
-      through the toast region below.
+      Rest. `role="timer"` without a live region on purpose: announcing every
+      tick would flood a screen reader. Completion is announced once, through
+      the toast region below.
+
+      This takes the screen rather than sitting in a 116px strip behind the tab
+      bar. During rest there is nothing else to do, and the value of a glance
+      from three metres away is high — which the old bar, a 16px stack of pips
+      and a 26px clock, could not deliver.
     -->
     <section class="rest" id="rest" role="timer" aria-label="Rest timer" hidden>
       <div class="rest__inner">
+        <div class="rest__top">
+          <div class="eyebrow" id="rest-plan"></div>
+          <div class="eyebrow" id="rest-did"></div>
+        </div>
+
         <div class="rest__stack" id="rest-stack" aria-hidden="true"></div>
-        <div class="rest__row">
-          <div>
-            <div class="eyebrow">Rest</div>
-            <div class="rest__clock mono" id="rest-clock">0:00</div>
+        <div class="rest__clock mono" id="rest-clock">0:00</div>
+
+        <!-- The effort question, asked about the set that was just done. -->
+        <div class="rest__effort" id="rest-effort" hidden>
+          <div class="rest__ask" id="rest-ask">How did that set feel?</div>
+          <div class="choices__row" role="group" aria-labelledby="rest-ask">
+            <button type="button" class="choices__button effort__button" data-effort="easy">Easy</button>
+            <button type="button" class="choices__button effort__button" data-effort="right">Right</button>
+            <button type="button" class="choices__button effort__button" data-effort="hard">Hard</button>
           </div>
-          <div class="rest__actions">
-            <button type="button" id="rest-add" aria-label="Add 30 seconds to rest">+30s</button>
-            <button type="button" id="rest-skip" aria-label="Skip rest">Skip</button>
-          </div>
+          <div class="rest__note">Sets the next set's weight. Skip it and nothing changes.</div>
+        </div>
+
+        <div class="rest__actions">
+          <button type="button" id="rest-add" aria-label="Add 30 seconds to rest">+30s</button>
+          <button type="button" id="rest-skip" aria-label="Skip rest">Skip rest</button>
         </div>
       </div>
     </section>

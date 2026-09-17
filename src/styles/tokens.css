@@ -83,6 +83,20 @@
   --t-screen: 1.875rem; /* 30px — screen headings, condensed uppercase */
   --t-readout: 2.5rem; /* 40px — entered numbers */
 
+  /*
+   * The mid-workout screen.
+   *
+   * Its own small scale, because it is the one screen read standing up, at
+   * arm's length, between two machines. The movement name and the weight-by-
+   * reps readout are the two things a glance has to land on; the controls are
+   * sized for a thumb rather than for a cursor, and sit in the bottom third
+   * where a thumb actually reaches.
+   */
+  --t-movement: 2.125rem; /* 34px — the movement name */
+  --t-focus-readout: clamp(2.5rem, 13vw, 4.75rem); /* up to 76px — weight × reps */
+  --focus-step: 68px; /* stepper button height, half the column wide */
+  --focus-log: 76px; /* the one action on the screen */
+
   /* Layout chrome. Referenced by the rest screen so the two cannot overlap. */
   --nav-height: 60px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);

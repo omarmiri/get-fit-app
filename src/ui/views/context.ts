@@ -1,4 +1,4 @@
-import type { AppState, DayKey, PlanDay, SetEffort, Tab } from '@/types';
+import type { AppState, DayKey, PlanDay, Tab } from '@/types';
 import type { CardioTimerState } from '../components/cardioTimer';
 import type { AppStore } from '@/state/store';
 import type { RestTimer } from '../restTimer';
@@ -37,8 +37,14 @@ export interface UiState {
    * case for a 45-minute run with the screen off — keeps perfect time.
    */
   cardioByDay: Record<string, CardioTimerState | undefined>;
-  /** Effort chosen for the set about to be logged, by exercise id. */
-  effortByExercise: Record<string, SetEffort | undefined>;
+  /**
+   * Which of the mid-workout header's disclosures is open.
+   *
+   * `reference` is the pre-session reading — the outline, how to run it, the
+   * weekly goals — and `menu` is undo, cues and finish. Held here so a
+   * re-render triggered from inside one does not close it.
+   */
+  sheet: 'reference' | 'menu' | null;
 }
 
 /** Everything a view needs to render itself and to request a re-render. */

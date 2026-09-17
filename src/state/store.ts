@@ -426,6 +426,32 @@ export class AppStore {
     this.#commit({ ...this.#state, active: { ...active, sets } });
   }
 
+  /**
+   * Record how the most recent set of one movement felt, after the fact.
+   *
+   * The effort question used to be asked above the log button, about a set that
+   * had not happened yet. It is asked on the rest screen now — phrased as the
+   * set that was just done, during the ninety seconds with nothing else to do —
+   * so the answer arrives after the set rather than before it, and has to be
+   * written back to a set already in the session.
+   *
+   * Choosing the same value again clears it, matching every other effort
+   * control in the app.
+   */
+  setSetEffort(dayKey: DayKey, exerciseId: string, effort: SetEffort): void {
+    const active = this.activeFor(dayKey);
+    if (!active) return;
+
+    const index = active.sets.findLastIndex((set) => set.exerciseId === exerciseId);
+    const target = active.sets[index];
+    if (index === -1 || !target) return;
+
+    const { effort: current, ...rest } = target;
+    const sets = [...active.sets];
+    sets[index] = current === effort ? rest : { ...rest, effort };
+    this.#commit({ ...this.#state, active: { ...active, sets } });
+  }
+
   setMinutes(dayKey: DayKey, minutes: number): void {
     this.#updateActive(dayKey, (session) => ({ ...session, minutes: clampMinutes(minutes) }));
   }

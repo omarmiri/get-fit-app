@@ -43,7 +43,7 @@ export class App {
     stationByExercise: {},
     draftByExercise: {},
     cardioByDay: {},
-    effortByExercise: {},
+    sheet: null,
   };
 
   readonly #weekStrip = requireElement('#week');

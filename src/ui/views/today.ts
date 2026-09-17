@@ -1,5 +1,5 @@
 import type { Child } from '../dom';
-import type { DayKey, PlanDay, Session } from '@/types';
+import type { DayKey, Exercise, PlanDay, Session } from '@/types';
 import { DAY_NAMES } from '@/data/plan';
 import { stationName } from '@/data/equipment';
 import { defaultStationId, resolveOptions } from '@/domain/substitutions';
@@ -15,14 +15,29 @@ import { AppStore } from '@/state/store';
 import { card, div, el, eyebrow, text } from '../dom';
 import { toast } from '../toast';
 import { renderDurationCard } from '../components/durationCard';
-import { renderExerciseCard } from '../components/exerciseCard';
+import { renderExerciseCues } from '../components/exerciseCues';
+import { renderFocusCard } from '../components/focusCard';
+import { renderFocusHeader, resetFocusTicker } from '../components/focusHeader';
 import { renderGoalsCard } from '../components/goalsCard';
+import { renderMovementBars } from '../components/movementBars';
 import { renderOnboarding } from '../components/onboarding';
 import { elapsedMs, resetCardioTicker } from '../components/cardioTimer';
-import { elapsedSessionMinutes, renderSessionClock, resetSessionTicker } from '../components/sessionClock';
+import { elapsedSessionMinutes, renderSessionClock } from '../components/sessionClock';
 import type { ViewContext } from './context';
 
-/** The Today tab: the session for the selected plan day, and the controls to log it. */
+/**
+ * The Today tab.
+ *
+ * Two screens, not one. Before the session starts you are sitting down with a
+ * phone: what is this session, how is it run, and one button to begin. Once it
+ * starts you are standing in front of a machine with wet hands, and the screen
+ * becomes one movement, one action and nothing below the fold — everything else
+ * moves behind the two disclosures in the header.
+ *
+ * The old single screen stacked thirteen blocks, nine of them reference
+ * material, and put the log button roughly two screens down. It cost a scroll
+ * on every set.
+ */
 export function renderTodayView(context: ViewContext): Child[] {
   const dayKey = context.ui.viewDay ?? todayDayKey();
   const day = context.plan[dayKey];
@@ -33,15 +48,17 @@ export function renderTodayView(context: ViewContext): Child[] {
     return [renderHeader(day), renderOnboardingCard(context)];
   }
 
-  return [
-    renderHeader(day),
-    renderStaleBanner(context),
-    renderDateNotice(context, dayKey),
-    renderOutline(day),
-    ...renderBody(context, dayKey, day),
-    card([eyebrow('How to run it'), text('prose', day.note)]),
-    renderGoalsCard(context.state, context.plan),
-  ];
+  const finished = todaysSession(context.state, dayKey, todayIso());
+  const active = context.store.activeFor(dayKey);
+
+  // A finished session for this day takes over the view, unless the user has
+  // reopened it and is adding to it.
+  if (finished && !active) {
+    resetFocusTicker();
+    return [renderHeader(day), renderSummaryCard(context, finished, day)];
+  }
+
+  return active ? renderFocusScreen(context, dayKey, day, active) : renderPrepScreen(context, dayKey, day);
 }
 
 function renderOnboardingCard(context: ViewContext): HTMLElement {
@@ -65,6 +82,36 @@ function renderHeader(day: PlanDay): HTMLElement {
     el('h1', { text: day.label }),
     text('spine__sub', day.sub),
   ]);
+}
+
+/* ------------------------------------------------------------ before it starts */
+
+/**
+ * The two minutes before the session.
+ *
+ * What the session is, how to run it, and Start. The reference material is on
+ * this screen precisely because this is when it is read — and it is the reason
+ * none of it has to be on the screen afterwards.
+ */
+function renderPrepScreen(context: ViewContext, dayKey: DayKey, day: PlanDay): Child[] {
+  resetFocusTicker();
+
+  return [
+    renderHeader(day),
+    renderStaleBanner(context),
+    renderDateNotice(context, dayKey),
+    renderOutline(day),
+    renderSessionClock({
+      onStart: () => {
+        context.store.startSession(dayKey);
+        context.ui.sheet = null;
+        toast('Workout started — the clock is running');
+        context.render();
+      },
+    }),
+    card([eyebrow('How to run it'), text('prose', day.note)]),
+    renderGoalsCard(context.state, context.plan),
+  ];
 }
 
 /**
@@ -135,51 +182,10 @@ function renderStaleBanner(context: ViewContext): HTMLElement | null {
   ]);
 }
 
-function renderBody(context: ViewContext, dayKey: DayKey, day: PlanDay): Child[] {
-  const finished = todaysSession(context.state, dayKey, todayIso());
-
-  // A finished session for this day takes over the view, unless the user has
-  // reopened it and is adding to it.
-  if (finished && !context.store.activeFor(dayKey)) {
-    resetSessionTicker();
-    return [renderSummaryCard(context, finished, day)];
-  }
-
-  const clock = renderSessionClockCard(context, dayKey);
-  const logger = day.exercises ? renderLogger(context, dayKey, day) : [];
-  const duration = day.type === 'strength' ? null : renderDuration(context, dayKey, day);
-
-  // Mixed days are cardio *then* core. Rendering the exercises first told the
-  // user to do them in the opposite order to the day's own instructions.
-  return day.type === 'mixed'
-    ? [clock, duration, ...logger, renderFinishButton(context, dayKey, day)]
-    : [clock, ...logger, duration, renderFinishButton(context, dayKey, day)];
-}
-
 /**
- * The start button, or the running clock once the session is open.
+ * What this session actually is, in order.
  *
- * Starting is optional: logging a set opens the session too, and someone who
- * forgets to tap start still gets a duration measured from their first set
- * rather than nothing at all.
- */
-function renderSessionClockCard(context: ViewContext, dayKey: DayKey): HTMLElement {
-  const active = context.store.activeFor(dayKey);
-
-  return renderSessionClock({
-    startedAt: active?.startedAt ?? null,
-    onStart: () => {
-      context.store.startSession(dayKey);
-      toast('Workout started — the clock is running');
-      context.render();
-    },
-  });
-}
-
-/**
- * What this session actually is, in order, before any logging controls.
- *
- * The logger shows one exercise at a time, which makes a six-movement session
+ * The logger shows one movement at a time, which makes a six-movement session
  * look like a one-movement session and a three-move circuit look like a choice
  * between three. This card is the answer to "wait, what am I doing today".
  */
@@ -194,75 +200,111 @@ function renderOutline(day: PlanDay): HTMLElement {
   ]);
 }
 
-/* ------------------------------------------------------------------ logger */
+/* ------------------------------------------------------------ mid-workout */
 
-function renderLogger(context: ViewContext, dayKey: DayKey, day: PlanDay): Child[] {
+function renderFocusScreen(context: ViewContext, dayKey: DayKey, day: PlanDay, active: Session): Child[] {
   const exercises = day.exercises ?? [];
-  if (exercises.length === 0) return [];
-
-  const index = Math.min(Math.max(context.ui.exerciseIndex, 0), exercises.length - 1);
+  const index = Math.min(Math.max(context.ui.exerciseIndex, 0), Math.max(0, exercises.length - 1));
   context.ui.exerciseIndex = index;
 
+  const counts = exercises.map((item) => active.sets.filter((set) => set.exerciseId === item.id).length);
+  const sessionComplete = exercises.length > 0 && exercises.every((item, i) => (counts[i] ?? 0) >= item.sets);
+
+  const header = renderFocusHeader({
+    title: day.label,
+    position: exercises.length > 0 ? `Movement ${index + 1} of ${exercises.length}` : null,
+    startedAt: active.startedAt,
+    reference: [
+      renderOutline(day),
+      card([eyebrow('How to run it'), text('prose', day.note)]),
+      renderGoalsCard(context.state, context.plan),
+    ],
+    menu: renderMenu(context, dayKey, day, active, exercises[index]),
+    openSheet: context.ui.sheet,
+    onToggleSheet: (sheet) => {
+      context.ui.sheet = sheet;
+      context.render();
+    },
+  });
+
+  const bars =
+    exercises.length > 1
+      ? renderMovementBars({
+          exercises,
+          counts,
+          currentIndex: index,
+          onSelect: (next) => {
+            context.ui.exerciseIndex = next;
+            context.ui.swapOpenFor = null;
+            context.ui.sheet = null;
+            context.render();
+          },
+        })
+      : null;
+
+  const movement =
+    exercises.length > 0 ? renderMovement(context, dayKey, day, exercises, index, sessionComplete) : null;
+
+  // Cardio comes before core on a mixed day — that is what the day's own
+  // outline says, and rendering them the other way round contradicted it.
+  const duration = day.type === 'strength' ? null : renderDuration(context, dayKey, day);
+
+  return [header, bars, duration, movement, movement ? null : renderFinishButton(context, dayKey, day)];
+}
+
+/**
+ * The `⋯` menu: everything that used to be a full-width button under the card.
+ *
+ * `Finish session` was a primary button in the same red as `Log set`, two taps
+ * apart, on a screen you use with wet hands. It is in here with Undo, and it is
+ * offered directly — as the one action — the moment the last movement hits its
+ * target.
+ */
+function renderMenu(
+  context: ViewContext,
+  dayKey: DayKey,
+  day: PlanDay,
+  active: Session,
+  exercise: Exercise | undefined,
+): Child[] {
+  const loggedHere = exercise ? active.sets.filter((set) => set.exerciseId === exercise.id).length : 0;
+
+  return [
+    loggedHere > 0 && exercise
+      ? el('button', {
+          class: 'button button--ghost',
+          text: 'Undo last set',
+          attrs: { type: 'button' },
+          on: {
+            click: () => {
+              context.store.undoLastSet(dayKey, exercise.id);
+              delete context.ui.draftByExercise[exercise.id];
+              context.ui.sheet = null;
+              context.render();
+            },
+          },
+        })
+      : null,
+    exercise ? renderExerciseCues(exercise) : null,
+    renderFinishButton(context, dayKey, day),
+  ];
+}
+
+function renderMovement(
+  context: ViewContext,
+  dayKey: DayKey,
+  day: PlanDay,
+  exercises: readonly Exercise[],
+  index: number,
+  sessionComplete: boolean,
+): HTMLElement | null {
   const exercise = exercises[index];
-  if (!exercise) return [];
+  if (!exercise) return null;
 
   const active = context.store.activeFor(dayKey);
   const logged = active?.sets.filter((set) => set.exerciseId === exercise.id) ?? [];
-
   const isCircuit = day.exerciseFormat === 'circuit';
-
-  // How many times each movement has been done this session.
-  const counts = exercises.map(
-    (item) => active?.sets.filter((set) => set.exerciseId === item.id).length ?? 0,
-  );
   const targetRounds = Math.max(...exercises.map((item) => item.sets));
-  const roundsDone = Math.min(...counts);
-  const allDone = exercises.every((item, i) => (counts[i] ?? 0) >= item.sets);
-
-  const railHeading = allDone
-    ? isCircuit
-      ? `All ${targetRounds} rounds done — finish the session below`
-      : `All ${exercises.length} movements done — finish the session below`
-    : isCircuit
-      ? `Round ${Math.min(roundsDone + 1, targetRounds)} of ${targetRounds} — one set of each, then round again`
-      : `Work through all ${exercises.length}`;
-
-  const railHeader = div(allDone ? 'railhead is-done' : 'railhead', [
-    text('railhead__text', railHeading),
-    text(
-      'railhead__hint',
-      isCircuit
-        ? 'Logging a set moves you to the next movement automatically.'
-        : 'Tap a name to jump to it. Logging a set moves you on automatically.',
-    ),
-  ]);
-
-  const rail = el(
-    'div',
-    { class: 'rail', attrs: { role: 'tablist', 'aria-label': 'Exercises' } },
-    exercises.map((item, itemIndex) => {
-      const count = active?.sets.filter((set) => set.exerciseId === item.id).length ?? 0;
-      const complete = count >= item.sets;
-
-      return el('button', {
-        class: complete ? 'rail__item is-done' : 'rail__item',
-        text: item.name,
-        attrs: {
-          type: 'button',
-          role: 'tab',
-          'aria-selected': itemIndex === index,
-          'aria-label': `${item.name}, ${count} of ${item.sets} sets logged`,
-        },
-        on: {
-          click: () => {
-            context.ui.exerciseIndex = itemIndex;
-            context.ui.swapOpenFor = null;
-            context.render();
-          },
-        },
-      });
-    }),
-  );
 
   // The chosen station is per-exercise transient state: an explicit pick this
   // session wins, otherwise fall back to the remembered or default station.
@@ -285,7 +327,7 @@ function renderLogger(context: ViewContext, dayKey: DayKey, day: PlanDay): Child
 
   const recommendation = recommend(exercise, blocks, context.state.prefs.unit, opening);
 
-  const cardEl = renderExerciseCard({
+  return renderFocusCard({
     exercise,
     logged,
     previous: lastPerformance(context.state, exercise.id),
@@ -295,30 +337,45 @@ function renderLogger(context: ViewContext, dayKey: DayKey, day: PlanDay): Child
     swapOpen: context.ui.swapOpenFor === exercise.id,
     recommendation,
     logLabel: isCircuit
-      ? `Log round ${Math.min(logged.length + 1, targetRounds)} — ${exercise.name}`
+      ? `Log round ${Math.min(logged.length + 1, targetRounds)}`
       : `Log set ${logged.length + 1}`,
     targetMet: logged.length >= exercise.sets,
-    effort: context.ui.effortByExercise[exercise.id],
-    onEffortChange: (effort) => {
-      context.ui.effortByExercise[exercise.id] = effort;
-      context.render();
-    },
-    onLogWithEffort: (weight, reps, effort) => {
-      context.store.logSet(dayKey, exercise.id, weight, reps, context.state.prefs.unit, stationId, effort);
-      context.rest.start(exercise.restSeconds);
+    sessionComplete,
+    onLog: (weight, reps) => {
+      context.store.logSet(dayKey, exercise.id, weight, reps, context.state.prefs.unit, stationId, undefined);
+      // How the set felt is asked on the rest screen now, against the set that
+      // was just done, during the ninety seconds with nothing else to do.
+      const setNumber = Math.min(logged.length + 1, exercise.sets);
+      context.rest.start(exercise.restSeconds, {
+        dayKey,
+        exerciseId: exercise.id,
+        exerciseName: exercise.name,
+        setLabel: isCircuit ? `round ${setNumber}` : `set ${setNumber} of ${exercise.sets}`,
+        weight,
+        reps,
+        unit: context.state.prefs.unit,
+        planLabel: day.label,
+        effort: undefined,
+        onEffort: (effort) => {
+          context.store.setSetEffort(dayKey, exercise.id, effort);
+          // The rest screen lives outside the view, so it is told directly
+          // rather than being rebuilt and losing its deadline.
+          const saved = context.store
+            .activeFor(dayKey)
+            ?.sets.findLast((set) => set.exerciseId === exercise.id)?.effort;
+          context.rest.setEffort(saved);
+          context.render();
+        },
+      });
       // The set is recorded, so the next one seeds from it rather than from the
-      // stale draft, and the effort question starts fresh.
+      // stale draft.
       delete context.ui.draftByExercise[exercise.id];
-      delete context.ui.effortByExercise[exercise.id];
+      context.ui.sheet = null;
 
       /*
        * A circuit moves on after every single set and wraps round to the top
        * for the next round — that is what makes it a circuit. Straight sets
        * stay on the movement until its target is met.
-       *
-       * The old rule applied straight-set behaviour to both, so a core circuit
-       * was silently logged as three sets of each movement in turn, which
-       * contradicted the session outline printed directly above it.
        */
       const after = context.store.activeFor(dayKey)?.sets ?? [];
       const doneHere = after.filter((set) => set.exerciseId === exercise.id).length;
@@ -335,10 +392,11 @@ function renderLogger(context: ViewContext, dayKey: DayKey, day: PlanDay): Child
       }
       context.render();
     },
+    onFinish: () => finishSession(context, dayKey, day),
     draft: context.ui.draftByExercise[exercise.id],
     onDraftChange: (draft) => {
-      // Deliberately no re-render: this fires on every keystroke, and the
-      // value is only needed the next time something else triggers one.
+      // Deliberately no re-render: this fires on every step, and the value is
+      // only needed the next time something else triggers one.
       context.ui.draftByExercise[exercise.id] = draft;
     },
     onToggleSwap: () => {
@@ -348,7 +406,7 @@ function renderLogger(context: ViewContext, dayKey: DayKey, day: PlanDay): Child
     onChooseStation: (chosenId, suggestedWeight) => {
       context.ui.stationByExercise[exercise.id] = chosenId;
       context.ui.swapOpenFor = null;
-      // Carry the converted load into the steppers for the coming render.
+      // Carry the converted load into the controls for the coming render.
       if (suggestedWeight !== null) {
         const current = context.ui.draftByExercise[exercise.id];
         context.ui.draftByExercise[exercise.id] = {
@@ -366,14 +424,7 @@ function renderLogger(context: ViewContext, dayKey: DayKey, day: PlanDay): Child
       toast(missing ? `${stationName(id)} marked as not at your club` : `${stationName(id)} restored`);
       context.render();
     },
-    onUndo: () => {
-      context.store.undoLastSet(dayKey, exercise.id);
-      delete context.ui.draftByExercise[exercise.id];
-      context.render();
-    },
   });
-
-  return [railHeader, rail, cardEl];
 }
 
 function renderDuration(context: ViewContext, dayKey: DayKey, day: PlanDay): HTMLElement {
@@ -438,35 +489,36 @@ function renderDuration(context: ViewContext, dayKey: DayKey, day: PlanDay): HTM
 
 function renderFinishButton(context: ViewContext, dayKey: DayKey, day: PlanDay): HTMLElement {
   return el('button', {
-    class: 'button button--primary button--finish',
+    class: 'button button--ghost button--finish',
     text: 'Finish session',
     attrs: { type: 'button' },
-    on: {
-      click: () => {
-        // Pure strength days have no default duration to fall back on.
-        const defaultMinutes = day.type === 'strength' ? null : (day.minutes ?? null);
-
-        // Read the start stamp before finishing clears the active session, so
-        // the confirmation can report how long it took.
-        const startedAt = context.store.activeFor(dayKey)?.startedAt ?? null;
-
-        if (!context.store.finishActive(dayKey, defaultMinutes)) {
-          toast('Log a set or some minutes first');
-          return;
-        }
-
-        context.ui.exerciseIndex = 0;
-        context.rest.stop();
-        resetSessionTicker();
-        toast(
-          startedAt === null || startedAt <= 0
-            ? 'Session saved'
-            : `Session saved — ${formatDuration(elapsedSessionMinutes(startedAt))}`,
-        );
-        context.render();
-      },
-    },
+    on: { click: () => finishSession(context, dayKey, day) },
   });
+}
+
+function finishSession(context: ViewContext, dayKey: DayKey, day: PlanDay): void {
+  // Pure strength days have no default duration to fall back on.
+  const defaultMinutes = day.type === 'strength' ? null : (day.minutes ?? null);
+
+  // Read the start stamp before finishing clears the active session, so the
+  // confirmation can report how long it took.
+  const startedAt = context.store.activeFor(dayKey)?.startedAt ?? null;
+
+  if (!context.store.finishActive(dayKey, defaultMinutes)) {
+    toast('Log a set or some minutes first');
+    return;
+  }
+
+  context.ui.exerciseIndex = 0;
+  context.ui.sheet = null;
+  context.rest.stop();
+  resetFocusTicker();
+  toast(
+    startedAt === null || startedAt <= 0
+      ? 'Session saved'
+      : `Session saved — ${formatDuration(elapsedSessionMinutes(startedAt))}`,
+  );
+  context.render();
 }
 
 /* ----------------------------------------------------------------- summary */

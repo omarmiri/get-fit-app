@@ -62,28 +62,6 @@
   margin-bottom: var(--space-3);
 }
 
-/* --------------------------------------------------------------- exercise */
-
-.exercise__name {
-  font-stretch: 87%;
-  font-size: var(--t-title);
-  font-weight: 700;
-  text-transform: uppercase;
-  line-height: 1.1;
-}
-
-.exercise__meta {
-  color: var(--dim);
-  font-size: var(--t-hint);
-  margin-top: 3px;
-}
-
-.exercise__hint {
-  color: var(--dim);
-  font-size: var(--t-hint);
-  margin-top: var(--space-2);
-}
-
 /* Roadmap slot: illustrations and demo clips. Sized so a 16:9 clip and a
    4:3 photo both sit comfortably without shifting the layout on load. */
 .exercise-media {
@@ -105,20 +83,6 @@
   color: var(--dim);
 }
 
-/* One pip per target set. */
-.setdots {
-  display: flex;
-  gap: 6px;
-  margin: var(--space-3) 0 var(--space-1);
-}
-
-.setdots i {
-  width: 100%;
-  height: 6px;
-  background: var(--dimmer);
-  border-radius: var(--radius);
-}
-
 .setdots i.is-done {
   background: var(--pc);
 }
@@ -126,127 +90,6 @@
 /* Sets logged beyond the target still count, shown at reduced weight. */
 .setdots i.is-extra {
   opacity: 0.5;
-}
-
-/* --------------------------------------------------------------- steppers */
-
-/*
- * Two steppers side by side have to survive a 390px phone. Everything in here
- * is sized so that a four-digit load — a plate-loaded leg press in pounds —
- * still fits between the buttons rather than being clipped at the third digit.
- */
-.steppers {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: end;
-  gap: var(--space-2);
-  margin-top: var(--space-4);
-}
-
-.steppers__times {
-  color: var(--dim);
-  font-size: var(--t-body);
-  padding-bottom: var(--space-3);
-}
-
-.stepper {
-  text-align: center;
-  min-width: 0;
-}
-
-.stepper__label {
-  font-size: var(--t-placard);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--dim);
-  font-weight: 700;
-}
-
-.stepper__row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 6px;
-}
-
-.stepper__value {
-  flex: 1;
-  min-width: 0;
-  /* Scales with the viewport so the value never outgrows the space between the
-     buttons. The ceiling is what it used to be fixed at, for wide screens. */
-  font-size: clamp(20px, 6vw, 32px);
-  font-weight: 700;
-  background: none;
-  border: none;
-  border-bottom: 1px solid var(--iron-3);
-  color: var(--chalk);
-  text-align: center;
-  padding: 6px 2px;
-  /* Digits keep a fixed width, so the value does not jitter as it is typed. */
-  font-variant-numeric: tabular-nums;
-}
-
-.stepper__value:focus {
-  outline: none;
-  border-bottom-color: var(--pc);
-}
-
-/* The selection made on focus, so it is obvious the next digit replaces it. */
-.stepper__value::selection {
-  background: var(--pc);
-  color: var(--on-pc);
-}
-
-.stepper__button {
-  flex: 0 0 auto;
-  /* Narrower than tall: the row is horizontally cramped and the height alone
-     keeps the target comfortable. */
-  width: 40px;
-  height: var(--tap);
-  border: 1px solid var(--iron-3);
-  border-radius: var(--radius);
-  /* A glyph, not a step on the ramp. */
-  font-size: 22px;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--dim);
-}
-
-.stepper__button:active {
-  background: var(--iron-2);
-  color: var(--chalk);
-}
-
-.stepper__suffix {
-  font-size: var(--t-hint);
-  color: var(--dim);
-  margin-top: var(--space-1);
-}
-
-/* --------------------------------------------------------------- set chips */
-
-.setline {
-  margin-top: var(--space-3);
-  font-size: var(--t-hint);
-  color: var(--dim);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: baseline;
-}
-
-.chip {
-  background: var(--iron-2);
-  border-radius: var(--radius);
-  padding: 2px 7px;
-  font-size: var(--t-hint);
-}
-
-.chip--now {
-  background: var(--iron-3);
-  color: var(--chalk);
 }
 
 /* -------------------------------------------------------------------- cues */
@@ -316,37 +159,6 @@
 
 .cue__list li + li {
   margin-top: var(--space-1);
-}
-
-/* -------------------------------------------------------------------- rail */
-
-.rail {
-  display: flex;
-  gap: var(--space-2);
-  overflow-x: auto;
-  padding: 2px 0 10px;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-
-.rail::-webkit-scrollbar {
-  display: none;
-}
-
-.rail__item {
-  flex: 0 0 auto;
-  min-height: var(--tap);
-  padding: var(--space-2) var(--space-3);
-  border: var(--border);
-  border-radius: var(--radius);
-  font-size: var(--t-hint);
-  color: var(--dim);
-  white-space: nowrap;
-}
-
-.rail__item[aria-selected='true'] {
-  border-color: var(--chalk);
-  color: var(--chalk);
 }
 
 .rail__item.is-done {
@@ -680,59 +492,6 @@
   font-size: var(--t-body);
 }
 
-/* ------------------------------------------------------------- station bar */
-
-/* Where you are doing this movement, and the way out when it is occupied. */
-.stationbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  margin-top: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  background: var(--iron-2);
-  border-radius: var(--radius);
-}
-
-.stationbar__at {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-width: 0;
-}
-
-.stationbar__label {
-  font-size: var(--t-placard);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  font-weight: 700;
-  color: var(--dim);
-}
-
-.stationbar__name {
-  font-size: var(--t-body);
-  font-weight: 600;
-}
-
-.stationbar__zone {
-  font-size: var(--t-hint);
-  color: var(--dim);
-}
-
-.stationbar__swap {
-  flex: 0 0 auto;
-  min-height: var(--tap);
-  padding: 0 var(--space-3);
-  border: 1px solid var(--iron-3);
-  border-radius: var(--radius);
-  font-size: var(--t-placard);
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--dim);
-}
-
 .stationbar__swap.is-open {
   background: var(--iron-3);
   color: var(--chalk);
@@ -1041,77 +800,6 @@
   opacity: 0.6;
 }
 
-/* --------------------------------------------------------- recommendation */
-
-/* The progression suggestion. Quiet by default — it is advice, not an alert —
-   with only the two directional cases picking up colour. */
-.reco {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border-left: 2px solid var(--iron-3);
-  background: var(--iron-2);
-  border-radius: 0 var(--radius) var(--radius) 0;
-}
-
-.reco__icon {
-  flex: 0 0 auto;
-  font-size: var(--t-hint);
-  line-height: 1.5;
-  color: var(--dim);
-}
-
-.reco__text {
-  font-size: var(--t-hint);
-  line-height: 1.5;
-  color: var(--dim);
-}
-
-.reco--add-weight {
-  border-left-color: var(--ok);
-}
-
-.reco--add-weight .reco__icon {
-  color: var(--ok);
-}
-
-.reco--deload {
-  border-left-color: var(--warn);
-}
-
-.reco--deload .reco__icon {
-  color: var(--warn);
-}
-
-.reco--opening {
-  border-left-color: var(--pc);
-}
-
-.reco--opening .reco__icon {
-  color: var(--pc);
-}
-
-/* ------------------------------------------------------------- set effort */
-
-.effort {
-  margin-top: var(--space-4);
-}
-
-.effort__label {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-}
-
-.effort__optional {
-  font-size: var(--t-hint);
-  color: var(--dim);
-  text-transform: lowercase;
-  letter-spacing: 0;
-}
-
 .effort__button {
   flex: 1;
   min-width: 0;
@@ -1252,24 +940,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-/* ------------------------------------------------------------ rail header */
-
-.railhead {
-  margin-bottom: var(--space-2);
-}
-
-.railhead__text {
-  font-size: var(--t-hint);
-  font-weight: 600;
-  color: var(--chalk);
-}
-
-.railhead__hint {
-  font-size: var(--t-hint);
-  color: var(--dim);
-  margin-top: 2px;
 }
 
 /* Plain-language description of the movement, always visible. */
@@ -1692,45 +1362,332 @@
   line-height: 1.5;
 }
 
-.sessclock__time {
-  font-size: var(--t-screen);
+.railhead.is-done .railhead__text {
+  color: var(--ok);
+}
+
+/* ======================================================= the mid-workout screen */
+
+/*
+ * One movement, one action, nothing below the fold.
+ *
+ * The old screen was thirteen blocks, nine of them reference material, with the
+ * primary action roughly two screens down — paid for with a scroll on every set,
+ * standing up, with hands that are not dry. Everything here is sized for that
+ * situation: the numbers are the largest thing on the screen because they are
+ * what you check between two machines, and the controls sit in the bottom third
+ * where a thumb actually lands.
+ */
+
+/* ------------------------------------------------------------ focus header */
+
+.focushead {
+  margin-bottom: var(--space-4);
+}
+
+.focushead__bar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.focushead__title {
+  font-size: var(--t-body);
   font-weight: 700;
-  line-height: 1.1;
+}
+
+.focushead__meta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: var(--t-hint);
+  color: var(--dim);
+}
+
+.focushead__sep {
+  color: var(--dimmer);
+}
+
+.focushead__tools {
+  display: flex;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+}
+
+.focushead__tool {
+  width: var(--tap);
+  height: var(--tap);
+  border: 1px solid var(--iron-3);
+  border-radius: var(--radius);
+  color: var(--dim);
+  font-size: var(--t-body);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.focushead__tool.is-open {
+  background: var(--iron-2);
+  color: var(--chalk);
+}
+
+/* The two disclosures. Everything cut from the screen is still one tap away. */
+.sheet {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: var(--rule);
+}
+
+.sheet--menu .button {
   margin-top: var(--space-2);
+}
+
+/* ---------------------------------------------------------- movement bars */
+
+/*
+ * Six bars replace the scrolling rail of names and its two lines of
+ * instruction. The rail spent a screen-width on text already read, and the
+ * instruction existed only because tapping a name was not obviously a thing you
+ * could do. The bar is a 6px rule inside a 44px target.
+ */
+.movebars {
+  display: grid;
+  grid-template-columns: repeat(var(--movebar-count, 6), 1fr);
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+
+.movebar {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0;
+}
+
+.movebar__track {
+  display: block;
+  width: 100%;
+  height: 6px;
+  background: var(--dimmer);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.movebar__fill {
+  display: block;
+  height: 100%;
+  background: var(--pc);
+  transition: width var(--transition);
+}
+
+/* Which movement you are on is shape, not colour: the current bar is taller. */
+.movebar[data-current='true'] .movebar__track {
+  height: 12px;
+  background: var(--iron-3);
+  box-shadow: inset 0 0 0 1px var(--chalk);
+}
+
+/* ------------------------------------------------------------- focus card */
+
+/*
+ * The controls sit at the bottom, not wherever the content happens to end.
+ *
+ * `--focus-chrome` is what the screen is already spending above and below the
+ * panel: the week strip, the header, the bars, the tab bar and the page's own
+ * padding. Subtracting it puts the steppers and the action in the bottom third
+ * where a thumb reaches, with the movement name and the numbers at eye height —
+ * and it degrades safely, because the panel grows past its minimum rather than
+ * clipping if a swap sheet opens or the text is scaled up.
+ */
+.focuscard {
+  --focus-chrome: 250px;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - var(--focus-chrome));
+}
+
+.focuscard .fsteps {
+  margin-top: auto;
+  padding-top: var(--space-5);
+}
+
+.focuscard__name {
+  font-stretch: 87%;
+  font-size: var(--t-movement);
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+}
+
+.focuscard__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.focuscard__set {
+  font-size: var(--t-placard);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--chalk);
+}
+
+.focuscard__where {
+  flex: 0 1 auto;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--iron-3);
+  border-radius: var(--radius);
+  font-size: var(--t-hint);
+  color: var(--dim);
+  text-align: right;
+}
+
+.focuscard__where.is-open {
+  background: var(--iron-3);
+  color: var(--chalk);
+}
+
+.focuscard__where.is-static {
+  border: 0;
+  min-height: 0;
+  padding: 0;
+}
+
+.focuscard__note {
+  margin-top: var(--space-2);
+  font-size: var(--t-hint);
+  line-height: 1.5;
+  color: var(--dim);
+}
+
+.focuscard__done {
+  margin-top: var(--space-4);
+  font-size: var(--t-hint);
+  color: var(--ok);
+}
+
+/* ---------------------------------------------------------------- readout */
+
+/* The two numbers you are about to do, and the way into the keypad. */
+.readout {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  width: 100%;
+  margin-top: var(--space-4);
+  text-align: left;
+}
+
+.readout__value,
+.readout__reps {
+  font-size: var(--t-focus-readout);
+  font-weight: 700;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 
-.sessclock__since {
-  font-size: var(--t-hint);
+.readout__reps {
+  font-size: calc(var(--t-focus-readout) * 0.6);
+}
+
+.readout__unit,
+.readout__times {
+  font-size: var(--t-body);
   color: var(--dim);
-  margin-top: var(--space-1);
 }
 
-/* --------------------------------------------------------- done indicator */
+/* --------------------------------------------------------- focus steppers */
 
-/* Shown once a movement has met its target, so "log another" reads as
-   optional rather than as the next required step. */
-.donebadge {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border-left: 2px solid var(--ok);
-  background: var(--iron-2);
-  border-radius: 0 var(--radius) var(--radius) 0;
+.fsteps {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
 }
 
-.donebadge__tick {
-  color: var(--ok);
+.fstep {
+  min-width: 0;
+}
+
+.fstep__label {
+  font-size: var(--t-placard);
   font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--chalk);
 }
 
-.donebadge__text {
+.fstep__hint {
+  margin-top: 2px;
   font-size: var(--t-hint);
   color: var(--dim);
 }
 
-.railhead.is-done .railhead__text {
-  color: var(--ok);
+.fstep__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+/* Two buttons per value, each half the column, 68px tall. The old pair was a
+   40 × 44 button either side of a text field you could drop a caret into. */
+.fstep__btn {
+  height: var(--focus-step);
+  border: 1px solid var(--iron-3);
+  border-radius: var(--radius);
+  font-size: var(--t-title);
+  line-height: 1;
+  color: var(--chalk);
+  background: var(--iron-1);
+}
+
+.fstep__btn:active {
+  background: var(--iron-2);
+}
+
+.fstep__input {
+  display: none;
+  grid-column: 1 / -1;
+  width: 100%;
+  height: var(--focus-step);
+  background: var(--iron-1);
+  border: 1px solid var(--chalk);
+  border-radius: var(--radius);
+  color: var(--chalk);
+  font-size: var(--t-readout);
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.fstep__input:focus {
+  outline: none;
+}
+
+.fstep__row[data-editing='true'] .fstep__btn {
+  display: none;
+}
+
+.fstep__row[data-editing='true'] .fstep__input {
+  display: block;
+}
+
+/* ----------------------------------------------------------- the action */
+
+/* The one thing on the screen, sized to be hit without looking, and sitting
+   just clear of the tab bar rather than two screens down. */
+.button--log {
+  min-height: var(--focus-log);
+  margin-top: var(--space-5);
+  margin-bottom: var(--space-4);
+  font-size: var(--t-title);
+  letter-spacing: 0.06em;
 }
