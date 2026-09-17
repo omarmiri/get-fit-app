@@ -43,6 +43,8 @@ interface ImportState {
   error: string | null;
   /** Whether the paste box is showing, so the card stays compact until needed. */
   open: boolean;
+  /** Whether the fallback routes are showing. Closed by default — see below. */
+  others: boolean;
   /** The push id currently in the copied prompt, if a session is open. */
   pushId: string | null;
   /** Highest version already seen, so an arrival is announced exactly once. */
@@ -55,6 +57,7 @@ const state: ImportState = {
   validation: null,
   error: null,
   open: false,
+  others: false,
   pushId: currentDrop()?.pushId ?? null,
   seenVersion: 0,
 };
@@ -111,24 +114,29 @@ export function resetPlanImport(): void {
   state.validation = null;
   state.error = null;
   state.open = false;
+  state.others = false;
   stopWatching();
 }
 
 /**
- * Three steps, numbered, in the order someone performs them.
+ * Two steps and a fold.
  *
- * ## Why the numbering is worth the space
+ * ## Why almost everything is behind the fold
  *
  * This card grew a control at a time — a copy button, then launchers, then a
  * clipboard reader, then a paste box, then a file picker — until it offered
- * nine ways to do a three-step job, with no indication of which went with
- * which. Someone opening it for the first time could not tell that "Copy
- * prompt" and "Paste a plan" were two ends of the same errand rather than
- * alternatives.
+ * nine ways to do one job. Numbering them helped, but it still presented five
+ * fallbacks with the same weight as the thing that works, which reads as five
+ * decisions rather than one path.
  *
- * Nothing has been taken away. The steps just say what the buttons are for,
- * and each step leads with the one control most people want, with the others
- * behind it for when it does not fit.
+ * Now that the link works there is a normal way through: open a chatbot, tap
+ * the link that comes back. That is the card. Everything else is one tap away
+ * under "Other ways to import", because every one of those routes exists for a
+ * specific failure and none of them are the normal case any more.
+ *
+ * What is *not* folded away is anything that reports a result — the waiting
+ * card, the paste box once opened, an error, a plan to review. A result hidden
+ * behind a toggle the user has since closed is a result they never see.
  */
 export function renderPlanImport(context: ViewContext): HTMLElement {
   return card([
@@ -138,80 +146,41 @@ export function renderPlanImport(context: ViewContext): HTMLElement {
       'Any chatbot can write a week this app understands. It takes about a minute and nothing about you is sent anywhere by this app — the prompt is built here, on your device.',
     ),
 
-    /* ----------------------------------------------------------- step one */
+    /* ------------------------------------------------------------ the path */
 
     eyebrow('1 · Send the prompt'),
     div('gen__group', [
-      text('prose', 'Open one with the prompt already in it:'),
+      text('prose', 'Opens with the prompt already in it:'),
       ...renderLaunchers(context),
     ]),
-
-    div('gen__group', [
-      /*
-       * The launchers carry the short prompt, which needs the model to fetch
-       * the format; this one carries the whole 15kb contract and works in
-       * anything, including a model with no network at all. It is the honest
-       * answer for Gemini and Copilot, which cannot be opened with a prompt.
-       */
-      el('button', {
-        class: 'button button--ghost',
-        text: 'Copy the prompt instead',
-        attrs: { type: 'button', title: 'Carries the whole format inline — paste it into any chatbot' },
-        on: { click: () => void copyPrompt(context) },
-      }),
-
-      /*
-       * Offered rather than detected, because the app has no way to know what
-       * a user has configured in someone else's chat client. No consumer
-       * product ships this connector today, so it sits last and says what it
-       * is for.
-       */
-      el('button', {
-        class: 'button button--ghost',
-        text: 'Copy short prompt (connector)',
-        attrs: { type: 'button', title: 'For clients with the Rack & File connector added' },
-        on: { click: () => void copyPrompt(context, 'connector') },
-      }),
-    ]),
-
-    /* ----------------------------------------------------------- step two */
 
     eyebrow('2 · Tap the link it gives you'),
     text(
       'prose',
-      'The reply should end with an "Open in Rack & File" link. Tapping it brings the whole week straight here — nothing to copy, nothing to paste.',
+      'The reply ends with an "Open in Rack & File" link. Tapping it brings the whole week straight here — nothing to copy, nothing to paste.',
     ),
 
-    /* --------------------------------------------------------- step three */
+    /* ---------------------------------------------------------- everything else */
 
-    eyebrow('3 · Or bring it back yourself'),
-    text(
-      'prose',
-      'Some models will not manage the link, and say so. Then copy the block of JSON from the reply — chat apps put a copy button on it — and paste anywhere on this page: Ctrl-V, or long-press and Paste on a phone.',
-    ),
-
-    div('gen__group', [
-      el('button', {
-        class: 'button button--primary',
-        text: 'Paste plan from clipboard',
-        attrs: { type: 'button' },
-        on: { click: () => void importFromClipboard(context) },
-      }),
-
-      el('button', {
-        class: 'button button--ghost',
-        text: state.open ? 'Hide the paste box' : 'Use a paste box',
-        attrs: { type: 'button', 'aria-expanded': state.open },
-        on: {
-          click: () => {
-            state.open = !state.open;
-            context.render();
-          },
+    el('button', {
+      class: 'button button--ghost',
+      text: state.others ? 'Hide the other ways' : 'Other ways to import',
+      attrs: { type: 'button', 'aria-expanded': state.others },
+      on: {
+        click: () => {
+          state.others = !state.others;
+          context.render();
         },
-      }),
+      },
+    }),
 
-      renderFileButton(context),
-    ]),
+    state.others ? renderOtherWays(context) : null,
+
+    /* ----------------------------------------------------------- what happened */
+
+    // Outside the fold on purpose: these say what the app is doing or what it
+    // found, and a result hidden behind a toggle the user has since closed is
+    // a result they will never see.
 
     // Only the connector prompt opens a session, so this only appears for
     // someone who took that route.
@@ -239,6 +208,78 @@ export function renderPlanImport(context: ViewContext): HTMLElement {
           },
         })
       : null,
+  ]);
+}
+
+/**
+ * The routes that are no longer the normal one.
+ *
+ * ## Why these are folded away rather than removed
+ *
+ * Each exists because something specific fails. A model that cannot fetch
+ * `/llms.txt` needs the whole contract pasted to it. A model that writes a
+ * good week and then mangles the link leaves the JSON in the reply, and the
+ * clipboard is the way to collect it. A phone that downloaded the plan as a
+ * file needs the file picker. None of that stopped being true when the link
+ * started working — it just stopped being what most people do.
+ *
+ * So the card shows one path and keeps the rest one tap away. The important
+ * fallback is not even in here: a paste anywhere on the page is caught by
+ * `watchPastedPlans` whether this section is open or closed, so the route
+ * someone reaches for by instinct never depends on having found this button.
+ */
+function renderOtherWays(context: ViewContext): HTMLElement {
+  return div('gen__group', [
+    text(
+      'prose',
+      'If a model cannot fetch the format, or writes the plan but not the link, these still work.',
+    ),
+
+    /*
+     * The launchers carry the short prompt, which needs the model to fetch the
+     * format; this one carries the whole 15kb contract and works in anything,
+     * including a model with no network at all. It is the honest answer for
+     * Gemini and Copilot, which cannot be opened with a prompt.
+     */
+    el('button', {
+      class: 'button button--ghost',
+      text: 'Copy the prompt instead',
+      attrs: { type: 'button', title: 'Carries the whole format inline — paste it into any chatbot' },
+      on: { click: () => void copyPrompt(context) },
+    }),
+
+    el('button', {
+      class: 'button button--ghost',
+      text: 'Paste plan from clipboard',
+      attrs: { type: 'button', title: 'Or just press Ctrl-V anywhere on this page' },
+      on: { click: () => void importFromClipboard(context) },
+    }),
+
+    el('button', {
+      class: 'button button--ghost',
+      text: state.open ? 'Hide the paste box' : 'Use a paste box',
+      attrs: { type: 'button', 'aria-expanded': state.open },
+      on: {
+        click: () => {
+          state.open = !state.open;
+          context.render();
+        },
+      },
+    }),
+
+    renderFileButton(context),
+
+    /*
+     * Offered rather than detected, because the app has no way to know what a
+     * user has configured in someone else's chat client. No consumer product
+     * ships this connector today, so it sits last and says what it is for.
+     */
+    el('button', {
+      class: 'button button--ghost',
+      text: 'Copy short prompt (connector)',
+      attrs: { type: 'button', title: 'For clients with the Rack & File connector added' },
+      on: { click: () => void copyPrompt(context, 'connector') },
+    }),
   ]);
 }
 
