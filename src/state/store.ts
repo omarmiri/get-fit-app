@@ -10,6 +10,7 @@ import type {
   WeightUnit,
 } from '@/types';
 import type { GymProfile } from '@/domain/gymProfile';
+import type { ThemePreference } from '@/domain/theme';
 import { activePlan } from '@/data/catalogue';
 import { describeGym } from '@/domain/gymProfile';
 import { todayIso } from '@/domain/dates';
@@ -192,6 +193,10 @@ export class AppStore {
   /** Record that onboarding has been offered, whether or not it was filled in. */
   setOnboarded(onboarded: boolean): void {
     this.#commit({ ...this.#state, prefs: { ...this.#state.prefs, onboarded } });
+  }
+
+  setTheme(theme: ThemePreference): void {
+    this.#commit({ ...this.#state, prefs: { ...this.#state.prefs, theme } });
   }
 
   setRestVibrate(enabled: boolean): void {

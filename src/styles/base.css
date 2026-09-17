@@ -95,10 +95,11 @@ ul {
   border: 0;
 }
 
-/* A visible, high-contrast focus ring on every interactive element. Yellow
-   reads clearly against both the iron surfaces and every plate accent. */
+/* A visible, high-contrast focus ring on every interactive element. The token
+   is yellow on iron, where it reads against every surface and plate accent,
+   and darkens on paper, where bright yellow would not. */
 :focus-visible {
-  outline: 2px solid var(--p-yellow);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
   border-radius: 2px;
 }

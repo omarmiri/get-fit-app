@@ -6,6 +6,7 @@ import { todayDayKey } from '@/domain/dates';
 import type { AppStore } from '@/state/store';
 import { replaceChildren, requireElement } from '@/ui/dom';
 import { RestTimer } from '@/ui/restTimer';
+import { applyTheme, watchSystemTheme } from '@/ui/theme';
 import { toast } from '@/ui/toast';
 import type { UiState, ViewContext } from '@/ui/views/context';
 import { renderHistoryView } from '@/ui/views/history';
@@ -60,6 +61,13 @@ export class App {
     });
 
     this.#bindNav();
+
+    /*
+     * Follow the device while the preference is `system`. Repainting rather
+     * than only re-applying the palette because the setting itself is on
+     * screen in the Plan tab, and "Auto" should visibly change with the phone.
+     */
+    watchSystemTheme(() => this.render());
 
     // Flush any debounced write before the page goes away. `pagehide` fires on
     // mobile Safari where `beforeunload` does not.
@@ -176,6 +184,7 @@ export class App {
     this.#weekStrip.parentElement?.toggleAttribute('hidden', welcoming);
     this.#nav.toggleAttribute('hidden', welcoming);
 
+    applyTheme(state.prefs.theme);
     this.#applyAccent();
     if (!welcoming) {
       this.#paintWeekStrip(context);

@@ -4,6 +4,7 @@ import { DAY_NAMES, PLAN_ORDER } from '@/data/plan';
 import { ALL_STATIONS } from '@/data/equipment';
 import { PLATE_LEGEND } from '@/data/plates';
 import { daysBetween, todayIso } from '@/domain/dates';
+import { THEME_LABEL, THEME_PREFERENCES, type ThemePreference } from '@/domain/theme';
 import { UNIT_LABEL, formatWeight } from '@/domain/units';
 import { parseStateJson, serializeState } from '@/state/schema';
 import { card, div, el, eyebrow, text } from '../dom';
@@ -174,8 +175,34 @@ function renderSettings(context: ViewContext): HTMLElement {
     }),
   );
 
+  const themeButtons = THEME_PREFERENCES.map((theme: ThemePreference) =>
+    el('button', {
+      class: 'choices__button',
+      text: THEME_LABEL[theme],
+      attrs: { type: 'button', 'aria-pressed': prefs.theme === theme },
+      on: {
+        click: () => {
+          context.store.setTheme(theme);
+          context.render();
+        },
+      },
+    }),
+  );
+
   return card([
     eyebrow('Settings'),
+
+    div('setting', [
+      div('setting__text', [
+        text('setting__label', 'Appearance'),
+        text('setting__hint', 'Auto follows your device. The plate colours stay the same either way.'),
+      ]),
+      el(
+        'div',
+        { class: 'choices__row', attrs: { role: 'group', 'aria-label': 'Appearance' } },
+        themeButtons,
+      ),
+    ]),
 
     div('setting', [
       div('setting__text', [

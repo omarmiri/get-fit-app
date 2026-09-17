@@ -1,4 +1,5 @@
 import type { GymProfile } from '@/domain/gymProfile';
+import type { ThemePreference } from '@/domain/theme';
 
 /**
  * Domain model for Rack & File.
@@ -505,6 +506,14 @@ export interface Preferences {
   readonly trendExerciseId?: string;
   /** Whether the rest timer vibrates on completion, where supported. */
   readonly restVibrate: boolean;
+  /**
+   * Which palette to paint.
+   *
+   * `system` follows the device, which is the default: the phone has usually
+   * been told already, and it is the only answer that changes on its own when
+   * the room does.
+   */
+  readonly theme: ThemePreference;
   /**
    * Stations the user has marked as not present at their gym.
    *

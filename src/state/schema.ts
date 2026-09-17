@@ -17,6 +17,7 @@ import { clampMinutes, clampNumber, clampReps, clampWeight } from '@/domain/limi
 import type { GymProfile } from '@/domain/gymProfile';
 import { EQUIPMENT, VENUES, hasAnswers } from '@/domain/gymProfile';
 import { parseCustomExercise } from '@/domain/planFormat';
+import { DEFAULT_THEME, isThemePreference } from '@/domain/theme';
 import { isWeightUnit } from '@/domain/units';
 
 /**
@@ -31,7 +32,7 @@ import { isWeightUnit } from '@/domain/units';
  *   add a step whenever a persisted shape changes.
  */
 
-export const CURRENT_SCHEMA_VERSION = 13;
+export const CURRENT_SCHEMA_VERSION = 14;
 
 /**
  * Ceiling on saved plans.
@@ -85,6 +86,7 @@ const LEVELS: readonly FitnessLevel[] = ['new', 'returning', 'experienced'];
 export const DEFAULT_PREFERENCES: Preferences = {
   unit: 'lb',
   restVibrate: true,
+  theme: DEFAULT_THEME,
 };
 
 export function defaultState(): AppState {
@@ -293,6 +295,10 @@ function parsePreferences(raw: unknown): Preferences {
     unit: isWeightUnit(raw['unit']) ? raw['unit'] : DEFAULT_PREFERENCES.unit,
     restVibrate:
       typeof raw['restVibrate'] === 'boolean' ? raw['restVibrate'] : DEFAULT_PREFERENCES.restVibrate,
+    // Absent on anything written before schema 14, and on a hand-edited
+    // backup naming a palette this build does not have. Both fall back to
+    // following the device rather than to a fixed choice.
+    theme: isThemePreference(raw['theme']) ? raw['theme'] : DEFAULT_PREFERENCES.theme,
     ...(trendExerciseId === undefined ? {} : { trendExerciseId: canonicalExerciseId(trendExerciseId) }),
     ...(missingStations.length === 0 ? {} : { missingStations }),
     ...(Object.keys(preferredStations).length === 0 ? {} : { preferredStations }),

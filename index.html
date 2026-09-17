@@ -4,7 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#14171A" />
-    <meta name="color-scheme" content="dark" />
+    <!--
+      Both palettes, dark first: that is the one the markup ships with, and
+      ui/theme.ts swaps in the light one — and rewrites the theme-color above —
+      when the saved preference, or the device, asks for it.
+    -->
+    <meta name="color-scheme" content="dark light" />
     <meta
       name="description"
       content="Rack &amp; File — a personal training log for a seven-day plan. Works offline, stores everything on your device."

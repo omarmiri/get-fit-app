@@ -35,7 +35,7 @@
 }
 
 .button--primary {
-  background: var(--pc);
+  background: var(--pc-fill);
   color: var(--on-pc);
 }
 
@@ -120,7 +120,7 @@
 }
 
 .setdots i.is-done {
-  background: var(--pc);
+  background: var(--pc-fill);
 }
 
 /* Sets logged beyond the target still count, shown at reduced weight. */
@@ -188,12 +188,12 @@
 
 .stepper__value:focus {
   outline: none;
-  border-bottom-color: var(--pc);
+  border-bottom-color: var(--pc-ink);
 }
 
 /* The selection made on focus, so it is obvious the next digit replaces it. */
 .stepper__value::selection {
-  background: var(--pc);
+  background: var(--pc-fill);
   color: var(--iron-0);
 }
 
@@ -344,7 +344,7 @@
 }
 
 .rail__item[aria-selected='true'] {
-  border-color: var(--pc);
+  border-color: var(--pc-ink);
   color: var(--chalk);
 }
 
@@ -374,7 +374,7 @@
 
 .bigfield__input:focus {
   outline: none;
-  border-bottom-color: var(--pc);
+  border-bottom-color: var(--pc-ink);
 }
 
 .bigfield__unit {
@@ -403,7 +403,7 @@
 }
 
 .choices__button[aria-pressed='true'] {
-  border-color: var(--pc);
+  border-color: var(--pc-ink);
   color: var(--chalk);
   background: var(--iron-2);
 }
@@ -431,7 +431,7 @@
 
 .goal__fill {
   height: 100%;
-  background: var(--pc);
+  background: var(--pc-fill);
   transition: width var(--transition);
 }
 
@@ -573,7 +573,7 @@
 
 .notice {
   border: var(--border);
-  border-left: 3px solid var(--pc);
+  border-left: 3px solid var(--pc-ink);
   border-radius: var(--radius);
   padding: var(--space-3) var(--space-4);
   margin-bottom: var(--space-3);
@@ -723,17 +723,17 @@
   flex: 0 0 auto;
   min-height: 36px;
   padding: 0 var(--space-3);
-  border: 1px solid var(--pc);
+  border: 1px solid var(--pc-ink);
   border-radius: var(--radius);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--pc);
+  color: var(--pc-ink);
 }
 
 .stationbar__swap.is-open {
-  background: var(--pc);
+  background: var(--pc-fill);
   color: var(--on-pc);
 }
 
@@ -796,7 +796,7 @@
 }
 
 .swap__pick[aria-pressed='true'] .swap__name {
-  color: var(--pc);
+  color: var(--pc-ink);
 }
 
 .swap__main {
@@ -905,7 +905,7 @@
 }
 
 .stationcard[aria-pressed='true'] {
-  border-color: var(--pc);
+  border-color: var(--pc-ink);
   background: var(--iron-2);
 }
 
@@ -1085,11 +1085,11 @@
 }
 
 .reco--opening {
-  border-left-color: var(--pc);
+  border-left-color: var(--pc-ink);
 }
 
 .reco--opening .reco__icon {
-  color: var(--pc);
+  color: var(--pc-ink);
 }
 
 /* ------------------------------------------------------------- set effort */
@@ -1154,7 +1154,7 @@
 
 .onboard__input:focus {
   outline: none;
-  border-bottom-color: var(--pc);
+  border-bottom-color: var(--pc-ink);
 }
 
 .onboard__input::placeholder {
@@ -1182,7 +1182,7 @@
 }
 
 .levelcard[aria-pressed='true'] {
-  border-color: var(--pc);
+  border-color: var(--pc-ink);
   background: var(--iron-2);
 }
 
@@ -1244,7 +1244,7 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: var(--pc);
+  background: var(--pc-fill);
   color: var(--on-pc);
   font-size: 11px;
   font-weight: 700;
@@ -1301,7 +1301,7 @@
 
 .gen__input:focus {
   outline: none;
-  border-color: var(--pc);
+  border-color: var(--pc-ink);
 }
 
 .gen__input::placeholder {
@@ -1333,7 +1333,7 @@
 }
 
 .optionbtn.is-on {
-  border-color: var(--pc);
+  border-color: var(--pc-ink);
   color: var(--chalk);
 }
 
@@ -1358,7 +1358,7 @@
 }
 
 .choices__button.is-on {
-  border-color: var(--pc);
+  border-color: var(--pc-ink);
   color: var(--chalk);
 }
 
@@ -1407,7 +1407,7 @@
 }
 
 .planlist__item.is-active {
-  border-color: var(--pc);
+  border-color: var(--pc-ink);
 }
 
 .planlist__pick {
@@ -1424,7 +1424,7 @@
 }
 
 .planlist__item.is-active .planlist__pick {
-  border-left-color: var(--pc);
+  border-left-color: var(--pc-ink);
 }
 
 .planlist__title {
@@ -1632,7 +1632,7 @@
 .cardio__fill {
   height: 100%;
   width: 0;
-  background: var(--pc);
+  background: var(--pc-fill);
   transition: width 1s linear;
 }
 

@@ -17,8 +17,13 @@ import { div, el, svg, text } from '../dom';
  * real text below it — the numbers must be readable without seeing the picture.
  */
 
-const AXIS_COLOR = '#333B44';
-const INK = '#EDEDE7';
+/*
+ * Tokens rather than literals: these two are the only chart colours taken from
+ * the interface rather than from the plates, and the interface has two
+ * palettes. A hard-coded near-white dot would disappear on paper.
+ */
+const AXIS_COLOR = 'var(--iron-3)';
+const INK = 'var(--chalk)';
 
 /* ------------------------------------------------------- aerobic minutes */
 

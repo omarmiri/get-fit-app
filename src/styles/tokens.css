@@ -7,9 +7,16 @@
  * derives from it — so the whole app tints itself by how heavy the day is.
  *
  * The `--p-*` values mirror `data/plates.ts`. Change both together.
+ *
+ * Two palettes live here. `:root` is the dark one the app was designed in;
+ * `[data-theme='light']` below re-points the same names at paper and ink.
+ * Nothing outside this file names a colour, so the whole interface turns over
+ * on that one attribute — set by `ui/theme.ts` from the saved preference.
  */
 
 :root {
+  color-scheme: dark;
+
   /* Surfaces, darkest to lightest. */
   --iron-0: #14171a;
   --iron-1: #1b1f24;
@@ -34,9 +41,12 @@
 
   /* Current day's plate colour. Overwritten at runtime; this is the fallback. */
   --pc: var(--p-white);
-  /* Text that sits on top of --pc. The plate colours are all mid-to-dark, so a
-     near-black foreground clears WCAG AA on every one of them. */
+  /* Text that sits on top of --pc-fill. The plate colours are all mid-to-dark,
+     so a near-black foreground clears WCAG AA on every one of them. */
   --on-pc: #0e1114;
+
+  /* The focus ring. Yellow reads against every iron surface and every plate. */
+  --focus: var(--p-yellow);
 
   /* Spacing scale. */
   --space-1: 4px;
@@ -62,4 +72,63 @@
 
   --border: 1px solid var(--iron-2);
   --transition: 0.18s ease;
+}
+
+/**
+ * The two forms the accent takes: a fill behind --on-pc text, and an ink for
+ * text, borders and rules. On iron they are both simply the plate colour.
+ *
+ * Declared on every element rather than on `:root` because `--pc` is not only
+ * a root variable — the week strip sets it per day, so each weekday carries
+ * its own. A derived token declared once at the root would compute there and
+ * then be inherited as a finished colour, and every one of those days would
+ * come out in Sunday's colour.
+ *
+ * The light palette darkens them here rather than redefining `--pc`, because
+ * `--pc` arrives from JavaScript as a literal hex that CSS cannot reach.
+ */
+* {
+  --pc-fill: var(--pc);
+  --pc-ink: var(--pc);
+}
+
+:root[data-theme='light'] * {
+  --pc-fill: color-mix(in srgb, var(--pc) 45%, #0e1114);
+  --pc-ink: var(--pc-fill);
+}
+
+/**
+ * The light palette.
+ *
+ * Only colour is redefined — spacing, type and layout are the same app. The
+ * iron names are kept rather than renamed: `--iron-0` stays the page ground
+ * and `--iron-3` the strongest edge, so the scale still runs ground-to-edge
+ * even though it now runs light-to-dark rather than dark-to-light.
+ *
+ * The plate accents keep their hue but not their lightness. They were picked
+ * to sit on black, and on paper the yellow and the white plate in particular
+ * would vanish, so --pc-fill and --pc-ink mix them toward the ink and the
+ * foreground on a fill flips to near-white.
+ */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* Surfaces, ground to edge: paper, card, rule, strong rule. */
+  --iron-0: #eceae4;
+  --iron-1: #f7f6f2;
+  --iron-2: #d7d4cb;
+  --iron-3: #b6b2a7;
+
+  /* Ink. */
+  --chalk: #17191c;
+  --dim: #5c626b;
+  --dimmer: #6f757e;
+
+  --ok: #17663f;
+  --warn: #8a6300;
+  --danger: #ab0c26;
+
+  --on-pc: #f7f6f2;
+
+  --focus: #8a6300;
 }
