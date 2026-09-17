@@ -43,13 +43,15 @@ screen is wrong than hear that it is fine.
 | `06-today-mid-workout-full.png` | Mid-workout in full: clock running, two sets logged, third queued |
 | `07-today-cardio-day-full.png` | Today tab on a cardio day (a different mode entirely) |
 | `08-history-fold.png` / `09-history-full.png` | History tab: aerobic minutes, strength trend, past sessions |
-| `10-plan-fold.png` / `11-plan-full.png` | Plan tab: rotation, gym setup, plan library, settings, data, account |
+| `10-plan-fold.png` | Plan tab, above the fold |
+| `11a`–`11d-plan-part*.png` | The whole Plan tab in four consecutive slices: rotation, gym setup, plan library, prompt inputs, import, profile, settings, colour key, backup, account |
 | `12-today-light-mode-full.png` | The new light palette, for contrast and parity checking |
 
 The "full" images are the whole scrollable screen in one picture, so vertical
-length in them is real: `11-plan-full.png` is about seven phone screens long
-and `01-first-run-welcome.png` about four. Treat that length as a finding, not
-as a rendering artefact.
+length in them is real: the Plan tab runs to about seven phone screens (hence
+the four slices), `01-first-run-welcome.png` to about four, and
+`09-history-full.png` to about four. Treat that length as a finding, not as a
+rendering artefact.
 
 ### What I want reviewed
 
