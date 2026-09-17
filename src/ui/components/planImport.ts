@@ -463,14 +463,6 @@ async function launch(context: ViewContext, providerId: string): Promise<void> {
   if (tab) tab.location.href = provider.link(prompt);
   else window.location.assign(provider.link(prompt));
 
-  /*
-   * Said at the moment of opening, for a product that will show an empty box.
-   * The prompt is already on the clipboard either way, so the honest version
-   * of this button costs one paste; the dishonest version costs a user
-   * staring at an empty chat window wondering what went wrong.
-   */
-  if (provider.pastes) toast(`Prompt copied — paste it into ${provider.name}`);
-
   context.render();
 }
 

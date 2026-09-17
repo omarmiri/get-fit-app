@@ -40,15 +40,15 @@
  * same shape confirmed the parameter was not being lost in transit. There is
  * nothing here to fix.
  *
- * Gemini is back, with its limitation stated rather than hidden. It keeps the
- * query parameter in the URL — unlike Copilot, which discards it — but does
- * not put it in the box, on `?q=`, `?text=` or `?prompt=`. It was dropped once
- * for exactly that, on the principle that a control which quietly does less
- * than the identical control beside it is worse than no control. The word there
- * was *quietly*: `launch` copies the prompt before opening any of these, so the
- * prompt is already on the clipboard, and `pastes` makes the button say so.
- * A button that asks for one paste and admits it is a fair offer; the same
- * button pretending to be its neighbours was not.
+ * Gemini has now failed twice, and the second attempt was the generous one.
+ * It keeps the query parameter in the URL — unlike Copilot, which discards it
+ * — but will not put it in the box, on `?q=`, `?text=` or `?prompt=`, so it
+ * was listed with the paste admitted up front rather than hidden. That still
+ * did not produce a plan. Two distinct failures, an empty box and no usable
+ * output, and neither is something this app can fix from the outside.
+ *
+ * The honest offer for Gemini is the one it has always had: "Copy the prompt
+ * instead" carries the whole contract and works in anything.
  */
 
 export interface LlmProvider {
@@ -56,12 +56,6 @@ export interface LlmProvider {
   readonly name: string;
   /** Builds the URL that opens this provider with `prompt` in the box. */
   readonly link: (prompt: string) => string;
-  /**
-   * Set when the product opens but does not accept the prompt, so the user has
-   * to paste it. The app says so at the moment it opens rather than letting
-   * them find an empty box and guess why.
-   */
-  readonly pastes?: boolean;
 }
 
 export const LLM_PROVIDERS: readonly LlmProvider[] = [
@@ -79,12 +73,6 @@ export const LLM_PROVIDERS: readonly LlmProvider[] = [
     id: 'grok',
     name: 'Grok',
     link: (prompt) => `https://grok.com/?q=${encodeURIComponent(prompt)}`,
-  },
-  {
-    id: 'gemini',
-    name: 'Gemini',
-    link: (prompt) => `https://gemini.google.com/app?q=${encodeURIComponent(prompt)}`,
-    pastes: true,
   },
 ];
 
