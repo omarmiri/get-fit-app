@@ -1,5 +1,6 @@
 // Relative rather than `@/`, like `planFormat.ts` — this module is reachable
 // from the build-time spec generator, outside Vite's alias resolution.
+import { getBuiltinExercise } from '../data/exercises';
 import { getStation } from '../data/equipment';
 
 /**
@@ -38,13 +39,24 @@ import { getStation } from '../data/equipment';
  * out of order is fine. The only real rule is that a tilde separates records
  * and a pipe separates fields, so neither may appear inside a value.
  *
- * ## What it deliberately cannot carry
+ * ## What it carries, and what it does not
  *
- * Cues, tips, muscles, alternatives — the prose that makes a *defined* movement
- * usable. Those are most of the bytes, and dropping them is what makes the link
- * possible. Built-in movements carry their own, so a plan written from the
- * catalogue loses nothing; a plan inventing movements is better sent as JSON,
- * and `/llms.txt` says so.
+ * The line is not "short fields yes, long fields no". It is **behaviour before
+ * prose**: anything the app computes with has to survive, whatever it costs,
+ * and anything the user merely reads can be dropped or inherited.
+ *
+ * So `inverseLoad` and `restSeconds` travel, at four bytes each. The first
+ * version left them out and that was a real bug rather than a compromise — a
+ * movement that loses `inverseLoad` makes the progression engine run backwards,
+ * rewarding every good set on an assisted machine with *more* assistance.
+ * "Absent" and "wrong" are not the same trade.
+ *
+ * Cues, tips and alternatives are the prose, they are most of the bytes, and
+ * dropping them is what makes the link possible. But a movement can name a
+ * built-in relative with `like=`, and inherit all of it out of the catalogue
+ * the app already ships — see `inheritFrom`. A plan written from built-in ids
+ * loses nothing at all; one defining a genuinely novel movement is better sent
+ * as JSON as well, and `/llms.txt` says so.
  */
 
 /** Record separator. A tilde survives a URL unescaped in every browser tested. */
@@ -206,31 +218,95 @@ function readDay(parts: readonly string[]): Record<string, unknown> | null {
   };
 }
 
+/**
+ * What a movement inherits when it says what it is a variant of.
+ *
+ * ## Why this exists
+ *
+ * The compact form drops prose to fit in a link, and that was a fair trade
+ * until it started dropping things the app *computes* with. `inverseLoad` is
+ * the worst of them: on an assisted pull-up machine the stack is counterweight,
+ * so a higher number is easier, and a plan that loses the flag makes the
+ * progression engine work confidently backwards — every good set earning more
+ * assistance. `restSeconds` is milder but still wrong rather than merely absent.
+ *
+ * Those two are now carried outright, because they are four bytes. This does
+ * something better for everything else: a movement that names a built-in
+ * relative gets that movement's cues, rest, rep metric, stations and load
+ * direction for free, out of the catalogue the app already ships. No network,
+ * no second store to maintain, and nothing added to the link but an id.
+ *
+ * "Single-arm lat pulldown" is a lat pulldown with one arm. It is not a
+ * movement the app has to be taught from scratch, and asking a model to retype
+ * three cues it could have inherited is how the cues end up worse than the
+ * built-in ones rather than better.
+ *
+ * Explicit fields always win — the base is a starting point, not a ceiling.
+ */
+function inheritFrom(id: string): Record<string, unknown> {
+  const base = getBuiltinExercise(id.trim().toLowerCase());
+  if (!base) return {};
+
+  const stationIds = base.stations?.map((station) => station.stationId) ?? [];
+
+  return {
+    summary: base.summary,
+    sets: base.sets,
+    repMin: base.repMin,
+    repMax: base.repMax,
+    repMetric: base.repMetric,
+    loaded: base.loaded,
+    restSeconds: base.restSeconds,
+    cues: base.cues,
+    ...(base.inverseLoad ? { inverseLoad: true } : {}),
+    ...(base.equipment ? { equipment: base.equipment } : {}),
+    ...(base.alternative ? { alternative: base.alternative } : {}),
+    ...(base.tips ? { tips: base.tips } : {}),
+    ...(base.muscles ? { muscles: base.muscles } : {}),
+    ...(stationIds.length > 0 ? { stationIds } : {}),
+  };
+}
+
 function readExercise(parts: readonly string[]): Record<string, unknown> | null {
   const name = parts[1] ?? '';
   if (!name) return null;
 
   const keys = readKeys(parts.slice(2));
+  const base = keys.has('like') ? inheritFrom(keys.get('like') ?? '') : {};
+
   const summary = keys.get('d');
   const equipment = keys.get('q');
+  const station = keys.get('st');
   const reps = readReps(keys.get('r') ?? '');
   const weight = readWeight(keys.get('w') ?? '');
   const sets = Number.parseInt(keys.get('s') ?? '', 10);
+  const rest = Number.parseInt(keys.get('rest') ?? '', 10);
+
+  /*
+   * An opening weight is this format's signal that a movement is loaded, since
+   * a loaded movement without one gets a crude bodyweight-ratio guess anyway.
+   * An inherited base can say so instead — `like=assistedpullup` is a loaded
+   * movement whether or not the author named a starting number.
+   */
+  const loaded = weight ? true : base['loaded'] === true;
 
   return {
+    ...base,
     name,
     ...(summary ? { summary } : {}),
     ...(equipment ? { equipment } : {}),
+    ...(station ? { stationId: station } : {}),
     ...(Number.isFinite(sets) ? { sets } : {}),
+    ...(Number.isFinite(rest) ? { restSeconds: rest } : {}),
     ...reps,
+    loaded,
+    ...(weight ? { openingWeight: weight } : {}),
     /*
-     * An opening weight is the only signal in this format that a movement is
-     * loaded at all. That is not a shortcut — a loaded movement without one
-     * gets a crude bodyweight-ratio guess, so an author who omits it is
-     * already better served by the bodyweight path, and one who supplies it
-     * has said everything the app needs.
+     * Carried rather than inferred. There is no reliable way to tell an
+     * assisted machine from its name, and guessing wrong is worse than the
+     * flag being absent: it reverses the direction the app pushes someone.
      */
-    ...(weight ? { loaded: true, openingWeight: weight } : { loaded: false }),
+    ...(keys.get('i') === '1' || base['inverseLoad'] === true ? { inverseLoad: true } : {}),
   };
 }
 

@@ -27,6 +27,111 @@ const WEEK = [
   'x|Sled push|d=Push a weighted sled the length of the turf|q=turf lane and a sled|s=4|r=20-30s|w=90lb',
 ].join('~');
 
+/**
+ * The line this format draws is behaviour before prose: anything the app
+ * *computes* with has to survive the trip, whatever it costs, and anything the
+ * user merely reads may be dropped or inherited.
+ *
+ * The first version got that wrong, and these are the tests that would have
+ * caught it.
+ */
+describe('fields the app computes with', () => {
+  it('carries inverseLoad, because losing it runs progression backwards', () => {
+    const { plan } = parsePortablePlan('rf1~x|Band-assisted pull-up|w=60lb|i=1~mon|str|e=x:band-assisted-pull-up|o=Pull');
+
+    expect(plan?.exercises?.[0]?.inverseLoad).toBe(true);
+  });
+
+  it('does not invent inverseLoad when it was not stated', () => {
+    const { plan } = parsePortablePlan('rf1~x|Sled push|w=90lb~mon|str|e=x:sled-push|o=Push');
+
+    expect(plan?.exercises?.[0]?.inverseLoad).toBeUndefined();
+  });
+
+  it('carries a rest interval that is not the default', () => {
+    const { plan } = parsePortablePlan('rf1~x|Heavy carry|w=70lb|rest=180~mon|str|e=x:heavy-carry|o=Carry');
+
+    expect(plan?.exercises?.[0]?.restSeconds).toBe(180);
+  });
+
+  it('carries a station hint, and puts it ahead of anything inherited', () => {
+    const { plan } = parsePortablePlan(
+      'rf1~x|Paused leg press|like=legpress|st=isochestpress~mon|str|e=x:paused-leg-press|o=Press',
+    );
+    const stations = plan?.exercises?.[0]?.stations?.map((station) => station.stationId);
+
+    // The head of the list is the default and the tail is what the swap sheet
+    // offers, so an explicitly named station has to lead.
+    expect(stations?.[0]).toBe('isochestpress');
+    expect(stations).toContain('legpressmachine');
+  });
+});
+
+describe('inheriting from a built-in movement', () => {
+  it('takes the cues, rest and rep metric of the movement it names', () => {
+    const { plan } = parsePortablePlan('rf1~x|Single-arm lat pulldown|like=latpulldown~mon|str|e=x:single-arm-lat-pulldown|o=Pull');
+    const movement = plan?.exercises?.[0];
+
+    expect(movement?.name).toBe('Single-arm lat pulldown');
+    expect(movement?.cues.setup).toBeTruthy();
+    expect(movement?.cues.execute).toBeTruthy();
+    expect(movement?.restSeconds).toBeGreaterThan(0);
+    expect(movement?.loaded).toBe(true);
+  });
+
+  /*
+   * The case this feature is really for. A model that forgets `i=1` on a
+   * band-assisted pull-up has written a plan that pushes the user the wrong
+   * way; naming the built-in it resembles makes that impossible to forget.
+   */
+  it('carries the load direction of an assisted machine without being told', () => {
+    const { plan } = parsePortablePlan('rf1~x|Band-assisted pull-up|like=assistedpullup~mon|str|e=x:band-assisted-pull-up|o=Pull');
+
+    expect(plan?.exercises?.[0]?.inverseLoad).toBe(true);
+    expect(plan?.exercises?.[0]?.loaded).toBe(true);
+  });
+
+  it('lets anything stated explicitly win over what it inherited', () => {
+    const { plan } = parsePortablePlan(
+      'rf1~x|Slow lat pulldown|like=latpulldown|d=Pull the bar down over four seconds|rest=150|s=5|r=6-8~mon|str|e=x:slow-lat-pulldown|o=Pull',
+    );
+    const movement = plan?.exercises?.[0];
+
+    expect(movement?.summary).toBe('Pull the bar down over four seconds');
+    expect(movement?.restSeconds).toBe(150);
+    expect(movement?.sets).toBe(5);
+    expect(movement?.repMin).toBe(6);
+    expect(movement?.repMax).toBe(8);
+    // Still inherited, because it was not overridden.
+    expect(movement?.cues.setup).toBeTruthy();
+  });
+
+  it('ignores a base that does not exist rather than failing the movement', () => {
+    const { plan } = parsePortablePlan('rf1~x|Sled push|like=notathing|d=Push a sled~mon|str|e=x:sled-push|o=Push');
+
+    expect(plan?.exercises?.[0]?.name).toBe('Sled push');
+    expect(plan?.exercises?.[0]?.summary).toBe('Push a sled');
+  });
+
+  /*
+   * A plan that defines a movement and then names it means its own — the
+   * definition shadows the catalogue for that plan, which is the right
+   * precedence for an author who went to the trouble of writing one.
+   *
+   * What it cannot do is *become* the built-in. The definition is namespaced
+   * under `x:`, so the catalogue's `legpress` keeps its meaning, and every set
+   * already logged against it still refers to the same movement. That is the
+   * invariant worth pinning: shadowing is a plan's business, rewriting history
+   * is not.
+   */
+  it('shadows a built-in name within its own plan without becoming it', () => {
+    const { plan } = parsePortablePlan('rf1~x|Legpress|like=legpress~mon|str|e=legpress|o=Press');
+
+    expect(plan?.exercises?.[0]?.id).toBe('x:legpress');
+    expect(plan?.days[0]?.exerciseIds).toEqual(['x:legpress']);
+  });
+});
+
 describe('the premise', () => {
   /*
    * The number this whole format is built around. A plan in JSON is 6–12kb,

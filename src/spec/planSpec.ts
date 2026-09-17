@@ -399,11 +399,36 @@ x|<movement name>|d=<what it physically is>|q=<equipment>|s=<sets>|r=<8-12>|w=<4
 | \`d=\` | movement | One plain sentence saying what it physically is. |
 | \`q=\` | movement | The equipment, in plain English. |
 | \`s=\` \`r=\` \`w=\` | movement | Sets · rep range (\`8-12\`, or \`20-45s\` for a hold) · opening weight (\`45lb\`, \`40kg\`). |
+| \`rest=\` | movement | Seconds between sets. Say it whenever it is not an ordinary 90. |
+| \`i=1\` | movement | **Assisted machines and band-assisted work**, where a higher number is *easier*. |
+| \`like=\` | movement | A built-in id this is a variant of. See below — this is the one that pays. |
+| \`st=\` | movement | A built-in station id, if one fits. Lets the app offer alternatives when it is busy. |
 
-**A movement with \`w=\` is treated as loaded; one without is bodyweight.** Cues,
-tips and alternatives cannot travel in this form — if a week leans on movements
-you are defining rather than built-in ones, send the full JSON as well, so the
-user can choose the richer version.
+**A movement with \`w=\` is treated as loaded; one without is bodyweight.**
+
+**\`i=1\` matters more than its size suggests.** The app computes every future
+load from the user's logged sets, and on a counterweighted machine getting
+stronger means the number going *down*. Without the flag it pushes them the
+wrong way, session after session, and the plan looks fine while it does.
+
+### Inheriting from a built-in movement
+
+Cues, tips and alternatives are too long for a link. Rather than lose them,
+give a movement a \`like=\` and it inherits them from the built-in you name,
+along with its rest, rep metric, stations and load direction. Anything you
+state explicitly wins.
+
+\`\`\`
+x|Single-arm lat pulldown|like=latpulldown|d=Pull the handle to your ribs with one arm at a time
+x|Band-assisted pull-up|like=assistedpullup|q=pull-up bar and a long loop band
+\`\`\`
+
+The second line is the case worth remembering: \`like=assistedpullup\` carries
+the assisted machine's load direction, so you cannot forget \`i=1\`.
+
+Use \`like=\` whenever a movement is a variant of something in the catalogue —
+most are. If a week genuinely needs a movement unlike anything built in, define
+it fully and send the JSON as well, so the user can choose the richer version.
 
 ### A complete week
 
