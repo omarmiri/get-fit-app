@@ -13,6 +13,7 @@ import { renderPlanImport } from '../components/planImport';
 import { renderAccountCard } from '../components/accountCard';
 import { renderPlanInputs } from '../components/planInputs';
 import { renderGymSetup } from '../components/gymSetup';
+import { renderOnboarding } from '../components/onboarding';
 import { renderPlanLibrary } from '../components/planLibrary';
 import type { ViewContext } from './context';
 
@@ -92,35 +93,27 @@ const LEVEL_LABEL: Readonly<Record<FitnessLevel, string>> = {
 function renderProfileCard(context: ViewContext): HTMLElement {
   const profile = context.state.prefs.profile;
 
+  // The form itself, rather than a button that used to send you to a screen in
+  // front of the first session.
   if (!profile) {
-    return card([
-      eyebrow('Your details'),
-      text(
-        'prose',
-        'No profile set. The app opens every new movement at zero and you pick your own weights, which works fine — a profile just gives a safer first guess.',
-      ),
-      el('button', {
-        class: 'button button--ghost',
-        text: 'Set up starting weights',
-        attrs: { type: 'button' },
-        on: {
-          click: () => {
-            context.store.setOnboarded(false);
-            context.ui.tab = 'today';
-            context.render();
-          },
-        },
-      }),
-    ]);
+    return renderOnboarding({
+      unit: context.state.prefs.unit,
+      onSave: (saved) => {
+        context.store.setProfile(saved);
+        toast('Starting weights set — adjust any of them as you go');
+        context.render();
+      },
+      onSkip: () => {
+        context.store.setOnboarded(true);
+        context.render();
+      },
+    });
   }
 
   const age = daysBetween(profile.recordedOn, todayIso());
 
   return card([
     eyebrow('Your details'),
-    div('setting', [
-      div('setting__text', [text('setting__label', 'Age'), text('setting__hint', `${profile.age} years`)]),
-    ]),
     div('setting', [
       div('setting__text', [
         text('setting__label', 'Bodyweight'),
@@ -142,12 +135,12 @@ function renderProfileCard(context: ViewContext): HTMLElement {
     ),
     el('button', {
       class: 'button button--ghost',
-      text: 'Update details',
+      text: 'Clear these details',
       attrs: { type: 'button' },
       on: {
         click: () => {
-          context.store.setOnboarded(false);
-          context.ui.tab = 'today';
+          context.store.clearProfile();
+          toast('Cleared — openings fall back to the default');
           context.render();
         },
       },

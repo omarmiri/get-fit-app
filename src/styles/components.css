@@ -1703,3 +1703,80 @@
   font-size: var(--t-title);
   letter-spacing: 0.06em;
 }
+
+/* ------------------------------------------------------------- first run */
+
+/*
+ * Two answers, both complete, neither an advanced setting.
+ *
+ * The built-in week used to be the eighth thing on the welcome screen, below
+ * the survey that exists to replace it. Now it is a door, and so is the other
+ * one.
+ */
+.doors {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.door {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-4);
+  border: 1px solid var(--iron-3);
+  border-radius: var(--radius);
+  background: var(--iron-1);
+}
+
+.door--primary {
+  background: var(--pc);
+  color: var(--on-pc);
+  border-color: var(--pc);
+}
+
+.door__label {
+  font-size: var(--t-title);
+  font-weight: 700;
+}
+
+.door__hint {
+  margin-top: var(--space-1);
+  font-size: var(--t-hint);
+  color: var(--dim);
+}
+
+.door--primary .door__hint {
+  color: inherit;
+  opacity: 0.8;
+}
+
+/* A line under the two buttons, not a card. It is short and it is honest. */
+.welcome__safety {
+  font-size: var(--t-hint);
+  line-height: 1.6;
+  color: var(--dim);
+}
+
+/* --------------------------------------------- the one profile question */
+
+/* Asked at the machine, where it can be answered honestly, and gone as soon
+   as there is a logged set to progress from. */
+.calibrate {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: var(--rule);
+}
+
+.calibrate__ask {
+  font-size: var(--t-body);
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+
+.calibrate__note {
+  margin-top: var(--space-2);
+  font-size: var(--t-hint);
+  color: var(--dim);
+  line-height: 1.5;
+}

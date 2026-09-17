@@ -6,7 +6,7 @@ import { getStation, stationName } from '@/data/equipment';
 import { defaultStationId, resolveOptions } from '@/domain/substitutions';
 import type { Recommendation } from '@/domain/progression';
 import { recommend } from '@/domain/progression';
-import { startingWeight } from '@/domain/startingWeights';
+import { ASSUMED_PROFILE, scaleOpening, startingWeight } from '@/domain/startingWeights';
 import { performanceHistory } from '@/state/selectors';
 import { formatDuration, formatShortDate, formatWithWeekday, todayDayKey, todayIso } from '@/domain/dates';
 import { exerciseSourceOf } from '@/data/catalogue';
@@ -22,7 +22,6 @@ import { renderFocusCard } from '../components/focusCard';
 import { renderFocusHeader, resetFocusTicker } from '../components/focusHeader';
 import { renderGoalsCard } from '../components/goalsCard';
 import { renderMovementBars } from '../components/movementBars';
-import { renderOnboarding } from '../components/onboarding';
 import { elapsedMs, resetCardioTicker } from '../components/cardioTimer';
 import { elapsedSessionMinutes, renderSessionClock } from '../components/sessionClock';
 import type { ViewContext } from './context';
@@ -44,12 +43,6 @@ export function renderTodayView(context: ViewContext): Child[] {
   const dayKey = context.ui.viewDay ?? todayDayKey();
   const day = context.plan[dayKey];
 
-  // Setup comes first and replaces the session, so it is answered once rather
-  // than nagging alongside the workout.
-  if (!context.state.prefs.onboarded) {
-    return [renderHeader(day), renderOnboardingCard(context)];
-  }
-
   const finished = todaysSession(context.state, dayKey, todayIso());
   const active = context.store.activeFor(dayKey);
 
@@ -61,21 +54,6 @@ export function renderTodayView(context: ViewContext): Child[] {
   }
 
   return active ? renderFocusScreen(context, dayKey, day, active) : renderPrepScreen(context, dayKey, day);
-}
-
-function renderOnboardingCard(context: ViewContext): HTMLElement {
-  return renderOnboarding({
-    unit: context.state.prefs.unit,
-    onSave: (profile) => {
-      context.store.setProfile(profile);
-      toast('Starting weights set — adjust any of them as you go');
-      context.render();
-    },
-    onSkip: () => {
-      context.store.setOnboarded(true);
-      context.render();
-    },
-  });
 }
 
 function renderHeader(day: PlanDay): HTMLElement {
@@ -333,6 +311,29 @@ function renderMovement(
       : `Log set ${logged.length + 1}`,
     targetMet: logged.length >= exercise.sets,
     sessionComplete,
+    // Asked only at a movement with no history, before the first set of it, and
+    // only until it has been answered once.
+    calibrate:
+      !context.state.prefs.openingCalibrated &&
+      logged.length === 0 &&
+      recommendation?.kind === 'opening' &&
+      recommendation.weight > 0
+        ? { weight: recommendation.weight }
+        : null,
+    onCalibrate: (verdict) => {
+      const current = context.state.prefs.openingScale ?? 1;
+      const factor = verdict === 'light' ? 1.3 : verdict === 'heavy' ? 0.7 : 1;
+      context.store.setOpeningScale(current * factor);
+      // The panel is rebuilt from the new scale, so the number on screen moves
+      // with the answer rather than waiting for the next movement.
+      delete context.ui.draftByExercise[exercise.id];
+      toast(
+        verdict === 'right'
+          ? 'Noted — opening weights stay where they are'
+          : `Noted — opening weights will be ${verdict === 'light' ? 'higher' : 'lower'}`,
+      );
+      context.render();
+    },
     onLog: (weight, reps) => {
       context.store.logSet(dayKey, exercise.id, weight, reps, context.state.prefs.unit, stationId, undefined);
       const setNumber = Math.min(logged.length + 1, exercise.sets);
@@ -460,7 +461,18 @@ function openingFor(
     (entry) => entry.station.id === stationId,
   )?.option;
 
-  const opening = startingWeight(exercise, context.state.prefs.profile, unit, stationOption);
+  /*
+   * With no profile the estimate used to be `null`, so every movement opened
+   * at zero until three questions had been answered on a screen before the
+   * first rep. It opens from a deliberately light assumed profile instead, and
+   * the one calibration answer scales it.
+   */
+  const base = startingWeight(exercise, context.state.prefs.profile ?? ASSUMED_PROFILE, unit, stationOption);
+  const opening =
+    base === null
+      ? null
+      : scaleOpening(base, context.state.prefs.openingScale ?? 1, unit, exercise.inverseLoad === true);
+
   const recommendation = recommend(exercise, blocks, unit, opening);
   const last = lastPerformance(context.state, exercise.id)?.sets.at(-1) ?? null;
   const station = stationId === undefined ? undefined : getStation(stationId);

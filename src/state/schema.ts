@@ -230,9 +230,12 @@ function parseSession(raw: unknown): Session | null {
 function parseProfile(raw: unknown): UserProfile | undefined {
   if (!isRecord(raw)) return undefined;
 
+  // Age is no longer asked, so a profile without one is normal rather than
+  // broken. Profiles that already carry one keep it, so nobody's estimates
+  // move because the question was dropped.
   const age = clampNumber(raw['age'], { min: 10, max: 100 }, 0);
   const bodyweight = clampNumber(raw['bodyweight'], { min: 0, max: 1000 }, 0);
-  if (age <= 0 || bodyweight <= 0) return undefined;
+  if (bodyweight <= 0) return undefined;
 
   const level = LEVELS.find((value) => value === raw['level']);
   if (!level) return undefined;
@@ -240,7 +243,7 @@ function parseProfile(raw: unknown): UserProfile | undefined {
   const rawDate = raw['recordedOn'];
 
   return {
-    age: Math.round(age),
+    ...(age > 0 ? { age: Math.round(age) } : {}),
     bodyweight,
     bodyweightUnit: isWeightUnit(raw['bodyweightUnit']) ? raw['bodyweightUnit'] : 'lb',
     level,
@@ -297,6 +300,10 @@ function parsePreferences(raw: unknown): Preferences {
       typeof raw['restVibrate'] === 'boolean' ? raw['restVibrate'] : DEFAULT_PREFERENCES.restVibrate,
     restSound: typeof raw['restSound'] === 'boolean' ? raw['restSound'] : DEFAULT_PREFERENCES.restSound,
     spokenCues: typeof raw['spokenCues'] === 'boolean' ? raw['spokenCues'] : DEFAULT_PREFERENCES.spokenCues,
+    ...(typeof raw['openingScale'] === 'number' && raw['openingScale'] > 0
+      ? { openingScale: raw['openingScale'] }
+      : {}),
+    ...(raw['openingCalibrated'] === true ? { openingCalibrated: true } : {}),
     ...(trendExerciseId === undefined ? {} : { trendExerciseId: canonicalExerciseId(trendExerciseId) }),
     ...(missingStations.length === 0 ? {} : { missingStations }),
     ...(Object.keys(preferredStations).length === 0 ? {} : { preferredStations }),

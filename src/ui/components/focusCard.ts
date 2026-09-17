@@ -40,6 +40,15 @@ export interface FocusCardOptions {
   readonly targetMet: boolean;
   /** True once every movement has, which turns the action into "finish". */
   readonly sessionComplete: boolean;
+  /**
+   * Ask whether the opening weight is about right, or null once it has been.
+   *
+   * This is the whole of what first run used to ask, moved to the only place
+   * it can be answered honestly: standing at the machine, looking at the
+   * number. One answer moves every other opening with it.
+   */
+  readonly calibrate: { readonly weight: number } | null;
+  readonly onCalibrate: (verdict: 'light' | 'right' | 'heavy') => void;
   readonly onLog: (weight: number, reps: number) => void;
   readonly onFinish: () => void;
   readonly onToggleSwap: () => void;
@@ -151,9 +160,52 @@ export function renderFocusCard(options: FocusCardOptions): HTMLElement {
       : null,
     readout,
     renderNote(options, ramp),
+    renderCalibration(options),
     div('fsteps', [weightStepper.element, repsStepper.element]),
     options.sessionComplete ? text('focuscard__done', 'Every movement has hit its target.') : null,
     action,
+  ]);
+}
+
+/**
+ * "First time on this machine — is 95 lb about right?"
+ *
+ * Screen 02 of the old first run asked age, bodyweight and experience before
+ * anyone had lifted anything, to produce a number the app rounds down and
+ * abandons after one logged set. This asks the same question where the answer
+ * is knowable, and self-dismisses the moment there is a real set to progress
+ * from.
+ */
+function renderCalibration(options: FocusCardOptions): HTMLElement | null {
+  const calibrate = options.calibrate;
+  if (!calibrate) return null;
+
+  const load = `${formatWeightValue(calibrate.weight, options.unit)} ${UNIT_LABEL[options.unit]}`;
+
+  const choices: readonly { verdict: 'light' | 'right' | 'heavy'; label: string }[] = [
+    { verdict: 'light', label: 'Too light' },
+    { verdict: 'right', label: 'Right' },
+    { verdict: 'heavy', label: 'Too heavy' },
+  ];
+
+  return div('calibrate', [
+    text('calibrate__ask', `First time on this machine — is ${load} about right?`),
+    el(
+      'div',
+      { class: 'choices__row', attrs: { role: 'group', 'aria-label': 'Is this weight about right' } },
+      choices.map((choice) =>
+        el('button', {
+          class: 'choices__button effort__button',
+          text: choice.label,
+          attrs: { type: 'button' },
+          on: { click: () => options.onCalibrate(choice.verdict) },
+        }),
+      ),
+    ),
+    text(
+      'calibrate__note',
+      'Answered once. Every other opening weight shifts with it — or just change the number.',
+    ),
   ]);
 }
 

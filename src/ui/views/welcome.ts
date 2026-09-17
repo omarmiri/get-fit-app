@@ -1,104 +1,110 @@
 import type { Child } from '../dom';
-import { PLAN_ORDER } from '@/data/plan';
-import { card, div, el, eyebrow, text } from '../dom';
+import { div, el, eyebrow, text } from '../dom';
 import { toast } from '../toast';
-import { renderAccountCard } from '../components/accountCard';
-import { renderGymSetup } from '../components/gymSetup';
-import { renderPlanImport } from '../components/planImport';
-import { renderPlanInputs } from '../components/planInputs';
 import type { ViewContext } from './context';
 
 /**
  * The first thing a new user sees.
  *
- * ## Why this exists
+ * ## Why this is two buttons
  *
- * The app used to open straight onto a seven-day rotation nobody had chosen,
- * with no indication of where it came from, while the feature that makes the
- * app interesting — bring a plan from whichever LLM you already use — sat
- * three taps deep in a settings tab. Someone opening it for the first time
- * would reasonably conclude it was a fixed programme they had to follow.
+ * It used to be four screens of scroll. Venue, eleven equipment chips,
+ * outdoors, days a week, minutes per session, what you enjoy, then the prompt
+ * paragraph, then the built-in week, then health context and things to work
+ * around, then three chatbot launchers and an import explainer, then a safety
+ * note — and if you accepted the built-in week, a further screen asking age,
+ * bodyweight and experience before the session appeared. Seven taps to a first
+ * logged set.
  *
- * ## What it is not
+ * Every one of those questions is defensible and the set is still wrong,
+ * because none of them are needed to log a leg press. The whole survey exists
+ * to make a *generated* plan good, and generating a plan is the second thing
+ * anyone does, not the first.
  *
- * Not a sign-up wall. Neither route needs an account, the built-in week is
- * still one tap away, and nothing here can be failed. The question is only
- * "how do you want to train", and every answer is allowed — including "just
- * give me something sensible".
+ * ## Where the questions went
  *
- * ## Why the built-in plan is offered last
+ * They are re-timed, not lost.
  *
- * Not because it is worst. It is the fallback the whole app is built around
- * and there is nothing wrong with it. It is last because it is the option that
- * needs no explanation, and putting it first would make the other one look
- * like an advanced setting — which is exactly the problem this screen fixes.
+ * - Venue, equipment, days, length, likes, health context and the prompt
+ *   paragraph move to the front of "Write me a new week", where someone has
+ *   chosen to spend a minute on them — and where the app can pre-fill half of
+ *   them from what has actually been logged.
+ * - Bodyweight and experience become one question at the first machine:
+ *   "is 95 lb about right?". That is the only place it can be answered
+ *   honestly. Age goes entirely; it moves the estimate less than the rounding
+ *   already does.
+ * - Equipment is inferred. The swap sheet asks "is this at your gym?" at the
+ *   exact moment a machine is missing, and that answer is worth more than a
+ *   checkbox ticked in a kitchen.
+ *
+ * ## Why the safety note stays
+ *
+ * It is short, it is honest and it costs nothing. It is a line under the two
+ * buttons rather than a card of its own.
  */
 export function renderWelcomeView(context: ViewContext): Child[] {
   return [
     div('spine', [
       eyebrow('Rack & File'),
-      el('h1', { text: 'How do you want to train?' }),
+      el('h1', { text: 'Your week, on this phone' }),
       text(
         'spine__sub',
-        'Tell us where you train, then pick how you want your week written. You can change any of it later, and nothing here is permanent.',
+        'Nothing leaves the device. No account. Start with the built-in rotation and change it whenever you like.',
       ),
     ]),
 
-    renderGymSetup(context),
-    renderBuiltInCard(context),
-    renderPlanInputs(() => {
-      /* No re-render: redrawing on each keystroke would lose the caret. */
-    }),
-    renderPlanImport(context),
-    renderAccountCard(context),
-    renderFooter(),
-  ];
-}
-
-/**
- * The one-tap answer.
- *
- * Deliberately concrete about what it contains rather than selling it — a
- * seven-day rotation is easy to describe, and someone can decide from the
- * description whether it suits them.
- */
-function renderBuiltInCard(context: ViewContext): HTMLElement {
-  const days = PLAN_ORDER.map((key) => context.plan[key].label);
-
-  return card([
-    eyebrow('Start with the built-in week'),
-    text(
-      'prose',
-      'A balanced seven-day rotation: two full-body strength sessions spread apart, cardio between them, and a recovery day. Sensible for most people and ready right now.',
-    ),
-
-    el(
-      'ul',
-      { class: 'welcome__days' },
-      days.map((label) => el('li', { class: 'welcome__day', text: label })),
-    ),
-
-    el('button', {
-      class: 'button button--primary',
-      text: 'Use this and start training',
-      attrs: { type: 'button' },
-      on: {
-        click: () => {
+    div('doors', [
+      renderDoor({
+        label: 'Start training now',
+        hint: 'Seven-day rotation, ready',
+        primary: true,
+        onChoose: () => {
           context.store.setWelcomed(true);
           toast('Ready — this is your week');
           context.render();
         },
-      },
-    }),
-  ]);
+      }),
+      renderDoor({
+        label: 'Bring a plan from an LLM',
+        hint: 'Six questions, about a minute',
+        primary: false,
+        onChoose: () => {
+          // Still the built-in week underneath, so there is something to train
+          // against if the plan-writing flow is abandoned half way.
+          context.store.setWelcomed(true);
+          context.ui.tab = 'plan';
+          context.render();
+        },
+      }),
+    ]),
+
+    text(
+      'welcome__safety',
+      'A training log, not medical advice. Stop if you get chest pain or dizziness out of proportion to the effort.',
+    ),
+  ];
 }
 
-function renderFooter(): HTMLElement {
-  return card([
-    eyebrow('Before you push'),
-    text(
-      'prose',
-      'This is a training log, not medical advice. Everything stays on your device unless you sign in. Stop the session if you get chest pain, dizziness, or shortness of breath out of proportion to the effort, and talk to your doctor before ramping up.',
-    ),
-  ]);
+/**
+ * One of the two answers.
+ *
+ * Both are complete and neither is an advanced setting — which is the whole
+ * point. The built-in week used to be the eighth thing on the screen, below
+ * the survey that exists to replace it.
+ */
+function renderDoor(options: {
+  label: string;
+  hint: string;
+  primary: boolean;
+  onChoose: () => void;
+}): HTMLElement {
+  return el(
+    'button',
+    {
+      class: options.primary ? 'door door--primary' : 'door',
+      attrs: { type: 'button' },
+      on: { click: options.onChoose },
+    },
+    [text('door__label', options.label), text('door__hint', options.hint)],
+  );
 }

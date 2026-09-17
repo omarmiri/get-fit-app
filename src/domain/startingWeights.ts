@@ -45,7 +45,8 @@ const LEVEL_FACTOR: Readonly<Record<UserProfile['level'], number>> = {
  * 30-year-olds. It reflects that recovery from an over-ambitious first session
  * takes longer, so the cost of guessing high rises.
  */
-function ageFactor(age: number): number {
+function ageFactor(age: number | undefined): number {
+  if (age === undefined) return 1;
   if (!Number.isFinite(age) || age <= 50) return 1;
   const decadesPast50 = (Math.min(age, 90) - 50) / 10;
   return Math.max(0.7, 1 - decadesPast50 * 0.075);
@@ -64,6 +65,37 @@ function ageFactor(age: number): number {
  * as a floor to work up from, because the reasoning at the top of this file
  * does not stop applying just because a model did the guessing.
  */
+/**
+ * The profile used when there is none.
+ *
+ * Asking three questions before anybody has lifted anything bought an estimate
+ * the app already rounds down and throws away after one logged set. So it is
+ * not asked: every movement opens from this instead — a novice factor at a
+ * middling bodyweight, which is the same conservative floor the form produced
+ * for most people — and one question at the first machine scales it.
+ *
+ * Deliberately not surfaced as "we assumed you weigh this". It is the shape of
+ * a floor to work up from, and the screen says so in those terms.
+ */
+export const ASSUMED_PROFILE: UserProfile = {
+  bodyweight: 155,
+  bodyweightUnit: 'lb',
+  level: 'new',
+  recordedOn: '1970-01-01',
+};
+
+/**
+ * Apply the user's one calibration answer to an estimate.
+ *
+ * Still rounded in the cautious direction afterwards, because the reasoning at
+ * the top of this file does not stop applying because somebody said "too
+ * light" once.
+ */
+export function scaleOpening(value: number, scale: number, unit: WeightUnit, inverse = false): number {
+  if (!Number.isFinite(scale) || scale <= 0) return value;
+  return safeIncrement(value * scale, unit, inverse);
+}
+
 export function startingWeight(
   exercise: Exercise,
   profile: UserProfile | undefined,
@@ -125,11 +157,5 @@ export function floorToIncrement(value: number, unit: WeightUnit): number {
 
 /** Whether a profile has enough in it to estimate from. */
 export function isUsableProfile(profile: UserProfile | undefined): profile is UserProfile {
-  return (
-    profile !== undefined &&
-    Number.isFinite(profile.bodyweight) &&
-    profile.bodyweight > 0 &&
-    Number.isFinite(profile.age) &&
-    profile.age > 0
-  );
+  return profile !== undefined && Number.isFinite(profile.bodyweight) && profile.bodyweight > 0;
 }

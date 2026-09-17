@@ -62,7 +62,15 @@ export type FitnessLevel = 'new' | 'returning' | 'experienced';
  */
 export interface UserProfile {
   /** Years. Used to taper the starting estimate slightly with age. */
-  readonly age: number;
+  /**
+   * Age in years, when it was given.
+   *
+   * Optional, and no longer asked. It moves the opening estimate less than the
+   * rounding already does, and it is the field that made a training log feel
+   * like a medical intake. Existing profiles keep theirs so their numbers do
+   * not move.
+   */
+  readonly age?: number;
   readonly bodyweight: number;
   readonly bodyweightUnit: WeightUnit;
   readonly level: FitnessLevel;
@@ -505,6 +513,18 @@ export interface Preferences {
   readonly trendExerciseId?: string;
   /** Whether the rest timer vibrates on completion, where supported. */
   readonly restVibrate: boolean;
+  /**
+   * One multiplier on every opening estimate, set by answering one question.
+   *
+   * First run used to ask age, bodyweight and experience before a single rep
+   * had been done, to produce a number the app rounds down and abandons after
+   * one logged set. The question is asked at the first machine instead —
+   * "is 95 lb about right?" — which is the only place it can be answered
+   * honestly, and the answer moves every other opening with it.
+   */
+  readonly openingScale?: number;
+  /** Whether that question has been answered, so it stops being asked. */
+  readonly openingCalibrated?: boolean;
   /**
    * Whether rest chimes: two short tones ten seconds out, one long at zero.
    *

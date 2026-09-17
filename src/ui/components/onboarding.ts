@@ -5,17 +5,16 @@ import { UNIT_LABEL } from '@/domain/units';
 import { card, div, el, eyebrow, text } from '../dom';
 
 /**
- * One-time setup, so the first session opens at a defensible weight instead of
- * zero.
+ * Optional detail, for anyone who would rather give it than calibrate by feel.
  *
- * Three questions and a skip button. Everything here is optional — the app
- * works fine without it, you just dial in your own starting weights. That is
- * said on screen rather than implied, because a setup form that looks mandatory
- * is a setup form people abandon the app at.
+ * This used to stand between the welcome screen and the first session: three
+ * questions, before anybody had lifted anything, to produce a number the app
+ * rounds down and abandons after one logged set. It is on the Plan tab now,
+ * where someone has gone looking for it, and the first session instead opens
+ * from a deliberately light default and asks one question at the machine.
  *
- * Only age, bodyweight and experience are asked. They are the fields that
- * change the estimate enough to justify asking; anything more would be
- * collecting personal detail for a number that is a rough floor anyway.
+ * Age is gone. It moved the estimate less than the rounding already does, and
+ * it was the field that made a training log feel like a medical intake.
  */
 
 const LEVELS: readonly { value: FitnessLevel; label: string; hint: string }[] = [
@@ -31,28 +30,26 @@ export interface OnboardingOptions {
 }
 
 export function renderOnboarding(options: OnboardingOptions): HTMLElement {
-  const draft: { age: number; bodyweight: number; level: FitnessLevel | null } = {
-    age: 0,
+  const draft: { bodyweight: number; level: FitnessLevel | null } = {
     bodyweight: 0,
     level: null,
   };
 
   const saveButton = el('button', {
     class: 'button button--primary',
-    text: 'Save and start',
+    text: 'Save these details',
     attrs: { type: 'button' },
   });
 
   const refresh = (): void => {
-    const ready = draft.age > 0 && draft.bodyweight > 0 && draft.level !== null;
+    const ready = draft.bodyweight > 0 && draft.level !== null;
     saveButton.toggleAttribute('disabled', !ready);
     saveButton.setAttribute('aria-disabled', String(!ready));
   };
 
   saveButton.addEventListener('click', () => {
-    if (draft.level === null || draft.age <= 0 || draft.bodyweight <= 0) return;
+    if (draft.level === null || draft.bodyweight <= 0) return;
     options.onSave({
-      age: draft.age,
       bodyweight: draft.bodyweight,
       bodyweightUnit: options.unit,
       level: draft.level,
@@ -83,17 +80,12 @@ export function renderOnboarding(options: OnboardingOptions): HTMLElement {
 
   const result = card(
     [
-      eyebrow('One-time setup'),
-      el('h2', { class: 'onboard__title', text: 'Let’s pick a safe starting weight' }),
+      eyebrow('Optional'),
+      el('h2', { class: 'onboard__title', text: 'Starting weights, from your numbers' }),
       text(
         'prose',
-        'Three questions, once. The app uses them only to suggest an opening weight for each machine — deliberately on the light side, so your first set is never the one that hurts you. Nothing leaves this device, and you can skip this and set your own weights.',
+        'Two questions. The app uses them only to suggest an opening weight the first time you do a movement — deliberately on the light side, so your first set is never the one that hurts you. Nothing leaves this device, and skipping it costs nothing: the app already opens from a conservative default and asks you at the machine whether it looks right.',
       ),
-
-      renderNumberField('Age', 'years', 'numeric', (value) => {
-        draft.age = clampNumber(value, { min: 10, max: 100 }, 0);
-        refresh();
-      }),
 
       renderNumberField('Bodyweight', UNIT_LABEL[options.unit], 'decimal', (value) => {
         draft.bodyweight = clampNumber(value, { min: 50, max: 700 }, 0);
@@ -106,7 +98,7 @@ export function renderOnboarding(options: OnboardingOptions): HTMLElement {
 
       el('button', {
         class: 'button button--ghost',
-        text: 'Skip — I’ll set my own',
+        text: 'Not now',
         attrs: { type: 'button' },
         on: { click: options.onSkip },
       }),

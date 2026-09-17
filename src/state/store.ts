@@ -198,6 +198,25 @@ export class AppStore {
     this.#commit({ ...this.#state, prefs: { ...this.#state.prefs, restVibrate: enabled } });
   }
 
+  /**
+   * Record the answer to "is this about right?", asked at the first machine.
+   *
+   * One number, applied to every opening estimate from then on, and the flag
+   * that stops the question being asked again.
+   */
+  setOpeningScale(scale: number): void {
+    this.#commit({
+      ...this.#state,
+      prefs: { ...this.#state.prefs, openingScale: scale, openingCalibrated: true },
+    });
+  }
+
+  /** Forget the optional profile. Openings fall back to the assumed one. */
+  clearProfile(): void {
+    const { profile: _dropped, ...prefs } = this.#state.prefs;
+    this.#commit({ ...this.#state, prefs });
+  }
+
   setRestSound(enabled: boolean): void {
     this.#commit({ ...this.#state, prefs: { ...this.#state.prefs, restSound: enabled } });
   }
