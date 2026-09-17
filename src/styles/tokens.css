@@ -16,7 +16,9 @@
   --iron-2: #252b32;
   --iron-3: #333b44;
 
-  /* Ink. */
+  /* Ink. Two text colours only: `--dimmer` draws rules and disabled pips and is
+     never used for type — at 2.9:1 on card ground it was carrying the most
+     explanatory copy in the app at the lowest contrast in the app. */
   --chalk: #edede7;
   --dim: #8a9099;
   --dimmer: #5d656e;
@@ -28,29 +30,60 @@
   --p-green: #1e7a4c;
   --p-white: #e4e1d8;
 
+  /*
+   * Text that sits on top of each plate.
+   *
+   * One foreground for all five plates does not work: near-black measures
+   * 3.2:1 on red, 3.1:1 on blue and 3.6:1 on green, and red is the plate under
+   * the primary button label on every strength day. Chalk clears AA on those
+   * three (5.0, 5.4 and 4.8); near-black clears it comfortably on yellow and
+   * white (9.8 and 13.7), where chalk would not. So it is one token per plate.
+   */
+  --on-p-red: var(--chalk);
+  --on-p-blue: var(--chalk);
+  --on-p-green: var(--chalk);
+  --on-p-yellow: #0e1114;
+  --on-p-white: #0e1114;
+
+  /* Current day's plate colour and its foreground. Both are overwritten at
+     runtime together; these are the fallback pair. */
+  --pc: var(--p-white);
+  --on-pc: var(--on-p-white);
+
   --ok: #1e7a4c;
   --warn: #e8b21c;
   --danger: #c8102e;
 
-  /* Current day's plate colour. Overwritten at runtime; this is the fallback. */
-  --pc: var(--p-white);
-  /* Text that sits on top of --pc. The plate colours are all mid-to-dark, so a
-     near-black foreground clears WCAG AA on every one of them. */
-  --on-pc: #0e1114;
-
-  /* Spacing scale. */
+  /* Spacing scale: 4 · 8 · 12 · 16 · 24 · 40. Every value a multiple of 4. */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
-  --space-5: 22px;
-  --space-6: 32px;
+  --space-5: 24px;
+  --space-6: 40px;
 
   --pad: var(--space-4);
   --radius: 4px;
   --content-max: 640px;
 
-  /* Layout chrome. Referenced by the rest bar so the two cannot overlap. */
+  /*
+   * Type ramp: six sizes, not eleven.
+   *
+   * In `rem` so that a phone set to large type actually enlarges the app. The
+   * previous ramp was pinned in px from 9 to 54, which made the interface a
+   * fixed-size document on a device whose text-size control did nothing.
+   *
+   * Two readouts sit outside the ramp on purpose, because they are read at
+   * arm's length rather than in the hand: the rest clock and the run clock.
+   */
+  --t-placard: 0.75rem; /* 12px — uppercase eyebrows, field labels, tags */
+  --t-hint: 0.8125rem; /* 13px — secondary lines and every explanatory hint */
+  --t-body: 0.9375rem; /* 15px — body copy and prose */
+  --t-title: 1.25rem; /* 20px — card titles */
+  --t-screen: 1.875rem; /* 30px — screen headings, condensed uppercase */
+  --t-readout: 2.5rem; /* 40px — entered numbers */
+
+  /* Layout chrome. Referenced by the rest screen so the two cannot overlap. */
   --nav-height: 60px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 
@@ -61,5 +94,6 @@
   --font-mono: 'Chivo Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --border: 1px solid var(--iron-2);
+  --rule: 1px solid var(--iron-2);
   --transition: 0.18s ease;
 }

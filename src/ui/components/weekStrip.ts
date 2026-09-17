@@ -1,6 +1,7 @@
 import type { AppState, DayKey, PlanDay } from '@/types';
 import { DAY_KEYS, DAY_NAMES } from '@/data/plan';
 import { addDays, startOfWeek, toIsoDate, todayDayKey } from '@/domain/dates';
+import { onPlate } from '@/data/plates';
 import { completedDates } from '@/state/selectors';
 import { el, replaceChildren } from '../dom';
 
@@ -43,7 +44,7 @@ export function renderWeekStrip(container: HTMLElement, options: WeekStripOption
       'button',
       {
         class: 'weekday',
-        style: { '--pc': day.color },
+        style: { '--pc': day.color, '--on-pc': onPlate(day.color) },
         attrs: {
           type: 'button',
           'aria-label': label,

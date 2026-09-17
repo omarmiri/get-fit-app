@@ -16,3 +16,6 @@ npm-debug.log*
 .idea/
 function.zip
 .lambda-build/
+
+# Imported Claude Design project — a review artefact synced in, not app source.
+/Get-fit-app design review/

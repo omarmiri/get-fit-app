@@ -16,6 +16,31 @@ export const PLATE = {
 
 export type PlateColor = (typeof PLATE)[keyof typeof PLATE];
 
+/**
+ * The text colour that clears WCAG AA on each plate.
+ *
+ * A single near-black foreground was documented as clearing AA on every plate
+ * and does not: it measures 3.2:1 on red, 3.1:1 on blue and 3.6:1 on green, and
+ * red sits under the primary button label on every strength day. Chalk clears
+ * AA on those three and fails on yellow and white, so the pairing is per plate.
+ * Mirrors the `--on-p-*` custom properties in `styles/tokens.css`.
+ */
+const CHALK = '#EDEDE7';
+const NEAR_BLACK = '#0E1114';
+
+export const ON_PLATE: Readonly<Record<string, string>> = {
+  [PLATE.red]: CHALK,
+  [PLATE.blue]: CHALK,
+  [PLATE.green]: CHALK,
+  [PLATE.yellow]: NEAR_BLACK,
+  [PLATE.white]: NEAR_BLACK,
+};
+
+/** The foreground for an arbitrary accent, falling back to chalk. */
+export function onPlate(color: string): string {
+  return ON_PLATE[color] ?? ON_PLATE[color.toUpperCase()] ?? CHALK;
+}
+
 /** Legend copy for the Plan tab, ordered heaviest to lightest. */
 export const PLATE_LEGEND: readonly { color: string; label: string }[] = [
   { color: PLATE.red, label: '25 kg · Strength' },

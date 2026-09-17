@@ -1,7 +1,7 @@
 import type { AppState, Tab } from '@/types';
 import { resolvePlan } from '@/data/activePlan';
 import { activePlan } from '@/data/catalogue';
-import { PLATE } from '@/data/plates';
+import { PLATE, onPlate } from '@/data/plates';
 import { todayDayKey } from '@/domain/dates';
 import type { AppStore } from '@/state/store';
 import { replaceChildren, requireElement } from '@/ui/dom';
@@ -209,6 +209,9 @@ export class App {
     const plan = resolvePlan(activePlan(this.#store.getState()));
     const accent = this.#ui.tab === 'today' ? plan[this.#ui.viewDay ?? todayDayKey()].color : NEUTRAL_ACCENT;
     document.documentElement.style.setProperty('--pc', accent);
+    // The two move together: one foreground for all five plates fails AA on
+    // three of them, so whatever sets the accent also sets its text colour.
+    document.documentElement.style.setProperty('--on-pc', onPlate(accent));
   }
 
   #paintWeekStrip(context: ViewContext): void {
