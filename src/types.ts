@@ -506,6 +506,23 @@ export interface Preferences {
   /** Whether the rest timer vibrates on completion, where supported. */
   readonly restVibrate: boolean;
   /**
+   * Whether rest chimes: two short tones ten seconds out, one long at zero.
+   *
+   * On by default, because it is the only completion signal that exists on
+   * iOS at all — `navigator.vibrate` is not implemented there. The tone is
+   * synthesised from an oscillator, so there is no asset to ship or cache, and
+   * it is silent until the Start tap has unlocked audio.
+   */
+  readonly restSound: boolean;
+  /**
+   * Whether the next movement is read out loud when rest ends.
+   *
+   * Off by default. It is genuinely useful — it replaces the glance, not the
+   * screen — and it is also the feature most likely to embarrass someone in a
+   * quiet gym, which is the whole reason it is a switch.
+   */
+  readonly spokenCues: boolean;
+  /**
    * Stations the user has marked as not present at their gym.
    *
    * The equipment catalogue is a vocabulary of common gym equipment, not an

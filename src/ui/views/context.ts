@@ -1,6 +1,7 @@
 import type { AppState, DayKey, PlanDay, Tab } from '@/types';
 import type { CardioTimerState } from '../components/cardioTimer';
 import type { AppStore } from '@/state/store';
+import type { Attention } from '@/services/attention';
 import type { RestTimer } from '../restTimer';
 
 /** Transient interface state. Not persisted — it resets on reload by design. */
@@ -58,6 +59,14 @@ export interface ViewContext {
    */
   readonly plan: Readonly<Record<DayKey, PlanDay>>;
   readonly rest: RestTimer;
+  /**
+   * The wake lock, the chime and the spoken cue.
+   *
+   * Views reach for this at exactly two moments: the Start tap, which is the
+   * user gesture that buys audio for the whole session and takes the wake
+   * lock, and finishing, which gives the screen back.
+   */
+  readonly attention: Attention;
   readonly ui: UiState;
   /** Re-render the current view from current state. */
   readonly render: () => void;

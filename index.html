@@ -42,8 +42,8 @@
       from three metres away is high — which the old bar, a 16px stack of pips
       and a 26px clock, could not deliver.
     -->
-    <section class="rest" id="rest" role="timer" aria-label="Rest timer" hidden>
-      <div class="rest__inner">
+    <section class="rest" id="rest" role="timer" aria-label="Rest timer" data-state="running" hidden>
+      <div class="rest__inner" id="rest-running">
         <div class="rest__top">
           <div class="eyebrow" id="rest-plan"></div>
           <div class="eyebrow" id="rest-did"></div>
@@ -63,9 +63,26 @@
           <div class="rest__note">Sets the next set's weight. Skip it and nothing changes.</div>
         </div>
 
+        <div class="rest__warning" id="rest-warning" hidden></div>
+
         <div class="rest__actions">
           <button type="button" id="rest-add" aria-label="Add 30 seconds to rest">+30s</button>
           <button type="button" id="rest-skip" aria-label="Skip rest">Skip rest</button>
+        </div>
+      </div>
+
+      <!--
+        Rest over: a whole-screen colour flip, readable across a gym floor, with
+        the next movement and its weight already on it. Green means go here and
+        nothing else.
+      -->
+      <div class="rest__over" id="rest-over" hidden>
+        <div class="rest__inner">
+          <div class="eyebrow">Rest over</div>
+          <div class="rest__next" id="rest-next"></div>
+          <div class="rest__load mono" id="rest-load"></div>
+          <div class="rest__nextmeta" id="rest-nextmeta"></div>
+          <button type="button" class="button button--go" id="rest-go">Go</button>
         </div>
       </div>
     </section>

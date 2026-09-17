@@ -1684,6 +1684,18 @@
 
 /* The one thing on the screen, sized to be hit without looking, and sitting
    just clear of the tab bar rather than two screens down. */
+/* The go screen's action. Chalk on green, so it reads as the way out of a
+   screen that is already shouting. Lives here, next to `.button`, because the
+   base rule would otherwise win on source order and shrink it. */
+.button--go {
+  min-height: var(--focus-log);
+  margin-top: var(--space-5);
+  background: var(--on-p-green);
+  color: var(--ok);
+  font-size: var(--t-title);
+  letter-spacing: 0.06em;
+}
+
 .button--log {
   min-height: var(--focus-log);
   margin-top: var(--space-5);

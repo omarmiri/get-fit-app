@@ -1,15 +1,17 @@
 import type { Child } from '../dom';
 import type { DayKey, Exercise, PlanDay, Session } from '@/types';
+import type { RestNext } from '../restTimer';
 import { DAY_NAMES } from '@/data/plan';
-import { stationName } from '@/data/equipment';
+import { getStation, stationName } from '@/data/equipment';
 import { defaultStationId, resolveOptions } from '@/domain/substitutions';
+import type { Recommendation } from '@/domain/progression';
 import { recommend } from '@/domain/progression';
 import { startingWeight } from '@/domain/startingWeights';
 import { performanceHistory } from '@/state/selectors';
 import { formatDuration, formatShortDate, formatWithWeekday, todayDayKey, todayIso } from '@/domain/dates';
 import { exerciseSourceOf } from '@/data/catalogue';
 import { sessionVolume } from '@/domain/metrics';
-import { formatVolume } from '@/domain/units';
+import { formatVolume, setWeightIn } from '@/domain/units';
 import { lastPerformance, todaysSession } from '@/state/selectors';
 import { AppStore } from '@/state/store';
 import { card, div, el, eyebrow, text } from '../dom';
@@ -103,6 +105,15 @@ function renderPrepScreen(context: ViewContext, dayKey: DayKey, day: PlanDay): C
     renderOutline(day),
     renderSessionClock({
       onStart: () => {
+        /*
+         * This tap is the only user gesture the session is guaranteed to get,
+         * so it is where audio is unlocked and the screen wake lock is taken.
+         * An AudioContext created inside a gesture stays usable afterwards,
+         * which is what makes every later rest audible — and holding the lock
+         * is why the phone is still lit when one ends.
+         */
+        context.attention.unlock();
+        void context.attention.hold();
         context.store.startSession(dayKey);
         context.ui.sheet = null;
         toast('Workout started — the clock is running');
@@ -306,26 +317,7 @@ function renderMovement(
   const isCircuit = day.exerciseFormat === 'circuit';
   const targetRounds = Math.max(...exercises.map((item) => item.sets));
 
-  // The chosen station is per-exercise transient state: an explicit pick this
-  // session wins, otherwise fall back to the remembered or default station.
-  const stationId =
-    context.ui.stationByExercise[exercise.id] ?? defaultStationId(exercise, context.state.prefs);
-
-  // Progression runs on this exercise's history at *this* station: loads are
-  // not comparable across machines.
-  const blocks = performanceHistory(context.state, exercise.id, stationId);
-  const stationOption = resolveOptions(exercise, context.state.prefs, null, context.state.prefs.unit).find(
-    (entry) => entry.station.id === stationId,
-  )?.option;
-
-  const opening = startingWeight(
-    exercise,
-    context.state.prefs.profile,
-    context.state.prefs.unit,
-    stationOption,
-  );
-
-  const recommendation = recommend(exercise, blocks, context.state.prefs.unit, opening);
+  const { stationId, recommendation } = openingFor(context, exercise);
 
   return renderFocusCard({
     exercise,
@@ -343,30 +335,8 @@ function renderMovement(
     sessionComplete,
     onLog: (weight, reps) => {
       context.store.logSet(dayKey, exercise.id, weight, reps, context.state.prefs.unit, stationId, undefined);
-      // How the set felt is asked on the rest screen now, against the set that
-      // was just done, during the ninety seconds with nothing else to do.
       const setNumber = Math.min(logged.length + 1, exercise.sets);
-      context.rest.start(exercise.restSeconds, {
-        dayKey,
-        exerciseId: exercise.id,
-        exerciseName: exercise.name,
-        setLabel: isCircuit ? `round ${setNumber}` : `set ${setNumber} of ${exercise.sets}`,
-        weight,
-        reps,
-        unit: context.state.prefs.unit,
-        planLabel: day.label,
-        effort: undefined,
-        onEffort: (effort) => {
-          context.store.setSetEffort(dayKey, exercise.id, effort);
-          // The rest screen lives outside the view, so it is told directly
-          // rather than being rebuilt and losing its deadline.
-          const saved = context.store
-            .activeFor(dayKey)
-            ?.sets.findLast((set) => set.exerciseId === exercise.id)?.effort;
-          context.rest.setEffort(saved);
-          context.render();
-        },
-      });
+
       // The set is recorded, so the next one seeds from it rather than from the
       // stale draft.
       delete context.ui.draftByExercise[exercise.id];
@@ -379,17 +349,49 @@ function renderMovement(
        */
       const after = context.store.activeFor(dayKey)?.sets ?? [];
       const doneHere = after.filter((set) => set.exerciseId === exercise.id).length;
+      const allDone = exercises.every(
+        (item) => after.filter((set) => set.exerciseId === item.id).length >= item.sets,
+      );
 
       if (isCircuit) {
-        const finished = exercises.every(
-          (item) => after.filter((set) => set.exerciseId === item.id).length >= item.sets,
-        );
         // Stay put once every movement has hit its target, rather than looping
         // into a round nobody asked for.
-        if (!finished) context.ui.exerciseIndex = (index + 1) % exercises.length;
+        if (!allDone) context.ui.exerciseIndex = (index + 1) % exercises.length;
       } else if (doneHere >= exercise.sets && index < exercises.length - 1) {
         context.ui.exerciseIndex = index + 1;
       }
+
+      /*
+       * Rest is started after the advance, because the screen it ends on is
+       * about what comes next rather than what just happened. Working it out
+       * here rather than when the timer fires means the go screen already has
+       * the movement and its weight on it the instant the colour flips.
+       */
+      context.rest.start(exercise.restSeconds, {
+        dayKey,
+        exerciseId: exercise.id,
+        exerciseName: exercise.name,
+        setLabel: isCircuit ? `round ${setNumber}` : `set ${setNumber} of ${exercise.sets}`,
+        weight,
+        reps,
+        unit: context.state.prefs.unit,
+        planLabel: day.label,
+        effort: undefined,
+        // How the set felt is asked here now, against the set that was just
+        // done, during the ninety seconds with nothing else to do.
+        onEffort: (effort) => {
+          context.store.setSetEffort(dayKey, exercise.id, effort);
+          // The rest screen lives outside the view, so it is told directly
+          // rather than being rebuilt and losing its deadline.
+          const saved = context.store
+            .activeFor(dayKey)
+            ?.sets.findLast((set) => set.exerciseId === exercise.id)?.effort;
+          context.rest.setEffort(saved);
+          context.render();
+        },
+        next: allDone ? null : describeNext(context, exercises, after, isCircuit),
+      });
+
       context.render();
     },
     onFinish: () => finishSession(context, dayKey, day),
@@ -425,6 +427,86 @@ function renderMovement(
       context.render();
     },
   });
+}
+
+/**
+ * What a movement opens on, and where it is done.
+ *
+ * Shared by the movement panel and the go screen, so the weight announced when
+ * rest ends is the same number the steppers will be holding a second later
+ * rather than an independent guess at it.
+ */
+function openingFor(
+  context: ViewContext,
+  exercise: Exercise,
+): {
+  stationId: string | undefined;
+  recommendation: Recommendation | null;
+  weight: number;
+  reps: number;
+  where: string | null;
+} {
+  const unit = context.state.prefs.unit;
+
+  // The chosen station is per-exercise transient state: an explicit pick this
+  // session wins, otherwise fall back to the remembered or default station.
+  const stationId =
+    context.ui.stationByExercise[exercise.id] ?? defaultStationId(exercise, context.state.prefs);
+
+  // Progression runs on this exercise's history at *this* station: loads are
+  // not comparable across machines.
+  const blocks = performanceHistory(context.state, exercise.id, stationId);
+  const stationOption = resolveOptions(exercise, context.state.prefs, null, unit).find(
+    (entry) => entry.station.id === stationId,
+  )?.option;
+
+  const opening = startingWeight(exercise, context.state.prefs.profile, unit, stationOption);
+  const recommendation = recommend(exercise, blocks, unit, opening);
+  const last = lastPerformance(context.state, exercise.id)?.sets.at(-1) ?? null;
+  const station = stationId === undefined ? undefined : getStation(stationId);
+
+  return {
+    stationId,
+    recommendation,
+    weight: recommendation?.weight ?? (last ? setWeightIn(last, unit) : 0),
+    reps: recommendation?.reps ?? last?.reps ?? exercise.defaultReps,
+    where: station?.name ?? null,
+  };
+}
+
+/**
+ * The movement the go screen sends you to, and the line it reads out.
+ *
+ * Seeded from what has already been logged this session where there is
+ * something — the weight you just used carries forward — and from the opening
+ * suggestion where there is not.
+ */
+function describeNext(
+  context: ViewContext,
+  exercises: readonly Exercise[],
+  sets: readonly { exerciseId: string; reps: number }[],
+  isCircuit: boolean,
+): RestNext | null {
+  const exercise = exercises[context.ui.exerciseIndex];
+  if (!exercise) return null;
+
+  const unit = context.state.prefs.unit;
+  const doneHere = sets.filter((set) => set.exerciseId === exercise.id).length;
+  const opening = openingFor(context, exercise);
+
+  const active = context.store.getState().active;
+  const lastHere = active?.sets.findLast((set) => set.exerciseId === exercise.id) ?? null;
+
+  return {
+    name: exercise.name,
+    setLabel: isCircuit
+      ? `Round ${Math.min(doneHere + 1, exercise.sets)}`
+      : `Set ${Math.min(doneHere + 1, exercise.sets)} of ${exercise.sets}`,
+    weight: lastHere ? setWeightIn(lastHere, unit) : opening.weight,
+    reps: lastHere && lastHere.reps > 0 ? lastHere.reps : opening.reps,
+    unit,
+    where: opening.where,
+  };
 }
 
 function renderDuration(context: ViewContext, dayKey: DayKey, day: PlanDay): HTMLElement {
@@ -512,6 +594,8 @@ function finishSession(context: ViewContext, dayKey: DayKey, day: PlanDay): void
   context.ui.exerciseIndex = 0;
   context.ui.sheet = null;
   context.rest.stop();
+  // The lock is held for the life of an open session and no longer.
+  context.attention.release();
   resetFocusTicker();
   toast(
     startedAt === null || startedAt <= 0

@@ -6,6 +6,7 @@ import { todayDayKey } from '@/domain/dates';
 import type { AppStore } from '@/state/store';
 import { replaceChildren, requireElement } from '@/ui/dom';
 import { RestTimer } from '@/ui/restTimer';
+import { Attention } from '@/services/attention';
 import { toast } from '@/ui/toast';
 import type { UiState, ViewContext } from '@/ui/views/context';
 import { renderHistoryView } from '@/ui/views/history';
@@ -34,6 +35,7 @@ const NEUTRAL_ACCENT = PLATE.white;
 
 export class App {
   readonly #store: AppStore;
+  readonly #attention = new Attention();
   readonly #rest: RestTimer;
   readonly #ui: UiState = {
     tab: 'today',
@@ -57,6 +59,9 @@ export class App {
     this.#store = store;
     this.#rest = new RestTimer({
       shouldVibrate: () => this.#store.getState().prefs.restVibrate,
+      shouldChime: () => this.#store.getState().prefs.restSound,
+      shouldSpeak: () => this.#store.getState().prefs.spokenCues,
+      attention: this.#attention,
     });
 
     this.#bindNav();
@@ -154,6 +159,7 @@ export class App {
       state,
       plan: resolvePlan(activePlan(state)),
       rest: this.#rest,
+      attention: this.#attention,
       ui: this.#ui,
       render: () => {
         this.#scrollToTop = false;

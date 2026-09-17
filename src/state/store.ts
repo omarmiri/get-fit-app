@@ -198,6 +198,14 @@ export class AppStore {
     this.#commit({ ...this.#state, prefs: { ...this.#state.prefs, restVibrate: enabled } });
   }
 
+  setRestSound(enabled: boolean): void {
+    this.#commit({ ...this.#state, prefs: { ...this.#state.prefs, restSound: enabled } });
+  }
+
+  setSpokenCues(enabled: boolean): void {
+    this.#commit({ ...this.#state, prefs: { ...this.#state.prefs, spokenCues: enabled } });
+  }
+
   setTrendExercise(exerciseId: string): void {
     this.#commit({ ...this.#state, prefs: { ...this.#state.prefs, trendExerciseId: exerciseId } });
   }

@@ -192,24 +192,48 @@ function renderSettings(context: ViewContext): HTMLElement {
       ),
     ]),
 
-    div('setting', [
-      div('setting__text', [
-        text('setting__label', 'Vibrate when rest ends'),
-        text('setting__hint', 'Where the device supports it.'),
-      ]),
-      el('div', { class: 'choices__row' }, [
-        el('button', {
-          class: 'choices__button',
-          text: prefs.restVibrate ? 'On' : 'Off',
-          attrs: { type: 'button', 'aria-pressed': prefs.restVibrate },
-          on: {
-            click: () => {
-              context.store.setRestVibrate(!prefs.restVibrate);
-              context.render();
-            },
+    renderToggle(context, {
+      label: 'Chime when rest ends',
+      hint: 'Two short tones ten seconds out, one long at zero. Synthesised on the device, so there is nothing to download — and silent until you have tapped Start once, because a browser only lets audio begin from a tap.',
+      on: prefs.restSound,
+      onToggle: () => context.store.setRestSound(!prefs.restSound),
+    }),
+
+    renderToggle(context, {
+      label: 'Say the next movement',
+      hint: 'Reads out the movement and its weight when rest ends — "Chest press. Ninety-five, ten reps." Spoken on the device; nothing is sent anywhere.',
+      on: prefs.spokenCues,
+      onToggle: () => context.store.setSpokenCues(!prefs.spokenCues),
+    }),
+
+    renderToggle(context, {
+      label: 'Vibrate when rest ends',
+      hint: 'Where the device supports it. iOS does not, which is why the chime above is on by default.',
+      on: prefs.restVibrate,
+      onToggle: () => context.store.setRestVibrate(!prefs.restVibrate),
+    }),
+  ]);
+}
+
+/** A single on/off row. The settings screen is a list of switches, so it looks like one. */
+function renderToggle(
+  context: ViewContext,
+  options: { label: string; hint: string; on: boolean; onToggle: () => void },
+): HTMLElement {
+  return div('setting', [
+    div('setting__text', [text('setting__label', options.label), text('setting__hint', options.hint)]),
+    el('div', { class: 'choices__row' }, [
+      el('button', {
+        class: 'choices__button',
+        text: options.on ? 'On' : 'Off',
+        attrs: { type: 'button', 'aria-pressed': options.on, 'aria-label': options.label },
+        on: {
+          click: () => {
+            options.onToggle();
+            context.render();
           },
-        }),
-      ]),
+        },
+      }),
     ]),
   ]);
 }

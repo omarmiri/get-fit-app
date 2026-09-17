@@ -1,4 +1,5 @@
 import type { DayKey, SetEffort, WeightUnit } from '@/types';
+import type { Attention } from '@/services/attention';
 import { formatClock } from '@/domain/dates';
 import { clampRestSeconds } from '@/domain/limits';
 import { UNIT_LABEL, formatWeightValue } from '@/domain/units';
@@ -25,6 +26,9 @@ const SEGMENTS = 10;
 const TICK_MS = 200;
 const VIBRATION_PATTERN = [120, 60, 120];
 
+/** Seconds left when the two short beeps fire. */
+const WARNING_AT = 10;
+
 /** What the rest screen says about the set that started it. */
 export interface RestPrompt {
   readonly dayKey: DayKey;
@@ -42,11 +46,30 @@ export interface RestPrompt {
   readonly effort: SetEffort | undefined;
   /** Record — or, on the same value again, clear — how the set felt. */
   readonly onEffort: (effort: SetEffort) => void;
+  /** What is up next, for the go screen and the spoken cue. */
+  readonly next: RestNext | null;
+}
+
+/** The movement the go screen sends you to. */
+export interface RestNext {
+  readonly name: string;
+  /** `Set 1 of 3`, or the circuit round. */
+  readonly setLabel: string;
+  readonly weight: number;
+  readonly reps: number;
+  readonly unit: WeightUnit;
+  /** Where to do it, when the movement has a station. */
+  readonly where: string | null;
 }
 
 export interface RestTimerOptions {
   /** Whether completion should buzz the device, where supported. */
   readonly shouldVibrate: () => boolean;
+  /** Whether the chime plays. The tone needs no asset, only a user gesture. */
+  readonly shouldChime: () => boolean;
+  /** Whether the next movement is read out loud. Off by default. */
+  readonly shouldSpeak: () => boolean;
+  readonly attention: Attention;
 }
 
 export class RestTimer {
@@ -57,12 +80,19 @@ export class RestTimer {
   readonly #did: HTMLElement;
   readonly #effort: HTMLElement;
   readonly #ask: HTMLElement;
+  readonly #warning: HTMLElement;
+  readonly #running: HTMLElement;
+  readonly #over: HTMLElement;
+  readonly #next: HTMLElement;
+  readonly #load: HTMLElement;
+  readonly #nextMeta: HTMLElement;
   readonly #options: RestTimerOptions;
 
   #deadline = 0;
   #totalSeconds = 0;
   #ticker: ReturnType<typeof setInterval> | undefined;
   #prompt: RestPrompt | null = null;
+  #warned = false;
 
   constructor(options: RestTimerOptions) {
     this.#options = options;
@@ -73,9 +103,16 @@ export class RestTimer {
     this.#did = requireElement('#rest-did');
     this.#effort = requireElement('#rest-effort');
     this.#ask = requireElement('#rest-ask');
+    this.#warning = requireElement('#rest-warning');
+    this.#running = requireElement('#rest-running');
+    this.#over = requireElement('#rest-over');
+    this.#next = requireElement('#rest-next');
+    this.#load = requireElement('#rest-load');
+    this.#nextMeta = requireElement('#rest-nextmeta');
 
     requireElement('#rest-add').addEventListener('click', () => this.add(30));
     requireElement('#rest-skip').addEventListener('click', () => this.stop());
+    requireElement('#rest-go').addEventListener('click', () => this.stop());
 
     for (const button of this.#effort.querySelectorAll<HTMLButtonElement>('[data-effort]')) {
       button.addEventListener('click', () => {
@@ -107,6 +144,8 @@ export class RestTimer {
     this.#prompt = prompt ?? null;
     this.#totalSeconds = duration;
     this.#deadline = Date.now() + duration * 1000;
+    this.#warned = false;
+    this.#showRunning();
     this.#root.hidden = false;
     this.#render();
 
@@ -145,24 +184,78 @@ export class RestTimer {
     }
     this.#deadline = 0;
     this.#prompt = null;
+    this.#warned = false;
+    this.#showRunning();
     this.#root.hidden = true;
   }
 
   #tick(): void {
-    if (this.remaining > 0) {
+    const remaining = this.remaining;
+
+    if (remaining > 0) {
+      // Two short beeps ten seconds out, so the next set can be walked back
+      // to rather than started from a standstill.
+      if (!this.#warned && remaining <= WARNING_AT) {
+        this.#warned = true;
+        if (this.#options.shouldChime()) this.#options.attention.warn();
+      }
       this.#render();
       return;
     }
-    this.stop();
+
+    this.#stopTicking();
     this.#announceComplete();
   }
 
+  #stopTicking(): void {
+    if (this.#ticker !== undefined) {
+      clearInterval(this.#ticker);
+      this.#ticker = undefined;
+    }
+    this.#deadline = 0;
+  }
+
+  /**
+   * Rest is over, said in every register the device has.
+   *
+   * The screen flips green — a whole-screen colour change is the only signal
+   * that survives being read across a gym floor — and stays there until the go
+   * button is pressed, with the next movement and its weight already on it.
+   */
   #announceComplete(): void {
     if (this.#options.shouldVibrate() && typeof navigator.vibrate === 'function') {
       // Ignored by browsers without a user-activation history; harmless there.
       navigator.vibrate(VIBRATION_PATTERN);
     }
-    toast('Rest complete');
+    if (this.#options.shouldChime()) this.#options.attention.complete();
+
+    const next = this.#prompt?.next ?? null;
+
+    if (!next) {
+      this.stop();
+      toast('Rest complete');
+      return;
+    }
+
+    if (this.#options.shouldSpeak()) this.#options.attention.speak(spokenCue(next));
+
+    this.#next.textContent = next.name;
+    this.#load.textContent = describeLoad(next);
+    this.#nextMeta.textContent = [next.setLabel, next.where].filter(Boolean).join(' · ');
+    this.#root.setAttribute('aria-label', `Rest over. Next: ${next.name}, ${describeLoad(next)}`);
+    this.#showOver();
+  }
+
+  #showRunning(): void {
+    this.#root.dataset.state = 'running';
+    this.#running.hidden = false;
+    this.#over.hidden = true;
+  }
+
+  #showOver(): void {
+    this.#root.dataset.state = 'over';
+    this.#running.hidden = true;
+    this.#over.hidden = false;
   }
 
   #render(): void {
@@ -187,6 +280,14 @@ export class RestTimer {
     this.#did.textContent = prompt ? `${prompt.exerciseName} · ${prompt.setLabel} logged` : '';
     this.#effort.hidden = prompt === null;
 
+    // Said once, in the one place it matters, rather than pretending the phone
+    // will still be lit when rest ends.
+    const refused = this.#options.attention.wakeLockRefused;
+    this.#warning.hidden = !refused;
+    this.#warning.textContent = refused
+      ? 'This browser will not keep the screen on, so it may go dark before rest ends.'
+      : '';
+
     if (!prompt) return;
 
     const load =
@@ -202,4 +303,25 @@ export class RestTimer {
       button.setAttribute('aria-pressed', String(button.dataset.effort === this.#prompt?.effort));
     }
   }
+}
+
+/** `95 lb × 10`, or just the reps for a bodyweight movement. */
+function describeLoad(next: RestNext): string {
+  return next.weight > 0
+    ? `${formatWeightValue(next.weight, next.unit)} ${UNIT_LABEL[next.unit]} × ${next.reps}`
+    : `${next.reps} reps`;
+}
+
+/**
+ * The one line worth hearing.
+ *
+ * Deliberately short — it replaces the glance, not the screen — and spelled out
+ * rather than punctuated, because a speech engine reads `95 lb × 10` as three
+ * unrelated tokens.
+ */
+function spokenCue(next: RestNext): string {
+  const unit = next.unit === 'kg' ? 'kilos' : 'pounds';
+  return next.weight > 0
+    ? `${next.name}. ${formatWeightValue(next.weight, next.unit)} ${unit}, ${next.reps} reps.`
+    : `${next.name}. ${next.reps} reps.`;
 }

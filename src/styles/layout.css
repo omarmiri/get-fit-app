@@ -253,3 +253,55 @@
 .toast.is-visible {
   opacity: 1;
 }
+
+/*
+ * Rest over.
+ *
+ * A whole-screen colour flip is the only completion signal that survives being
+ * read across a gym floor. Green means go here and nothing else — it is the one
+ * status colour the app never spends on a day accent while it is also acting as
+ * status.
+ */
+.rest[data-state='over'] {
+  background: var(--ok);
+  color: var(--on-p-green);
+  justify-content: flex-end;
+}
+
+.rest__over .eyebrow {
+  color: var(--on-p-green);
+  opacity: 0.75;
+}
+
+.rest__next {
+  margin-top: var(--space-2);
+  font-stretch: 87%;
+  font-size: var(--t-movement);
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.rest__load {
+  margin-top: var(--space-2);
+  font-size: var(--t-focus-readout);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.rest__nextmeta {
+  margin-top: var(--space-2);
+  font-size: var(--t-hint);
+  opacity: 0.85;
+}
+
+/* Said once, rather than pretending the phone will still be lit. */
+.rest__warning {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: var(--rule);
+  font-size: var(--t-hint);
+  color: var(--warn);
+  line-height: 1.5;
+}

@@ -85,6 +85,8 @@ const LEVELS: readonly FitnessLevel[] = ['new', 'returning', 'experienced'];
 export const DEFAULT_PREFERENCES: Preferences = {
   unit: 'lb',
   restVibrate: true,
+  restSound: true,
+  spokenCues: false,
 };
 
 export function defaultState(): AppState {
@@ -293,6 +295,8 @@ function parsePreferences(raw: unknown): Preferences {
     unit: isWeightUnit(raw['unit']) ? raw['unit'] : DEFAULT_PREFERENCES.unit,
     restVibrate:
       typeof raw['restVibrate'] === 'boolean' ? raw['restVibrate'] : DEFAULT_PREFERENCES.restVibrate,
+    restSound: typeof raw['restSound'] === 'boolean' ? raw['restSound'] : DEFAULT_PREFERENCES.restSound,
+    spokenCues: typeof raw['spokenCues'] === 'boolean' ? raw['spokenCues'] : DEFAULT_PREFERENCES.spokenCues,
     ...(trendExerciseId === undefined ? {} : { trendExerciseId: canonicalExerciseId(trendExerciseId) }),
     ...(missingStations.length === 0 ? {} : { missingStations }),
     ...(Object.keys(preferredStations).length === 0 ? {} : { preferredStations }),
