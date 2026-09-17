@@ -434,16 +434,30 @@ so the plan stays between your reply and their device.`;
 
 /** The full contract as Markdown, emitted to `/llms.txt`. */
 export function buildLlmsTxt(): string {
+  /*
+   * Order is load-bearing, and it was wrong once.
+   *
+   * The link section was last, on the reasonable-sounding grounds that it is a
+   * shorter way of writing something the reader has to understand first. Then
+   * Grok fetched this page, got everything up to about line 340, and reported
+   * that the link section was missing — so it asked for the long prompt
+   * instead. The part that matters most had been placed exactly where a
+   * truncating fetcher would lose it.
+   *
+   * So what a model needs to finish the job comes first now: how to write the
+   * link, then the movement ids it will reference. The full JSON contract
+   * follows, because it is the fallback rather than the main path.
+   */
   return [
     header(),
+    linkSection(),
+    catalogueSection(),
     envelopeSection(),
     daySection(),
     exerciseSection(),
     loadSection(),
     rulesSection(),
-    catalogueSection(),
     exampleSection(),
-    linkSection(),
   ].join('\n\n');
 }
 
@@ -455,8 +469,15 @@ function header(): string {
 > pastes in or opens as a file from their device.
 
 You are most likely reading this because someone asked you to write them a
-training plan for this app. Everything you need is on this page. Emit **one
-JSON object** in the format below and nothing else the user has to edit by hand.
+training plan for this app. Everything you need is on this page.
+
+**If you read only one section, read the next one.** It describes how to hand
+the finished week back as a link the user taps once, which is the whole point
+of the exercise — and it is short. The JSON contract further down is the
+fallback, for a week that needs more detail than a link can carry.
+
+If your tools truncated this page before the end, you still have what you need:
+the link format and the movement ids are both near the top.
 
 If the person has not told you what equipment they have, do not stop to ask —
 some tools reading this cannot hold a conversation. Assume a typical commercial

@@ -23,33 +23,32 @@
  * empty chat box with exactly the right thing already copied, which is the
  * failure this feature is meant to avoid anyway.
  *
- * ## Who is listed, and who was removed
+ * ## Who is listed, and who is not
  *
- * Tested by hand against each product, and the list is shorter than it was
- * because two of them failed.
+ * Tested by hand against each product, and the list changes as they do.
  *
- * Gemini opens on `?q=` and leaves the box empty, so the button promised the
- * one thing its neighbours deliver and then asked for a paste anyway. A
- * control that quietly does less than the identical control beside it is worse
- * than no control — "Copy prompt for your LLM" already serves Gemini honestly.
+ * ChatGPT, Claude and Grok prefill and write a good week.
+ *
+ * Perplexity prefilled but never produced a usable plan, through two rounds of
+ * testing and a `robots.txt` fix that ruled out the likeliest cause. A launcher
+ * that reliably leads to "send me the long prompt" is a round trip to a dead
+ * end, so it is gone.
  *
  * Copilot has no deep link at all. `?q=`, `?prompt=`, `/chats?q=`, the
  * `sendquery`/`autosend` pairs and the old `bing.com/chat` entry point all
  * canonicalise to the bare origin with an empty box; a control fetch of the
  * same shape confirmed the parameter was not being lost in transit. There is
- * nothing here to fix, so it is gone rather than kept as a button that
- * silently does half its job.
+ * nothing here to fix.
  *
- * Grok prefills correctly and writes the plan, but will not call the MCP
- * server — which is true of every product on this list. That is a fact about
- * the return path, not about the launcher, and it is why the launchers are now
- * only half of this feature.
- *
- * Perplexity prefills correctly but could not fetch `/llms.txt`, so it answered
- * by asking for the long prompt. It stays pending a re-test now that
- * `robots.txt` is served — its 403 was the likeliest cause. If that was not it,
- * Perplexity goes: a launcher that reliably leads to "send me the long prompt"
- * is a round trip to a dead end.
+ * Gemini is back, with its limitation stated rather than hidden. It keeps the
+ * query parameter in the URL — unlike Copilot, which discards it — but does
+ * not put it in the box, on `?q=`, `?text=` or `?prompt=`. It was dropped once
+ * for exactly that, on the principle that a control which quietly does less
+ * than the identical control beside it is worse than no control. The word there
+ * was *quietly*: `launch` copies the prompt before opening any of these, so the
+ * prompt is already on the clipboard, and `pastes` makes the button say so.
+ * A button that asks for one paste and admits it is a fair offer; the same
+ * button pretending to be its neighbours was not.
  */
 
 export interface LlmProvider {
@@ -57,6 +56,12 @@ export interface LlmProvider {
   readonly name: string;
   /** Builds the URL that opens this provider with `prompt` in the box. */
   readonly link: (prompt: string) => string;
+  /**
+   * Set when the product opens but does not accept the prompt, so the user has
+   * to paste it. The app says so at the moment it opens rather than letting
+   * them find an empty box and guess why.
+   */
+  readonly pastes?: boolean;
 }
 
 export const LLM_PROVIDERS: readonly LlmProvider[] = [
@@ -71,14 +76,15 @@ export const LLM_PROVIDERS: readonly LlmProvider[] = [
     link: (prompt) => `https://claude.ai/new?q=${encodeURIComponent(prompt)}`,
   },
   {
-    id: 'perplexity',
-    name: 'Perplexity',
-    link: (prompt) => `https://www.perplexity.ai/search?q=${encodeURIComponent(prompt)}`,
-  },
-  {
     id: 'grok',
     name: 'Grok',
     link: (prompt) => `https://grok.com/?q=${encodeURIComponent(prompt)}`,
+  },
+  {
+    id: 'gemini',
+    name: 'Gemini',
+    link: (prompt) => `https://gemini.google.com/app?q=${encodeURIComponent(prompt)}`,
+    pastes: true,
   },
 ];
 

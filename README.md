@@ -253,7 +253,7 @@ Five ways in, all landing on the same parser and the same validator:
 | Route                    | For                                                                                                                                                       |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Tap a link**           | The normal path. The model ends its reply with **Open in Rack & File** and the week rides in the URL fragment — one tap, nothing to copy.                   |
-| **Open a chatbot**       | The other half of that. Opens ChatGPT, Claude, Perplexity or Grok with a short prompt already in the box; the model fetches `/llms.txt` for the format.     |
+| **Open a chatbot**       | The other half of that. Opens ChatGPT, Claude, Grok or Gemini with the prompt; the model fetches `/llms.txt` for the format. Gemini opens without prefilling and the app says so.     |
 | **Copy the prompt**      | Any model, including one with no network. Carries the whole contract plus your gym, profile and health context.                                            |
 | **Paste anywhere**       | When the model could not manage a link. A paste event needs no permission in any browser, so Ctrl-V on the page — or long-press and Paste — opens review.   |
 | **Open a plan file**     | Whatever the model handed you as a download. On Android this covers Google Drive too, since Drive mounts in the system file picker.                        |
@@ -290,7 +290,7 @@ There is a sixth route — an MCP server at `/mcp` and a write-only session id,
 so a model can push the finished plan straight into the waiting app. It is
 built, tested and live, and it is behind a button rather than in the default
 prompt, because no consumer chat product can currently reach it. ChatGPT,
-Claude, Perplexity, Grok, Gemini and Copilot were each tried: all of them write
+Claude, Grok, Gemini, Perplexity and Copilot were each tried: all of them write
 a good plan, none of them will call an MCP server or make an HTTP request, and
 some claim to have sent something they have not.
 
