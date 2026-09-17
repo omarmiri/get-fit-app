@@ -3,7 +3,7 @@ import { GOALS, PLAN, getPlanDay } from '@/data/plan';
 import { isTrendable } from '@/data/exercises';
 import { catalogueFor, exerciseSourceOf } from '@/data/catalogue';
 import { addDays, parseIsoDate, startOfWeek, toIsoDate } from '@/domain/dates';
-import { bestOneRepMax } from '@/domain/metrics';
+import { bestOneRepMax, percentChange, sessionVolume } from '@/domain/metrics';
 import { type PerformanceBlock, toPerformanceBlocks } from '@/domain/progression';
 
 /**
@@ -81,6 +81,8 @@ export interface WeekBucket {
   readonly weekStart: Date;
   readonly minutes: number;
   readonly metGoal: boolean;
+  /** The week in progress, which is not yet comparable with the finished ones. */
+  readonly isCurrent: boolean;
 }
 
 /** Aerobic minutes bucketed by week, oldest first, ending with the current week. */
@@ -105,7 +107,12 @@ export function minutesByWeek(
       if (day?.aerobic && session.minutes) minutes += session.minutes;
     }
 
-    buckets.push({ weekStart: from, minutes, metGoal: minutes >= GOALS.minutes });
+    buckets.push({
+      weekStart: from,
+      minutes,
+      metGoal: minutes >= GOALS.minutes,
+      isCurrent: offset === 0,
+    });
   }
 
   return buckets;
@@ -150,6 +157,143 @@ export function trendableExercises(state: AppState): readonly Exercise[] {
   return catalogueFor(exerciseSourceOf(state)).filter(
     (exercise) => isTrendable(exercise) && logged.has(exercise.id),
   );
+}
+
+/** How one movement is going, as a single row. */
+export interface MovementSummary {
+  readonly id: string;
+  readonly name: string;
+  /** Latest estimated one-rep max, in the unit requested. */
+  readonly latest: number;
+  /** Percent change from the first logged session to the latest. */
+  readonly change: number | null;
+  /** Sessions since this movement last set a new best. */
+  readonly flatSessions: number;
+  /** Whether the latest estimate beats where it was roughly a month ago. */
+  readonly improvedThisMonth: boolean;
+}
+
+/** Sessions with no new best before a movement counts as stalled. */
+const FLAT_AFTER = 3;
+
+/**
+ * Every trendable movement, sorted by how much it has moved.
+ *
+ * The tab used to answer "am I getting stronger" one movement at a time,
+ * behind a native select: twelve movements meant twelve taps, so nobody did
+ * it, and the honest summary of the screen was "here is one line about leg
+ * press, then thirty-five rows of deleted-by-accident risk".
+ *
+ * Answering it for all of them at once is what lets the flat and deloading
+ * movements surface themselves instead of waiting to be found — which is the
+ * only reason to look at this screen at all.
+ */
+export function movementSummaries(state: AppState, unit: WeightUnit): MovementSummary[] {
+  const summaries: MovementSummary[] = [];
+
+  for (const exercise of trendableExercises(state)) {
+    const points = trendPoints(state, exercise.id, unit);
+    const latest = points.at(-1);
+    const first = points[0];
+    if (!latest || !first) continue;
+
+    summaries.push({
+      id: exercise.id,
+      name: exercise.name,
+      latest: latest.value,
+      change: percentChange(first.value, latest.value),
+      flatSessions: flatSessions(points),
+      improvedThisMonth: latest.value > monthAgoValue(points),
+    });
+  }
+
+  // Biggest movers first, in either direction: a movement that has gone
+  // backwards is at least as worth seeing as one that has gone forwards.
+  return summaries.sort((a, b) => Math.abs(b.change ?? 0) - Math.abs(a.change ?? 0));
+}
+
+/** Trailing sessions that failed to beat the best before them. */
+function flatSessions(points: readonly TrendPoint[]): number {
+  let best = -Infinity;
+  let lastBestIndex = -1;
+
+  points.forEach((point, index) => {
+    if (point.value > best) {
+      best = point.value;
+      lastBestIndex = index;
+    }
+  });
+
+  return points.length - 1 - lastBestIndex;
+}
+
+/** The best estimate from a month or more ago, or the first one there is. */
+function monthAgoValue(points: readonly TrendPoint[]): number {
+  const cutoff = toIsoDate(addDays(new Date(), -30));
+  const older = points.filter((point) => point.date <= cutoff);
+  const pool = older.length > 0 ? older : points.slice(0, 1);
+  return Math.max(...pool.map((point) => point.value));
+}
+
+/** A one-line verdict on the whole list, which is the tab for most visits. */
+export function describeProgress(summaries: readonly MovementSummary[]): string[] {
+  if (summaries.length === 0) return [];
+
+  const improved = summaries.filter((entry) => entry.improvedThisMonth).length;
+  const flat = summaries.filter((entry) => entry.flatSessions >= FLAT_AFTER).length;
+
+  const lines = [
+    `${improved} of ${summaries.length} movement${summaries.length === 1 ? '' : 's'} ${improved === 1 ? 'is' : 'are'} heavier than a month ago.`,
+  ];
+
+  if (flat > 0) {
+    lines.push(`${flat} ${flat === 1 ? 'has' : 'have'} not moved in ${FLAT_AFTER} sessions.`);
+  }
+
+  return lines;
+}
+
+/** Whether a movement has stalled long enough to say so on its row. */
+export function isStalled(summary: MovementSummary): boolean {
+  return summary.flatSessions >= FLAT_AFTER;
+}
+
+/** Sessions grouped into weeks, newest week first, with each week's totals. */
+export interface WeekGroup {
+  readonly weekStart: Date;
+  readonly sessions: readonly Session[];
+  readonly minutes: number;
+  readonly volume: number;
+}
+
+/**
+ * The session log, collapsed by week.
+ *
+ * Three and a half screens of rows, newest first, with nothing to group them
+ * was not a log anyone read — it was a list to scroll past. A week header
+ * carries the totals that actually trend, and the sessions sit inside it.
+ */
+export function sessionsByWeek(state: AppState, unit: WeightUnit): WeekGroup[] {
+  const source = exerciseSourceOf(state);
+  const groups = new Map<number, { weekStart: Date; sessions: Session[] }>();
+
+  for (const session of state.sessions) {
+    const weekStart = startOfWeek(parseIsoDate(session.date));
+    const key = weekStart.getTime();
+    const group = groups.get(key) ?? { weekStart, sessions: [] };
+    group.sessions.push(session);
+    groups.set(key, group);
+  }
+
+  return [...groups.values()]
+    .sort((a, b) => b.weekStart.getTime() - a.weekStart.getTime())
+    .map((group) => ({
+      weekStart: group.weekStart,
+      // Newest first inside the week too, matching the order of the weeks.
+      sessions: [...group.sessions].sort((a, b) => b.date.localeCompare(a.date)),
+      minutes: group.sessions.reduce((sum, session) => sum + (session.minutes ?? 0), 0),
+      volume: group.sessions.reduce((sum, session) => sum + sessionVolume(session.sets, unit, source), 0),
+    }));
 }
 
 /** Consecutive days ending today (or yesterday) with a logged session. */

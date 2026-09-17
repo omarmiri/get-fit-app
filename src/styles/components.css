@@ -252,12 +252,6 @@
   background: var(--ok);
 }
 
-.goals__streak {
-  margin-top: var(--space-4);
-  font-size: var(--t-hint);
-  color: var(--dim);
-}
-
 /* ------------------------------------------------------------------ charts */
 
 .chart {
@@ -1900,4 +1894,145 @@
   font-size: var(--t-hint);
   line-height: 1.6;
   color: var(--chalk);
+}
+
+/* ========================================================= the history tab */
+
+/* The two sentences that are the whole tab for most visits. */
+.answer__line {
+  margin-top: var(--space-2);
+  font-size: var(--t-body);
+  line-height: 1.5;
+}
+
+.answer__streak {
+  margin-top: var(--space-3);
+  font-size: var(--t-hint);
+  color: var(--dim);
+}
+
+/*
+ * Every movement at once, sorted by how far it has moved.
+ *
+ * The picker in front of the chart meant twelve taps to answer the question
+ * for twelve movements, so nobody did. The flat and deloading ones surface
+ * themselves here instead of waiting to be found.
+ */
+.movements {
+  padding-bottom: var(--space-2);
+}
+
+.moverow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--space-2) 0;
+  border-top: var(--rule);
+  text-align: left;
+}
+
+.moverow[aria-pressed='true'] {
+  /* Selected, not urgent — chalk rather than the day's accent. */
+  box-shadow: inset 2px 0 0 var(--chalk);
+  padding-left: var(--space-3);
+}
+
+.moverow__name {
+  font-size: var(--t-body);
+  font-weight: 600;
+}
+
+.moverow__sub {
+  margin-top: 2px;
+  font-size: var(--t-hint);
+  color: var(--dim);
+}
+
+/* Direction is in the text as well as the colour. */
+.moverow__delta {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: var(--t-hint);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.moverow__delta.is-up {
+  color: var(--ok);
+}
+
+.moverow__delta.is-flat {
+  color: var(--dim);
+}
+
+.moverow__delta.is-down {
+  color: var(--warn);
+}
+
+/* ---------------------------------------------------------- the week log */
+
+.weekgroup {
+  border-bottom: var(--rule);
+}
+
+.weekgroup:last-child {
+  border-bottom: none;
+}
+
+.weekgroup__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 56px;
+  padding: var(--space-2) var(--pad);
+  list-style: none;
+  cursor: pointer;
+}
+
+.weekgroup__head::-webkit-details-marker {
+  display: none;
+}
+
+.weekgroup[open] .cues__chevron {
+  transform: rotate(180deg);
+}
+
+.weekgroup__range {
+  font-size: var(--t-body);
+  font-weight: 700;
+}
+
+.weekgroup__totals {
+  margin-top: 2px;
+  font-size: var(--t-hint);
+  color: var(--dim);
+}
+
+/* The session row is a disclosure now: delete lives inside it rather than
+   sitting in the open at 32px on every one of thirty-five rows. */
+.logitem {
+  border-bottom: 1px solid var(--iron-2);
+}
+
+.logitem:last-child {
+  border-bottom: none;
+}
+
+.logitem__head {
+  border-bottom: none;
+  list-style: none;
+  cursor: pointer;
+}
+
+.logitem__head::-webkit-details-marker {
+  display: none;
+}
+
+.logitem .button--danger {
+  width: calc(100% - var(--pad) * 2);
+  margin: 0 var(--pad) var(--space-3);
 }

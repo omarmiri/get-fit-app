@@ -1,17 +1,21 @@
 import type { AppState } from '@/types';
-import { type ActivePlan, currentStreak, weekStats } from '@/state/selectors';
-import { card, div, el, eyebrow, text } from '../dom';
+import { type ActivePlan, weekStats } from '@/state/selectors';
+import { card, div, el, eyebrow } from '../dom';
 
-/** Weekly progress against the aerobic-minutes and strength-session targets. */
+/**
+ * Weekly progress against the aerobic-minutes and strength-session targets.
+ *
+ * The streak line that used to be here has moved to History. A streak is
+ * history, not an instruction, and this card was pointed at the screen you
+ * read between two machines.
+ */
 export function renderGoalsCard(state: AppState, plan: ActivePlan, now: Date = new Date()): HTMLElement {
   const stats = weekStats(state, now, plan);
-  const streak = currentStreak(state, now);
 
   return card([
     eyebrow('This week'),
     renderGoal('Aerobic minutes', stats.aerobicMinutes, stats.minutesGoal),
     renderGoal('Strength sessions', stats.strengthSessions, stats.strengthGoal),
-    streak > 1 ? text('goals__streak', `${streak} days in a row`) : null,
   ]);
 }
 

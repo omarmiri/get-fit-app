@@ -50,6 +50,12 @@ export function renderMinutesChart(buckets: readonly WeekBucket[], goal: number)
         'stroke-dasharray': '4 4',
         opacity: 0.7,
       }),
+      /*
+       * The week in progress is drawn in chalk rather than coloured by whether
+       * it has passed a target it still has days to reach. Colouring it green
+       * only once it clears 150 minutes made a partial week look like a failed
+       * one for six days out of seven.
+       */
       ...buckets.map((bucket, index) => {
         const barHeight = (bucket.minutes / peak) * height;
         return svg('rect', {
@@ -57,7 +63,7 @@ export function renderMinutesChart(buckets: readonly WeekBucket[], goal: number)
           y: height - Math.max(barHeight, 1),
           width: barWidth,
           height: Math.max(barHeight, 1),
-          fill: bucket.metGoal ? PLATE.green : AXIS_COLOR,
+          fill: bucket.isCurrent ? INK : bucket.metGoal ? PLATE.green : AXIS_COLOR,
           rx: 2,
         });
       }),
@@ -69,12 +75,22 @@ export function renderMinutesChart(buckets: readonly WeekBucket[], goal: number)
   return div('chart-block', [
     chart,
     renderLegend([
+      [INK, 'This week'],
       [PLATE.green, `Hit ${goal} min`],
       [AXIS_COLOR, 'Under'],
       [PLATE.yellow, `${goal} min target`],
     ]),
-    text('chart-block__caption', `This week: ${latest?.minutes ?? 0} min`),
+    text(
+      'chart-block__caption',
+      `This week: ${latest?.minutes ?? 0} / ${goal} min, ${daysLeftThisWeek()} days left.`,
+    ),
   ]);
+}
+
+/** Days remaining in the current week, so a partial bar reads as partial. */
+function daysLeftThisWeek(now: Date = new Date()): number {
+  // Weeks run Sunday to Saturday, matching the week strip.
+  return 6 - now.getDay();
 }
 
 function describeBuckets(buckets: readonly WeekBucket[], goal: number): string {
