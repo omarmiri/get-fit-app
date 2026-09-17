@@ -4,6 +4,9 @@ import type { AppStore } from '@/state/store';
 import type { Attention } from '@/services/attention';
 import type { RestTimer } from '../restTimer';
 
+/** The Plan tab's menu, and the destinations it leads to. */
+export type PlanRoute = 'menu' | 'week' | 'write' | 'saved' | 'gym' | 'app';
+
 /** Transient interface state. Not persisted — it resets on reload by design. */
 export interface UiState {
   tab: Tab;
@@ -46,6 +49,16 @@ export interface UiState {
    * re-render triggered from inside one does not close it.
    */
   sheet: 'reference' | 'menu' | null;
+  /**
+   * Which of the Plan tab's five rows is open, or the menu itself.
+   *
+   * The tab used to be thirteen cards in one scroll with no way to tell which
+   * one you were meant to touch. It is a menu and five destinations now, which
+   * needs somewhere to record where you are.
+   */
+  planRoute: PlanRoute;
+  /** Which step of the one wizard is showing. */
+  writeStep: number;
 }
 
 /** Everything a view needs to render itself and to request a re-render. */

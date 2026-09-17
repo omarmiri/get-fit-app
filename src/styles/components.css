@@ -1780,3 +1780,124 @@
   color: var(--dim);
   line-height: 1.5;
 }
+
+/* ======================================================== the plan tab */
+
+/*
+ * Five rows. Four are destinations you can name before you tap them, and one
+ * is a task. The tab used to be thirteen peer cards in one scroll with no
+ * headings above card level, so there was no way to tell which of them you
+ * were supposed to touch today.
+ */
+.menurow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 64px;
+  padding: var(--space-3) var(--pad);
+  border-bottom: var(--rule);
+  text-align: left;
+}
+
+.menurow:last-child {
+  border-bottom: none;
+}
+
+.menurow:active {
+  background: var(--iron-2);
+}
+
+.menurow__label {
+  font-size: var(--t-body);
+  font-weight: 700;
+}
+
+.menurow__hint {
+  margin-top: 2px;
+  font-size: var(--t-hint);
+  color: var(--dim);
+}
+
+.menurow__chevron {
+  flex: 0 0 auto;
+  font-size: var(--t-title);
+  color: var(--dim);
+}
+
+.menufoot {
+  margin-top: var(--space-3);
+  font-size: var(--t-hint);
+  color: var(--dim);
+  line-height: 1.6;
+}
+
+.backlink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding-right: var(--space-3);
+  font-size: var(--t-hint);
+  font-weight: 700;
+  color: var(--dim);
+}
+
+/* ------------------------------------------------------------- the wizard */
+
+/*
+ * The one real wizard, for the one task with a sequence and a finish line.
+ * Everything else in the tab is a list of switches and looks like one.
+ */
+.wizard__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.wizard__skip {
+  min-height: var(--tap);
+  padding-left: var(--space-3);
+  font-size: var(--t-hint);
+  font-weight: 700;
+  color: var(--dim);
+}
+
+/* Honest: one filled segment per step actually left behind. */
+.wizard__bar {
+  display: grid;
+  grid-template-columns: repeat(var(--wizard-count, 4), 1fr);
+  gap: var(--space-1);
+  margin: var(--space-2) 0 var(--space-4);
+}
+
+.wizard__bar i {
+  height: 4px;
+  border-radius: var(--radius);
+  background: var(--dimmer);
+}
+
+.wizard__bar i.is-done {
+  background: var(--pc);
+}
+
+.wizard__title {
+  font-stretch: 87%;
+  font-size: var(--t-screen);
+  line-height: 1.05;
+  text-transform: uppercase;
+  margin-bottom: var(--space-3);
+}
+
+/* The assembled prompt, read-only, next to the buttons that send it. */
+.preview {
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border-left: 2px solid var(--iron-3);
+  background: var(--iron-1);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-size: var(--t-hint);
+  line-height: 1.6;
+  color: var(--chalk);
+}

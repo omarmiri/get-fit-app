@@ -2,45 +2,183 @@ import type { Child } from '../dom';
 import type { FitnessLevel, WeightUnit } from '@/types';
 import { DAY_NAMES, PLAN_ORDER } from '@/data/plan';
 import { ALL_STATIONS } from '@/data/equipment';
-import { PLATE_LEGEND } from '@/data/plates';
 import { daysBetween, todayIso } from '@/domain/dates';
 import { UNIT_LABEL, formatWeight } from '@/domain/units';
 import { parseStateJson, serializeState } from '@/state/schema';
 import { card, div, el, eyebrow, text } from '../dom';
 import { toast } from '../toast';
-import { renderLegend } from '../components/charts';
-import { renderPlanImport } from '../components/planImport';
 import { renderAccountCard } from '../components/accountCard';
-import { renderPlanInputs } from '../components/planInputs';
-import { renderGymSetup } from '../components/gymSetup';
 import { renderOnboarding } from '../components/onboarding';
+import { renderPlanWizard } from '../components/planWizard';
 import { renderPlanLibrary } from '../components/planLibrary';
-import type { ViewContext } from './context';
+import type { PlanRoute, ViewContext } from './context';
 
-/** The Plan tab: the rotation, settings, and data management. */
+/**
+ * The Plan tab.
+ *
+ * Three tabs is the right split — do it, look at it, change it — and this is
+ * the third one. The problem was that "Plan" meant thirteen cards in one
+ * scroll: rotation, gym setup, equipment, plan library, choose-again, plan
+ * inputs, plan import, profile, settings, colour key, data, account, safety.
+ * Seven screens deep, no headings above card level, and no way to tell which
+ * of those cards you were supposed to touch today.
+ *
+ * It is a five-row menu now. Four of the rows are destinations you can name
+ * before you tap them; one is a task, and only that one is a wizard — because
+ * writing a plan is the thing here with a real sequence and a real failure
+ * mode. A settings screen you have to walk through is worse than one you have
+ * to scroll.
+ *
+ * "Change how you train" is gone: it was a second door into the same room as
+ * "Write me a new week". The colour key is gone too — a legend for a
+ * decoration, when every day already says `25 KG PLATE` on its own screen. It
+ * is one line in This week.
+ */
 export function renderPlanView(context: ViewContext): Child[] {
-  return [
-    div('spine', [eyebrow('Seven-day rotation'), el('h1', { text: 'The plan' })]),
-    renderRotation(context),
-    renderGymSetup(context),
-    renderEquipmentCard(context),
-    renderPlanLibrary(context),
-    renderStartOver(context),
-    renderPlanInputs(() => {
-      /*
-       * Deliberately no re-render. These inputs feed the prompt and the
-       * generator when they are next used; redrawing on every keystroke would
-       * tear down the field being typed into and lose the caret.
-       */
-    }),
-    renderPlanImport(context),
-    renderProfileCard(context),
-    renderSettings(context),
-    renderColourKey(),
-    renderDataCard(context),
-    renderAccountCard(context),
-    renderSafetyCard(),
+  switch (context.ui.planRoute) {
+    case 'week':
+      return renderRoute(context, 'This week', [renderRotation(context), renderPlateLine()]);
+    case 'write':
+      return renderRoute(context, 'Write me a new week', renderPlanWizard(context));
+    case 'saved':
+      return renderRoute(context, 'Saved plans', [renderPlanLibrary(context)]);
+    case 'gym':
+      return renderRoute(context, 'My gym', [renderEquipmentCard(context), renderUnitCard(context)]);
+    case 'app':
+      return renderRoute(context, 'App and data', [
+        renderSettings(context),
+        renderProfileCard(context),
+        renderDataCard(context),
+        renderAccountCard(context),
+        renderSafetyCard(),
+      ]);
+    default:
+      return renderMenu(context);
+  }
+}
+
+/** Five rows. Four destinations and one task. */
+function renderMenu(context: ViewContext): Child[] {
+  const saved = context.state.plans?.length ?? 0;
+  const strengthDays = PLAN_ORDER.filter((key) => context.plan[key].type === 'strength').length;
+
+  const rows: readonly { route: PlanRoute; label: string; hint: string }[] = [
+    {
+      route: 'week',
+      label: 'This week',
+      hint: `Seven days, ${strengthDays} strength · edit or open a day`,
+    },
+    {
+      route: 'write',
+      label: 'Write me a new week',
+      hint: 'Six questions, then your own chatbot',
+    },
+    {
+      route: 'saved',
+      label: 'Saved plans',
+      hint: saved === 0 ? 'The built-in rotation only' : `${saved} kept · switch any time`,
+    },
+    { route: 'gym', label: 'My gym', hint: 'Equipment, missing machines, units' },
+    { route: 'app', label: 'App and data', hint: 'Sound, backup, account' },
   ];
+
+  return [
+    div('spine', [eyebrow('Built-in rotation · in force'), el('h1', { text: 'Plan' })]),
+
+    card(
+      rows.map((row) =>
+        el(
+          'button',
+          {
+            class: 'menurow',
+            attrs: { type: 'button' },
+            on: {
+              click: () => {
+                context.ui.planRoute = row.route;
+                context.ui.writeStep = 0;
+                context.render();
+              },
+            },
+          },
+          [
+            div('menurow__text', [text('menurow__label', row.label), text('menurow__hint', row.hint)]),
+            el('span', { class: 'menurow__chevron', text: '›', attrs: { 'aria-hidden': 'true' } }),
+          ],
+        ),
+      ),
+      'card--flush',
+    ),
+
+    text('menufoot', 'Everything stays on this device. Nothing is sent anywhere unless you sign in.'),
+  ];
+}
+
+/** A destination, with the way back out of it. */
+function renderRoute(context: ViewContext, title: string, body: readonly Child[]): Child[] {
+  return [
+    el('button', {
+      class: 'backlink',
+      text: '‹ Plan',
+      attrs: { type: 'button', 'aria-label': 'Back to the plan menu' },
+      on: {
+        click: () => {
+          context.ui.planRoute = 'menu';
+          context.render();
+        },
+      },
+    }),
+    div('spine', [el('h1', { text: title })]),
+    ...body,
+  ];
+}
+
+/**
+ * The colour key, as one line rather than a card.
+ *
+ * A legend for a decoration is a sign the decoration is not carrying meaning —
+ * and it does not need to, because every day states its load in text on its
+ * own screen.
+ */
+function renderPlateLine(): HTMLElement {
+  return text(
+    'menufoot',
+    'Each day carries the colour of the Olympic plate matching its load — red heaviest, white lightest.',
+  );
+}
+
+/** Units live with the gym, because that is what decides which one you use. */
+function renderUnitCard(context: ViewContext): HTMLElement {
+  const { prefs } = context.state;
+
+  return card([
+    eyebrow('Units'),
+    div('setting', [
+      div('setting__text', [
+        text('setting__label', 'Weight unit'),
+        text(
+          'setting__hint',
+          'Applies to entry, totals and charts. Sets you already logged keep the unit they were recorded in and are converted for display.',
+        ),
+      ]),
+      el(
+        'div',
+        { class: 'choices__row', attrs: { role: 'group', 'aria-label': 'Weight unit' } },
+        (['lb', 'kg'] as const).map((unit: WeightUnit) =>
+          el('button', {
+            class: 'choices__button',
+            text: UNIT_LABEL[unit],
+            attrs: { type: 'button', 'aria-pressed': prefs.unit === unit },
+            on: {
+              click: () => {
+                context.store.setUnit(unit);
+                context.render();
+              },
+            },
+          }),
+        ),
+      ),
+    ]),
+  ]);
 }
 
 function renderRotation(context: ViewContext): HTMLElement {
@@ -153,37 +291,11 @@ function renderProfileCard(context: ViewContext): HTMLElement {
 function renderSettings(context: ViewContext): HTMLElement {
   const { prefs } = context.state;
 
-  const unitButtons = (['lb', 'kg'] as const).map((unit: WeightUnit) =>
-    el('button', {
-      class: 'choices__button',
-      text: UNIT_LABEL[unit],
-      attrs: { type: 'button', 'aria-pressed': prefs.unit === unit },
-      on: {
-        click: () => {
-          context.store.setUnit(unit);
-          context.render();
-        },
-      },
-    }),
-  );
-
+  // The weight unit lives under My gym: it is a fact about where you train,
+  // not an app preference, and it was previously the only thing standing
+  // between someone and the switch they actually came here for.
   return card([
     eyebrow('Settings'),
-
-    div('setting', [
-      div('setting__text', [
-        text('setting__label', 'Weight unit'),
-        text(
-          'setting__hint',
-          'Applies to entry, totals and charts. Sets you already logged keep the unit they were recorded in and are converted for display.',
-        ),
-      ]),
-      el(
-        'div',
-        { class: 'choices__row', attrs: { role: 'group', 'aria-label': 'Weight unit' } },
-        unitButtons,
-      ),
-    ]),
 
     renderToggle(context, {
       label: 'Chime when rest ends',
@@ -228,17 +340,6 @@ function renderToggle(
         },
       }),
     ]),
-  ]);
-}
-
-function renderColourKey(): HTMLElement {
-  return card([
-    eyebrow('Colour key'),
-    text(
-      'prose',
-      'Each day carries the colour of the Olympic plate that matches its load. Red is the heaviest day, white the lightest.',
-    ),
-    renderLegend(PLATE_LEGEND.map((entry) => [entry.color, entry.label] as const)),
   ]);
 }
 
@@ -425,35 +526,6 @@ function renderEquipmentCard(context: ViewContext): HTMLElement {
           },
         })
       : null,
-  ]);
-}
-
-/**
- * A way back to the welcome screen.
- *
- * Small and near the bottom on purpose. It is not a reset — nothing is
- * deleted, no plan is dropped — it just re-asks the question the app asks on
- * first run, for someone whose situation has changed enough to want a
- * different answer.
- */
-function renderStartOver(context: ViewContext): HTMLElement {
-  return card([
-    eyebrow('Change how you train'),
-    text(
-      'prose',
-      'Go back to the opening question — bring a plan from an LLM, generate one, or take the built-in week. Your saved plans and logged sessions are untouched.',
-    ),
-    el('button', {
-      class: 'button button--ghost',
-      text: 'Choose again',
-      attrs: { type: 'button' },
-      on: {
-        click: () => {
-          context.store.setWelcomed(false);
-          context.render();
-        },
-      },
-    }),
   ]);
 }
 

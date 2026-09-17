@@ -1,6 +1,8 @@
 import type { GymProfile } from '@/domain/gymProfile';
 import { EQUIPMENT, VENUES, describeGym } from '@/domain/gymProfile';
-import { card, div, el, eyebrow, text } from '../dom';
+import type { Child } from '../dom';
+import { addDays } from '@/domain/dates';
+import { div, el, eyebrow, text } from '../dom';
 import type { ViewContext } from '../views/context';
 
 /**
@@ -33,7 +35,18 @@ import type { ViewContext } from '../views/context';
 const DAY_CHOICES = [2, 3, 4, 5, 6] as const;
 const MINUTE_CHOICES = [30, 45, 60, 75] as const;
 
-export function renderGymSetup(context: ViewContext): HTMLElement {
+/**
+ * Which part of the survey a step is asking for.
+ *
+ * The whole thing used to be one card, shown twice — on first run, in front of
+ * the door, and again on the Plan tab in the same scroll as the switches. It
+ * is one wizard now, in the one place it belongs: the front of "Write me a new
+ * week", which is the only task here with a real sequence, a real finish line
+ * and a real failure mode.
+ */
+export type GymStep = 'venue' | 'equipment' | 'habits';
+
+export function renderGymStep(context: ViewContext, step: GymStep): Child[] {
   const profile = context.state.prefs.gymProfile ?? {};
   const equipment = new Set(profile.equipment ?? []);
 
@@ -50,47 +63,55 @@ export function renderGymSetup(context: ViewContext): HTMLElement {
     context.render();
   };
 
-  return card([
-    eyebrow('Your training setup'),
-    text(
-      'prose',
-      'This is what makes a generated plan usable — it decides which movements are even possible, and which ones you will actually keep doing. Nothing here is required, and you can change it later.',
-    ),
-
-    div('gen__group', [
-      eyebrow('Your gym'),
-      div(
-        'choices__wrap',
-        VENUES.map((venue) =>
-          el(
-            'button',
-            {
-              class: profile.venue === venue.id ? 'optionbtn is-on' : 'optionbtn',
-              attrs: { type: 'button', 'aria-pressed': profile.venue === venue.id },
-              on: {
-                click: () => {
-                  /*
-                   * Picking a venue ticks its usual equipment. A starting point,
-                   * never a claim — every box below stays editable, because your
-                   * chain gym might not have a pool and mine might.
-                   */
-                  const already = profile.venue === venue.id;
-                  update({
-                    ...profile,
-                    venue: venue.id,
-                    equipment: already ? [...equipment] : [...venue.implies],
-                  });
+  if (step === 'venue') {
+    return [
+      text(
+        'prose',
+        'Where you train decides which movements are even possible. Nothing here is required, and you can change it later.',
+      ),
+      div('gen__group', [
+        div(
+          'choices__wrap',
+          VENUES.map((venue) =>
+            el(
+              'button',
+              {
+                class: profile.venue === venue.id ? 'optionbtn is-on' : 'optionbtn',
+                attrs: { type: 'button', 'aria-pressed': profile.venue === venue.id },
+                on: {
+                  click: () => {
+                    /*
+                     * Picking a venue ticks its usual equipment. A starting point,
+                     * never a claim — every box below stays editable, because your
+                     * chain gym might not have a pool and mine might.
+                     */
+                    const already = profile.venue === venue.id;
+                    update({
+                      ...profile,
+                      venue: venue.id,
+                      equipment: already ? [...equipment] : [...venue.implies],
+                    });
+                  },
                 },
               },
-            },
-            [text('optionbtn__label', venue.label), text('optionbtn__hint', venue.hint)],
+              [text('optionbtn__label', venue.label), text('optionbtn__hint', venue.hint)],
+            ),
           ),
         ),
+      ]),
+      renderToggle('Can you run or walk outdoors from home?', profile.outdoors, (value) =>
+        update({ ...profile, outdoors: value }),
       ),
-    ]),
+    ];
+  }
 
-    div('gen__group', [
-      eyebrow('What is available'),
+  if (step === 'equipment') {
+    return [
+      text('prose', 'Tick what you can use.'),
+      text(
+        'club__hint',
+        'Pre-ticked from the venue you picked — a starting point, never a claim. Your chain gym might not have a pool and mine might.',
+      ),
       div(
         'choices__wrap',
         EQUIPMENT.map((item) =>
@@ -109,11 +130,11 @@ export function renderGymSetup(context: ViewContext): HTMLElement {
           }),
         ),
       ),
-    ]),
+    ];
+  }
 
-    renderToggle('Can you run or walk outdoors from home?', profile.outdoors, (value) =>
-      update({ ...profile, outdoors: value }),
-    ),
+  return [
+    renderObserved(context, profile, update),
 
     renderChoiceRow(
       'Days a week you can train',
@@ -132,7 +153,77 @@ export function renderGymSetup(context: ViewContext): HTMLElement {
     ),
 
     renderLikes(context),
-    renderSummary(context, describeGym(profile)),
+  ];
+}
+
+/**
+ * What two weeks of logged sessions already say, offered back.
+ *
+ * Asking "days a week" and "minutes per session" on day one gets a guess.
+ * Asking it after a fortnight of logged sessions is a question the app can
+ * answer better than the user can, so it answers it and offers the figure
+ * rather than making them recall it.
+ */
+function renderObserved(
+  context: ViewContext,
+  profile: GymProfile,
+  update: (next: GymProfile) => void,
+): HTMLElement | null {
+  const observed = observedHabits(context);
+  if (!observed) return null;
+
+  const matches = profile.daysPerWeek === observed.days && profile.sessionMinutes === observed.minutes;
+
+  return div('gen__group', [
+    text(
+      'club__hint',
+      `Over the last two weeks you have trained ${observed.days} ${observed.days === 1 ? 'day' : 'days'} a week, ${observed.minutes} minutes a session.`,
+    ),
+    matches
+      ? null
+      : el('button', {
+          class: 'button button--ghost',
+          text: 'Write the next plan around that',
+          attrs: { type: 'button' },
+          on: {
+            click: () => update({ ...profile, daysPerWeek: observed.days, sessionMinutes: observed.minutes }),
+          },
+        }),
+  ]);
+}
+
+/** Sessions a week and minutes a session, over the last fortnight. */
+function observedHabits(context: ViewContext): { days: number; minutes: number } | null {
+  const since = addDays(new Date(), -14);
+  const recent = context.state.sessions.filter((session) => new Date(session.date) >= since);
+  if (recent.length < 2) return null;
+
+  const dates = new Set(recent.map((session) => session.date));
+  const durations = recent.map((session) => session.durationMinutes ?? session.minutes ?? 0).filter(Boolean);
+  if (durations.length === 0) return null;
+
+  return {
+    days: Math.max(1, Math.round(dates.size / 2)),
+    minutes: Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length),
+  };
+}
+
+/**
+ * The sentences that will actually be sent, at the moment they are sent.
+ *
+ * There used to be two textareas on first run — this one, and the answers it
+ * is generated from — with a stated rule that editing one destroyed the other.
+ * It is read-only now, shown on the step with the buttons that send it, where
+ * it is a preview rather than a form field. Anyone who wants to edit it can
+ * edit it in the chat window, which is where they are going anyway.
+ */
+export function renderPromptPreview(context: ViewContext): HTMLElement {
+  const profile = context.state.prefs.gymProfile ?? {};
+  const body = context.state.prefs.gym ?? describeGym(profile);
+
+  return div('gen__group', [
+    eyebrow('What your LLM will be told'),
+    text('preview', body || 'Nothing yet — answer a question or two and it appears here.'),
   ]);
 }
 
@@ -168,41 +259,6 @@ function renderLikes(context: ViewContext): HTMLElement {
       },
     }),
     text('club__hint', 'Included in the prompt. The plan you keep doing beats the plan that looks best.'),
-  ]);
-}
-
-/**
- * The sentences that will actually be sent, shown and editable.
- *
- * Visible on purpose. This paragraph is the entire contribution the answers
- * make to the prompt, and showing it turns an invisible transformation into
- * something the user can check and correct — including with the details no
- * fixed question set will ever cover.
- */
-function renderSummary(context: ViewContext, generated: string): HTMLElement {
-  const current = context.state.prefs.gym ?? '';
-
-  return div('gen__group', [
-    eyebrow('What your LLM will be told'),
-    el('textarea', {
-      class: 'gen__input gen__input--area',
-      text: current || generated,
-      attrs: {
-        rows: 4,
-        autocomplete: 'off',
-        placeholder: 'Answer the questions above, or write it yourself.',
-        'aria-label': 'What your LLM will be told about your gym',
-      },
-      on: {
-        change: (event) => {
-          context.store.setGym((event.target as HTMLTextAreaElement).value);
-        },
-      },
-    }),
-    text(
-      'club__hint',
-      'Edit freely — add anything the questions missed, like busy hours or equipment that is usually taken. Changing an answer above rewrites this.',
-    ),
   ]);
 }
 

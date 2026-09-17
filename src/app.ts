@@ -46,6 +46,8 @@ export class App {
     draftByExercise: {},
     cardioByDay: {},
     sheet: null,
+    planRoute: 'menu',
+    writeStep: 0,
   };
 
   readonly #weekStrip = requireElement('#week');
