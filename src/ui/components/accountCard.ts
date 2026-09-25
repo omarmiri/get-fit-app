@@ -3,24 +3,24 @@ import {
   accountsAvailable,
   currentUser,
   pullState,
-  pushState,
   signInWithGoogle,
   signOut,
   takeRedirectError,
 } from '@/services/account';
+import { forgetSyncBase, syncNow } from '@/services/sync';
 import { parseState } from '@/state/schema';
 import { card, div, el, eyebrow, text } from '../dom';
 import { toast } from '../toast';
 import type { ViewContext } from '../views/context';
 
 /**
- * Optional backup to an account.
+ * Optional account: a backup, and the same plans and history on every device.
  *
  * ## What this is for, and what it is not
  *
- * One thing: clearing browser data stops being the end of your training
- * history. It is not sync — there is no second device to reconcile with — and
- * it is not a login wall. Everything in the app works signed out, which is why
+ * Two things. Clearing browser data stops being the end of your training
+ * history, and a plan written on the PC is waiting on the phone at the gym.
+ * It is not a login wall. Everything in the app works signed out, which is why
  * this card sits at the bottom of the Plan tab rather than in front of the
  * first session.
  *
@@ -73,14 +73,14 @@ function renderSignedIn(context: ViewContext, email: string): HTMLElement {
     text('setting__label', email),
     text(
       'prose',
-      'Your plans, sessions and settings are backed up to this account. Clearing your browser will not lose them.',
+      'Your plans, sessions and settings sync to this account. Sign in on another device to pick up where you left off, and clearing your browser will not lose them.',
     ),
 
     el('button', {
       class: 'button button--ghost',
-      text: ui.busy ? 'Working…' : 'Back up now',
+      text: ui.busy ? 'Working…' : 'Sync now',
       attrs: { type: 'button', disabled: ui.busy },
-      on: { click: () => void backUp(context) },
+      on: { click: () => void syncHere(context) },
     }),
 
     el('button', {
@@ -97,6 +97,7 @@ function renderSignedIn(context: ViewContext, email: string): HTMLElement {
       on: {
         click: () => {
           signOut();
+          forgetSyncBase();
           // Signing out leaves the device's data alone. The account is a copy,
           // not the original, and deleting the original on sign-out would be a
           // surprising way to lose a training history.
@@ -115,7 +116,7 @@ function renderSignedOut(context: ViewContext): HTMLElement {
     eyebrow('Account'),
     text(
       'prose',
-      'Everything is stored on this device. Sign in to keep a copy, so clearing your browser does not lose your training history. Optional — the app works exactly the same without it.',
+      'Everything is stored on this device. Sign in to use your plans and history on your other devices too, and so clearing your browser does not lose them. Optional — the app works exactly the same without it.',
     ),
 
     el('button', {
@@ -146,11 +147,11 @@ async function startSignIn(context: ViewContext): Promise<void> {
   });
 }
 
-async function backUp(context: ViewContext): Promise<void> {
+async function syncHere(context: ViewContext): Promise<void> {
   if (ui.busy) return;
   await run(context, async () => {
-    await pushState(context.state);
-    toast('Backed up');
+    await syncNow({ report: true });
+    toast('Synced');
   });
 }
 
@@ -165,7 +166,7 @@ async function restore(context: ViewContext): Promise<void> {
   if (ui.busy) return;
 
   await run(context, async () => {
-    const remote = await pullState();
+    const { state: remote } = await pullState();
     if (!remote) {
       toast('Nothing backed up yet');
       return;

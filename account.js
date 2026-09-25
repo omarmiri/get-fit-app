@@ -1,18 +1,16 @@
 /**
  * Per-account storage of the app's state blob.
  *
- * ## Backup and restore, not sync
+ * ## Stored, not merged
  *
- * The client remains the source of truth. It pushes its whole `AppState` after
- * changes and pulls it on sign-in; the server keeps the latest copy and has no
- * opinion about it. There is no merge, because multi-device was explicitly out
- * of scope — with one device, last-write-wins is not a compromise, it is
- * simply correct.
+ * The server keeps the latest copy and has no opinion about it. Merging is the
+ * client's job (`src/state/merge.ts`), because the client owns the schema and
+ * knows what changed since it last synced.
  *
- * If two devices ever do run at once, the loser's writes are lost, and that
- * would be the moment to build real sync rather than to quietly hope. The
- * `updatedAt` written alongside each blob is what a future version would need
- * to detect it, which is why it is recorded now.
+ * What the server does guarantee is that no write is lost to a race. A client
+ * says which `updatedAt` it merged against, and a write is refused with 409 if
+ * another device has written since — so the loser pulls, merges and retries
+ * rather than quietly overwriting a session logged on the other phone.
  *
  * ## What is not here
  *
@@ -20,7 +18,7 @@
  * persisted state, so there is nothing to store — see `state/ephemeral.ts`.
  */
 
-import { kvGet, kvSet } from './kv.js';
+import { KvConflict, kvGet, kvSet, kvSetIf } from './kv.js';
 
 const stateKey = (uid) => `fit:state:${uid}`;
 
@@ -41,14 +39,18 @@ export async function loadState(uid) {
 }
 
 /**
- * Replace an account's stored blob.
+ * Replace an account's stored blob. Returns the new `updatedAt`.
  *
  * The state is written as given, not merged and not validated field by field:
  * the client owns the schema and runs a total parser over it on the way back
  * in, so a server-side copy of those rules would be a second thing to keep in
- * step. What the server does enforce is size, and that the thing is an object.
+ * step. What the server does enforce is size, that the thing is an object,
+ * and — when `baseUpdatedAt` is given — that nobody else wrote in between.
+ *
+ * `baseUpdatedAt` of `undefined` is an unconditional write, which is what a
+ * client from before sync still sends until its service worker updates.
  */
-export async function saveState(uid, state) {
+export async function saveState(uid, state, baseUpdatedAt) {
   if (!state || typeof state !== 'object' || Array.isArray(state)) {
     throw new AccountError('That is not an app state.', 400);
   }
@@ -58,7 +60,24 @@ export async function saveState(uid, state) {
     throw new AccountError('That backup is too large to store.', 413);
   }
 
-  await kvSet(stateKey(uid), { state, updatedAt: Date.now() });
+  // Strictly after the version it replaces, even within one millisecond, or a
+  // stale base could match the new version and slip past the check.
+  const record = { state, updatedAt: Math.max(Date.now(), (baseUpdatedAt ?? 0) + 1) };
+
+  if (baseUpdatedAt === undefined) {
+    await kvSet(stateKey(uid), record);
+    return record.updatedAt;
+  }
+
+  try {
+    await kvSetIf(stateKey(uid), record, 'updatedAt', baseUpdatedAt);
+  } catch (error) {
+    if (error instanceof KvConflict) {
+      throw new AccountError('Another device saved first. Sync again.', 409);
+    }
+    throw error;
+  }
+  return record.updatedAt;
 }
 
 export class AccountError extends Error {

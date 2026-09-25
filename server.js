@@ -250,11 +250,20 @@ app.get('/api/account/state', auth.attachUser, auth.requireUser, async (req, res
   }
 });
 
-/** Replace the account's stored state with the client's copy. */
+/**
+ * Replace the account's stored state with the client's merged copy.
+ *
+ * `baseUpdatedAt` is the version the client merged against — `null` for "I saw
+ * nothing stored" — and a stale one is answered 409. Absent means an
+ * unconditional write, from a client that predates sync.
+ */
 app.put('/api/account/state', auth.attachUser, auth.requireUser, async (req, res) => {
+  const base = req.body?.baseUpdatedAt;
+  const baseUpdatedAt = base === null || typeof base === 'number' ? base : undefined;
+
   try {
-    await saveState(req.user.id, req.body?.state);
-    return res.json({ ok: true, updatedAt: Date.now() });
+    const updatedAt = await saveState(req.user.id, req.body?.state, baseUpdatedAt);
+    return res.json({ ok: true, updatedAt });
   } catch (error) {
     if (error instanceof AccountError) {
       return res.status(error.status).json({ error: error.message });

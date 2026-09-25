@@ -117,6 +117,51 @@ export async function kvSet(key, value, ttlMs = null) {
   );
 }
 
+/** Thrown by `kvSetIf` when the record changed since the caller last read it. */
+export class KvConflict extends Error {
+  constructor() {
+    super('The record changed since it was read.');
+    this.name = 'KvConflict';
+  }
+}
+
+/**
+ * Write a record only if its `value[field]` is still `expected`.
+ *
+ * `expected` of `null` means the record must not exist yet. This is what lets
+ * two devices write the same account without either silently discarding the
+ * other's changes: a writer that read a stale copy is refused, reads again,
+ * merges, and retries. No expiry — every caller so far is durable state.
+ */
+export async function kvSetIf(key, value, field, expected) {
+  if (!TABLE) {
+    const current = await kvGet(key);
+    const actual = current && typeof current === 'object' ? (current[field] ?? null) : null;
+    if (actual !== expected) throw new KvConflict();
+    memory.set(key, { value, expires: null });
+    return;
+  }
+
+  try {
+    await docs().send(
+      new PutCommand({
+        TableName: TABLE,
+        Item: { pk: key, value },
+        ...(expected === null
+          ? { ConditionExpression: 'attribute_not_exists(pk)' }
+          : {
+              ConditionExpression: '#value.#field = :expected',
+              ExpressionAttributeNames: { '#value': 'value', '#field': field },
+              ExpressionAttributeValues: { ':expected': expected },
+            }),
+      }),
+    );
+  } catch (error) {
+    if (error?.name === 'ConditionalCheckFailedException') throw new KvConflict();
+    throw error;
+  }
+}
+
 /**
  * Remove a record.
  *

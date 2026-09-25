@@ -6,7 +6,7 @@ A personal training log built around one seven-day plan. Mobile-first, installab
 
 **Bring your own plan.** Ask ChatGPT, Claude, Gemini or anything else for a training week and load it in — paste the reply, or open the file it gave you. The format is published at [`/llms.txt`](https://fitness.miriogames.com/llms.txt), so any model that can read a page can write a plan this app understands. See [Bringing a plan from an LLM](#bringing-a-plan-from-an-llm).
 
-All data lives in the browser on the device you use it on. There is no account by default and nothing leaves the phone — the whole app works signed out, which is the point. **Export a backup from the Plan tab now and then**, because clearing browser data erases everything.
+All data lives in the browser on the device you use it on. There is no account by default and nothing leaves the phone — the whole app works signed out, which is the point. **Export a backup from the Plan tab now and then**, because clearing browser data erases everything. Signing in is optional and syncs plans, history and settings between your devices — write a plan on the PC, open the app at the gym on your phone.
 
 Signing in with Google is optional and buys exactly one thing: a copy of your data, so clearing your browser is not the end of your training history. Health context is never part of that — it is typed per plan, used once, and never stored anywhere.
 

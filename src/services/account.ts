@@ -20,12 +20,11 @@ import type { AppState } from '@/types';
  * history. It does not gate logging a set, and nothing in `state/` knows this
  * module exists.
  *
- * ## Backup, not sync
+ * ## Sync, merged on the device
  *
- * The device is the source of truth. It pushes its whole state after changes
- * and pulls on sign-in. There is no merge because there is no second device to
- * merge with — see `account.js` on the server for what would have to change if
- * that stopped being true.
+ * Each device keeps its own full copy and works offline. Signed in, it pulls
+ * the account's copy, merges it with its own, and pushes the result — see
+ * `services/sync.ts` for when, and `state/merge.ts` for how.
  */
 
 const SESSION_KEY = 'rackfile:session';
@@ -329,24 +328,39 @@ async function refresh(): Promise<boolean> {
 
 /* ------------------------------------------------------------------ state */
 
-/**
- * The state stored for this account, or `null` when there is none yet.
- *
- * `null` is the normal answer on a first sign-in and means "nothing up here
- * yet" — never "wipe what you have".
- */
-export async function pullState(): Promise<AppState | null> {
-  const body = await authedJson('/api/account/state', { method: 'GET' });
-  const state = (body as { state?: unknown }).state;
-  return state && typeof state === 'object' ? (state as AppState) : null;
+/** The account's stored copy, and which version of it this is. */
+export interface RemoteState {
+  /** `null` when nothing is stored yet — never an instruction to wipe. */
+  readonly state: AppState | null;
+  /** Echoed back on the next push, so a write over someone else's is refused. */
+  readonly updatedAt: number | null;
 }
 
-export async function pushState(state: AppState): Promise<void> {
-  await authedJson('/api/account/state', {
+export async function pullState(): Promise<RemoteState> {
+  const body = (await authedJson('/api/account/state', { method: 'GET' })) as {
+    state?: unknown;
+    updatedAt?: unknown;
+  };
+  return {
+    state: body.state && typeof body.state === 'object' ? (body.state as AppState) : null,
+    updatedAt: typeof body.updatedAt === 'number' ? body.updatedAt : null,
+  };
+}
+
+/**
+ * Store `state` as the account's copy. Returns the new `updatedAt`.
+ *
+ * `baseUpdatedAt` is the version this state was merged against. If another
+ * device has written since, this throws an `AccountError` with status 409 and
+ * the caller has to pull and merge again.
+ */
+export async function pushState(state: AppState, baseUpdatedAt: number | null): Promise<number | null> {
+  const body = (await authedJson('/api/account/state', {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ state }),
-  });
+    body: JSON.stringify({ state, baseUpdatedAt }),
+  })) as { updatedAt?: unknown };
+  return typeof body.updatedAt === 'number' ? body.updatedAt : null;
 }
 
 /* ----------------------------------------------------------------- fetch */

@@ -17,8 +17,7 @@ import { renderWeekStrip } from '@/ui/components/weekStrip';
 import { captureIncomingPlan, watchPastedPlans } from '@/ui/components/planImport';
 import { initAccountCard } from '@/ui/components/accountCard';
 import { captureRedirectSession, refreshIdentity } from '@/services/account';
-import { backUpSoon, flushBackup } from '@/services/backup';
-import { pushState } from '@/services/account';
+import { flushSync, initSync, syncNow } from '@/services/sync';
 
 /**
  * The application shell.
@@ -72,15 +71,12 @@ export class App {
     // mobile Safari where `beforeunload` does not.
     window.addEventListener('pagehide', () => {
       this.#store.flush();
-      // A phone closing the app is exactly when the backup debounce has not
+      // A phone closing the app is exactly when the sync debounce has not
       // fired yet and the data most needs to leave.
-      void flushBackup();
+      flushSync();
     });
 
-    this.#store.subscribe((state) => {
-      this.#paint();
-      backUpSoon(state);
-    });
+    this.#store.subscribe(() => this.#paint());
   }
 
   start(): void {
@@ -117,6 +113,10 @@ export class App {
     // accounts never shows an offer to sign in to nowhere.
     initAccountCard(() => this.render());
 
+    // Pulls whatever another device saved — the plan written on the PC — and
+    // keeps pushing this one's changes from here on. A no-op signed out.
+    initSync(this.#store);
+
     if (returning) void this.#completeSignIn();
   }
 
@@ -124,10 +124,10 @@ export class App {
    * Finish a sign-in that just came back from Google.
    *
    * The fragment carries a token but not an email, so the identity is fetched
-   * — which doubles as the first real proof the token works. Then this
-   * device's state is pushed, because someone who has been training for months
-   * before making an account must not have that overwritten by the empty state
-   * of a fresh one. Restoring is a separate, explicit action.
+   * — which doubles as the first real proof the token works. Then a sync, which
+   * on a first sign-in unions this device's history with the account's rather
+   * than letting either replace the other: months trained here before making
+   * an account survive, and so does the plan written on another device.
    */
   async #completeSignIn(): Promise<void> {
     const user = await refreshIdentity();
@@ -138,11 +138,11 @@ export class App {
     }
 
     try {
-      await pushState(this.#store.getState());
-      toast(`Signed in as ${user.email || 'your account'} — this device is backed up`);
+      await syncNow({ report: true });
+      toast(`Signed in as ${user.email || 'your account'} — synced`);
     } catch {
-      // The sign-in worked even if the first push did not; the debounced
-      // backup will carry it on the next change.
+      // The sign-in worked even if the first sync did not; the next open or
+      // change tries again.
       toast(`Signed in as ${user.email || 'your account'}`);
     }
     this.render();
