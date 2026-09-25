@@ -2,13 +2,11 @@ import {
   AccountError,
   accountsAvailable,
   currentUser,
-  pullState,
   signInWithGoogle,
   signOut,
   takeRedirectError,
 } from '@/services/account';
-import { forgetSyncBase, syncNow } from '@/services/sync';
-import { parseState } from '@/state/schema';
+import { forgetSyncBase } from '@/services/sync';
 import { card, div, el, eyebrow, text } from '../dom';
 import { toast } from '../toast';
 import type { ViewContext } from '../views/context';
@@ -71,24 +69,14 @@ function renderSignedIn(context: ViewContext, email: string): HTMLElement {
   return card([
     eyebrow('Account'),
     text('setting__label', email),
-    text(
-      'prose',
-      'Your plans, sessions and settings sync to this account. Sign in on another device to pick up where you left off, and clearing your browser will not lose them.',
-    ),
-
-    el('button', {
-      class: 'button button--ghost',
-      text: ui.busy ? 'Working…' : 'Sync now',
-      attrs: { type: 'button', disabled: ui.busy },
-      on: { click: () => void syncHere(context) },
-    }),
-
-    el('button', {
-      class: 'button button--ghost',
-      text: 'Restore from backup',
-      attrs: { type: 'button', disabled: ui.busy },
-      on: { click: () => void restore(context) },
-    }),
+    /*
+     * No sync controls. Sync runs on sign-in, on opening the app, on coming
+     * back to it and after changes — see `services/sync.ts` — so a button
+     * could only ever do what had already happened, and "Restore" (replace
+     * this device with the account's copy) was the one destructive action
+     * here, made unnecessary by merging.
+     */
+    text('prose', 'Your plans and workouts stay in sync on every device you sign in on.'),
 
     el('button', {
       class: 'button button--ghost',
@@ -116,7 +104,7 @@ function renderSignedOut(context: ViewContext): HTMLElement {
     eyebrow('Account'),
     text(
       'prose',
-      'Everything is stored on this device. Sign in to use your plans and history on your other devices too, and so clearing your browser does not lose them. Optional — the app works exactly the same without it.',
+      'Sign in to keep your plans and workouts on all your devices. Optional — the app works the same without it.',
     ),
 
     el('button', {
@@ -144,54 +132,6 @@ async function startSignIn(context: ViewContext): Promise<void> {
     // for the moment before the browser leaves, and for the case where it
     // cannot.
     await signInWithGoogle();
-  });
-}
-
-async function syncHere(context: ViewContext): Promise<void> {
-  if (ui.busy) return;
-  await run(context, async () => {
-    await syncNow({ report: true });
-    toast('Synced');
-  });
-}
-
-/**
- * Replace this device's data with the account's copy.
- *
- * Confirmed twice and named plainly, because it is the one destructive thing
- * on this card: restoring an older backup over a session logged this morning
- * loses that session, and there is no undo.
- */
-async function restore(context: ViewContext): Promise<void> {
-  if (ui.busy) return;
-
-  await run(context, async () => {
-    const { state: remote } = await pullState();
-    if (!remote) {
-      toast('Nothing backed up yet');
-      return;
-    }
-
-    // Parsed rather than trusted: it went up from a client, and it comes back
-    // through the same total parser as any other untrusted input.
-    const parsed = parseState(remote);
-    if (!parsed.recognised) {
-      ui.error = 'The backup could not be read.';
-      return;
-    }
-
-    const incoming = parsed.state.sessions.length;
-    const here = context.state.sessions.length;
-    if (
-      !confirm(
-        `Replace this device's data with the backup?\n\nHere: ${here} sessions\nBackup: ${incoming} sessions\n\nThis cannot be undone.`,
-      )
-    ) {
-      return;
-    }
-
-    context.store.replaceState(parsed.state);
-    toast(`Restored ${incoming} ${incoming === 1 ? 'session' : 'sessions'}`);
   });
 }
 

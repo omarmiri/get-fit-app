@@ -22,12 +22,7 @@ export function renderPlanLibrary(context: ViewContext): HTMLElement {
 
   return card([
     eyebrow('Your plans'),
-    text(
-      'prose',
-      plans.length === 0
-        ? 'Only the built-in rotation so far. Anything you import or generate is kept here, so trying a new week never loses the one you were running.'
-        : 'Switch whenever you like. Your logged history is shared across all of them.',
-    ),
+    text('prose', 'Tap a plan to switch to it. Your workout history stays the same.'),
 
     el('ul', { class: 'planlist' }, [
       renderRow(context, null, current === null),
@@ -42,10 +37,10 @@ function renderRow(
   plan: (typeof context.state.plans)[number] | null,
   isActive: boolean,
 ): HTMLElement {
-  const name = plan ? describePlanName(plan) : 'Built-in seven-day rotation';
+  const name = plan ? describePlanName(plan) : 'Starter plan';
   // A plan with an empty summary shows no subtitle rather than a stray blank
   // line, so this is a deliberate falsy check and not a nullish one.
-  const sub = plan ? (plan.summary ? plan.summary : '') : 'Always here as a fallback';
+  const sub = plan ? (plan.summary ? plan.summary : '') : 'Seven days that work in any gym. Always here.';
 
   return el('li', { class: isActive ? 'planlist__item is-active' : 'planlist__item' }, [
     el(
@@ -55,7 +50,7 @@ function renderRow(
         attrs: {
           type: 'button',
           'aria-pressed': isActive,
-          'aria-label': isActive ? `${name}, currently in force` : `Switch to ${name}`,
+          'aria-label': isActive ? `${name}, active` : `Switch to ${name}`,
         },
         on: {
           click: () => {
@@ -72,7 +67,7 @@ function renderRow(
         div('planlist__main', [
           div('planlist__title', [
             el('span', { class: 'planlist__name', text: name }),
-            isActive ? el('span', { class: 'swap__tag', text: 'In force' }) : null,
+            isActive ? el('span', { class: 'swap__tag', text: 'Active' }) : null,
           ]),
           sub ? text('planlist__sub', sub) : null,
         ]),
@@ -104,7 +99,7 @@ function renderRow(
               click: () => {
                 if (!confirm(`Delete "${name}"? Your logged sessions are not affected.`)) return;
                 context.store.deletePlan(plan.id);
-                toast(isActive ? 'Deleted — back to the built-in plan' : 'Plan deleted');
+                toast(isActive ? 'Deleted — back to the starter plan' : 'Plan deleted');
                 context.render();
               },
             },

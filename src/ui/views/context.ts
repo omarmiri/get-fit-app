@@ -5,7 +5,7 @@ import type { Attention } from '@/services/attention';
 import type { RestTimer } from '../restTimer';
 
 /** The Plan tab's menu, and the destinations it leads to. */
-export type PlanRoute = 'menu' | 'week' | 'write' | 'saved' | 'gym' | 'app';
+export type PlanRoute = 'menu' | 'week' | 'write' | 'settings';
 
 /** Transient interface state. Not persisted — it resets on reload by design. */
 export interface UiState {

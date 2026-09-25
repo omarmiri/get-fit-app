@@ -23,7 +23,16 @@
  * empty chat box with exactly the right thing already copied, which is the
  * failure this feature is meant to avoid anyway.
  *
- * ## Who is listed, and who is not
+ * ## Only ChatGPT is a button
+ *
+ * The one-tap route is offered for ChatGPT alone, by name, because it is the
+ * name people know — the way "Coke" stands for soda. Claude and Grok prefill
+ * and write a good week too, and were buttons until the screen was simplified;
+ * they are served by "Use a different AI" (copy the prompt, paste the reply),
+ * which works in any model. Their links, should they come back:
+ * `https://claude.ai/new?q=` and `https://grok.com/?q=`.
+ *
+ * ## Who was tested, and how it went
  *
  * Tested by hand against each product, and the list changes as they do.
  *
@@ -63,16 +72,6 @@ export const LLM_PROVIDERS: readonly LlmProvider[] = [
     id: 'chatgpt',
     name: 'ChatGPT',
     link: (prompt) => `https://chatgpt.com/?q=${encodeURIComponent(prompt)}`,
-  },
-  {
-    id: 'claude',
-    name: 'Claude',
-    link: (prompt) => `https://claude.ai/new?q=${encodeURIComponent(prompt)}`,
-  },
-  {
-    id: 'grok',
-    name: 'Grok',
-    link: (prompt) => `https://grok.com/?q=${encodeURIComponent(prompt)}`,
   },
 ];
 

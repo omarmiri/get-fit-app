@@ -222,7 +222,7 @@ export function renderPromptPreview(context: ViewContext): HTMLElement {
   const body = context.state.prefs.gym ?? describeGym(profile);
 
   return div('gen__group', [
-    eyebrow('What your LLM will be told'),
+    eyebrow('What ChatGPT will be told'),
     text('preview', body || 'Nothing yet — answer a question or two and it appears here.'),
   ]);
 }

@@ -6,7 +6,7 @@ import { describePlanName } from '@/data/activePlan';
 import { activePlan } from '@/data/catalogue';
 import { daysBetween, todayIso } from '@/domain/dates';
 import { UNIT_LABEL, formatWeight } from '@/domain/units';
-import { parseStateJson, serializeState } from '@/state/schema';
+import { currentUser } from '@/services/account';
 import { card, div, el, eyebrow, text } from '../dom';
 import { toast } from '../toast';
 import { renderAccountCard } from '../components/accountCard';
@@ -48,17 +48,17 @@ function renderPlanRoute(context: ViewContext): Child[] {
     case 'week':
       return renderRoute(context, 'This week', [renderRotation(context), renderPlateLine()]);
     case 'write':
-      return renderRoute(context, 'Write me a new week', renderPlanWizard(context));
-    case 'saved':
-      return renderRoute(context, 'Saved plans', [renderPlanLibrary(context)]);
-    case 'gym':
-      return renderRoute(context, 'My gym', [renderEquipmentCard(context), renderUnitCard(context)]);
-    case 'app':
-      return renderRoute(context, 'App and data', [
-        renderSettings(context),
-        renderProfileCard(context),
-        renderDataCard(context),
+      return renderRoute(context, 'New plan with ChatGPT', renderPlanWizard(context));
+    case 'settings':
+      // Everything that is configuration, on one screen, account first: it is
+      // the one most people come here for.
+      return renderRoute(context, 'Settings', [
         renderAccountCard(context),
+        renderSettings(context),
+        renderUnitCard(context),
+        renderProfileCard(context),
+        renderEquipmentCard(context),
+        renderEraseCard(context),
         renderSafetyCard(),
       ]);
     default:
@@ -68,33 +68,32 @@ function renderPlanRoute(context: ViewContext): Child[] {
 
 /** Five rows. Four destinations and one task. */
 function renderMenu(context: ViewContext): Child[] {
-  const saved = context.state.plans?.length ?? 0;
   const strengthDays = PLAN_ORDER.filter((key) => context.plan[key].type === 'strength').length;
 
   const rows: readonly { route: PlanRoute; label: string; hint: string }[] = [
-    {
-      route: 'week',
-      label: 'This week',
-      hint: `Seven days, ${strengthDays} strength · edit or open a day`,
-    },
-    {
-      route: 'write',
-      label: 'Write me a new week',
-      hint: 'Six questions, then your own chatbot',
-    },
-    {
-      route: 'saved',
-      label: 'Saved plans',
-      hint: saved === 0 ? 'The built-in rotation only' : `${saved} kept · switch any time`,
-    },
-    { route: 'gym', label: 'My gym', hint: 'Equipment, missing machines, units' },
-    { route: 'app', label: 'App and data', hint: 'Sound, backup, account' },
+    { route: 'week', label: 'This week', hint: `Seven days, ${strengthDays} strength · open a day` },
+    { route: 'settings', label: 'Settings', hint: 'Account, sounds, units, your gym' },
   ];
 
   return [
-    // Names the week actually in force — it said "Built-in rotation" even
-    // with a saved plan selected, which is the one thing this line is for.
-    div('spine', [eyebrow(`${inForceName(context)} · in force`), el('h1', { text: 'Plan' })]),
+    div('spine', [eyebrow(`${inForceName(context)} · active`), el('h1', { text: 'Plan' })]),
+
+    // The list is the tab: which plan you are on, and switching, is what
+    // people come here for. Making a new one is the one action under it.
+    renderPlanLibrary(context),
+
+    el('button', {
+      class: 'button button--primary',
+      text: 'New plan with ChatGPT',
+      attrs: { type: 'button' },
+      on: {
+        click: () => {
+          context.ui.planRoute = 'write';
+          context.ui.writeStep = 0;
+          context.render();
+        },
+      },
+    }),
 
     card(
       rows.map((row) =>
@@ -106,7 +105,6 @@ function renderMenu(context: ViewContext): Child[] {
             on: {
               click: () => {
                 context.ui.planRoute = row.route;
-                context.ui.writeStep = 0;
                 context.render();
               },
             },
@@ -119,15 +117,13 @@ function renderMenu(context: ViewContext): Child[] {
       ),
       'card--flush',
     ),
-
-    text('menufoot', 'Everything stays on this device. Nothing is sent anywhere unless you sign in.'),
   ];
 }
 
 /** What to call the plan in force: its name, or the built-in rotation. */
 function inForceName(context: ViewContext): string {
   const plan = activePlan(context.state);
-  return plan ? describePlanName(plan) : 'Built-in rotation';
+  return plan ? describePlanName(plan) : 'Starter plan';
 }
 
 /** A destination, with the way back out of it. */
@@ -362,93 +358,22 @@ function renderToggle(
 
 /* ------------------------------------------------------------------- data */
 
-function renderDataCard(context: ViewContext): HTMLElement {
-  const fileInput = el('input', {
-    class: 'visually-hidden',
-    attrs: { type: 'file', accept: 'application/json,.json', tabindex: '-1' },
-    on: { change: (event) => void handleImport(event, context) },
-  });
-
+function renderEraseCard(context: ViewContext): HTMLElement {
   return card([
     eyebrow('Your data'),
     text(
       'prose',
-      'Everything is stored on this device only. Nothing is sent anywhere. Clearing your browser data will erase it — export a backup now and then.',
+      currentUser()
+        ? 'Your plans and workouts are saved on this phone and synced to your account.'
+        : 'Your plans and workouts are saved on this phone. Sign in above to keep a copy in your account.',
     ),
-
-    el('button', {
-      class: 'button button--ghost',
-      text: 'Export backup',
-      attrs: { type: 'button' },
-      on: { click: () => exportBackup(context) },
-    }),
-
-    el('button', {
-      class: 'button button--ghost',
-      text: 'Import backup',
-      attrs: { type: 'button' },
-      on: { click: () => fileInput.click() },
-    }),
-    fileInput,
-
     el('button', {
       class: 'button button--ghost button--danger',
-      text: 'Erase all data',
+      text: 'Erase all workouts',
       attrs: { type: 'button' },
       on: { click: () => eraseAll(context) },
     }),
   ]);
-}
-
-function exportBackup(context: ViewContext): void {
-  const blob = new Blob([serializeState(context.state, true)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const link = el('a', { attrs: { href: url, download: `rackfile-${todayIso()}.json` } });
-
-  link.click();
-  // Revoking immediately can cancel the download in some browsers; a short
-  // delay is the conventional workaround.
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
-  toast('Backup exported');
-}
-
-async function handleImport(event: Event, context: ViewContext): Promise<void> {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
-  // Reset so re-selecting the same file fires `change` again.
-  input.value = '';
-  if (!file) return;
-
-  let raw: string;
-  try {
-    raw = await file.text();
-  } catch {
-    toast('Could not read that file');
-    return;
-  }
-
-  const parsed = parseStateJson(raw);
-  if (!parsed.recognised) {
-    toast('That file is not a Rack & File backup');
-    return;
-  }
-
-  const incoming = parsed.state.sessions.length;
-  const existing = context.state.sessions.length;
-  const warning =
-    existing > 0
-      ? `Replace your ${existing} logged session${existing === 1 ? '' : 's'} with ${incoming} from this backup? This cannot be undone.`
-      : `Restore ${incoming} session${incoming === 1 ? '' : 's'} from this backup?`;
-
-  if (!confirm(warning)) return;
-
-  context.store.replaceState(parsed.state);
-  toast(
-    parsed.dropped > 0
-      ? `Restored ${incoming} sessions · ${parsed.dropped} unreadable entries skipped`
-      : `Restored ${incoming} sessions`,
-  );
-  context.render();
 }
 
 function eraseAll(context: ViewContext): void {
@@ -458,7 +383,10 @@ function eraseAll(context: ViewContext): void {
     return;
   }
   if (
-    !confirm(`Permanently erase all ${count} logged sessions? Export a backup first if you might want them.`)
+    // Sync carries deletions, so signed in this reaches every device — say so.
+    !confirm(
+      `Permanently erase all ${count} logged workouts${currentUser() ? ' on all your devices' : ''}? Your plans are kept.`,
+    )
   ) {
     return;
   }

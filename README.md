@@ -6,7 +6,7 @@ A personal training log built around one seven-day plan. Mobile-first, installab
 
 **Bring your own plan.** Ask ChatGPT, Claude, Gemini or anything else for a training week and load it in — paste the reply, or open the file it gave you. The format is published at [`/llms.txt`](https://fitness.miriogames.com/llms.txt), so any model that can read a page can write a plan this app understands. See [Bringing a plan from an LLM](#bringing-a-plan-from-an-llm).
 
-All data lives in the browser on the device you use it on. There is no account by default and nothing leaves the phone — the whole app works signed out, which is the point. **Export a backup from the Plan tab now and then**, because clearing browser data erases everything. Signing in is optional and syncs plans, history and settings between your devices — write a plan on the PC, open the app at the gym on your phone.
+All data lives in the browser on the device you use it on. There is no account by default and nothing leaves the phone — the whole app works signed out, which is the point. Signing in is optional: it keeps a copy in your account, so clearing browser data loses nothing, and syncs plans, history and settings between your devices automatically — write a plan on the PC, open the app at the gym on your phone.
 
 Signing in with Google is optional and buys exactly one thing: a copy of your data, so clearing your browser is not the end of your training history. Health context is never part of that — it is typed per plan, used once, and never stored anywhere.
 
@@ -51,7 +51,6 @@ Then open http://localhost:5173.
 - **Busy machine? Swap it** — tap "Taken?" for ranked alternatives, each with where to find it and a converted starting load
 - **Units** — pounds or kilograms, switchable at any time without rewriting history
 - **Bring a plan from any LLM** — copy a prompt, paste the answer back; the app checks it before anything is adopted
-- **Export / import** — JSON backup, with validation on the way back in
 - **Offline** — self-hosted fonts and a precached shell; no third-party requests at runtime
 
 ---
@@ -253,7 +252,7 @@ Five ways in, all landing on the same parser and the same validator:
 | Route                    | For                                                                                                                                                       |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Tap a link**           | The normal path. The model ends its reply with **Open in Rack & File** and the week rides in the URL fragment — one tap, nothing to copy.                   |
-| **Open a chatbot**       | The other half of that. Opens ChatGPT, Claude or Grok with a short prompt already in the box; the model fetches `/llms.txt` for the format.     |
+| **Open a chatbot**       | The other half of that. Opens ChatGPT with a short prompt already in the box; the model fetches `/llms.txt` for the format. Other AIs use the copy-and-paste route. |
 | **Copy the prompt**      | Any model, including one with no network. Carries the whole contract plus your gym, profile and health context.                                            |
 | **Paste anywhere**       | When the model could not manage a link. A paste event needs no permission in any browser, so Ctrl-V on the page — or long-press and Paste — opens review.   |
 | **Open a plan file**     | Whatever the model handed you as a download. On Android this covers Google Drive too, since Drive mounts in the system file picker.                        |

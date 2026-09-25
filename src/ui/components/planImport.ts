@@ -7,7 +7,7 @@ import { withSavedMovements } from '@/data/catalogue';
 import { type PromptContext, buildBriefPrompt, buildLinkPrompt, buildPrompt } from '@/spec/planSpec';
 import { clearDrop, currentDrop, dropEndpoint, openDrop, pollDrop } from '@/services/planDrop';
 import { conditionsList, getNotes } from '@/state/ephemeral';
-import { card, div, el, eyebrow, text } from '../dom';
+import { card, div, el, text } from '../dom';
 import { toast } from '../toast';
 import type { ViewContext } from '../views/context';
 import { renderPlanCandidate } from './planCandidate';
@@ -148,31 +148,19 @@ export function resetPlanImport(): void {
  */
 export function renderPlanImport(context: ViewContext): HTMLElement {
   return card([
-    eyebrow('Bring a plan from any LLM'),
+    // No heading: the wizard step above it is already titled "Ask ChatGPT".
     text(
       'prose',
-      'Any chatbot can write a week this app understands. It takes about a minute and nothing about you is sent anywhere by this app — the prompt is built here, on your device.',
+      'ChatGPT opens with your answers already typed in. When it has written your plan, tap the "Open in Rack & File" link at the end of its reply and the plan comes straight back here.',
     ),
 
-    /* ------------------------------------------------------------ the path */
-
-    eyebrow('1 · Send the prompt'),
-    div('gen__group', [
-      text('prose', 'Opens with the prompt already in it:'),
-      ...renderLaunchers(context),
-    ]),
-
-    eyebrow('2 · Tap the link it gives you'),
-    text(
-      'prose',
-      'The reply ends with an "Open in Rack & File" link. Tapping it brings the whole week straight here — nothing to copy, nothing to paste.',
-    ),
+    ...renderLaunchers(context),
 
     /* ---------------------------------------------------------- everything else */
 
     el('button', {
       class: 'button button--ghost',
-      text: state.others ? 'Hide the other ways' : 'Other ways to import',
+      text: state.others ? 'Hide other AIs' : 'Use a different AI',
       attrs: { type: 'button', 'aria-expanded': state.others },
       on: {
         click: () => {
@@ -294,7 +282,7 @@ function renderOtherWays(context: ViewContext): HTMLElement {
   return div('gen__group', [
     text(
       'prose',
-      'If a model cannot fetch the format, or writes the plan but not the link, these still work.',
+      'Claude, Grok, Gemini or any other AI: copy the prompt, paste it in, then copy the whole reply and paste it back here. This also works if ChatGPT writes the plan but no link.',
     ),
 
     /*
@@ -305,43 +293,24 @@ function renderOtherWays(context: ViewContext): HTMLElement {
      */
     el('button', {
       class: 'button button--ghost',
-      text: 'Copy the prompt instead',
-      attrs: { type: 'button', title: 'Carries the whole format inline — paste it into any chatbot' },
+      text: 'Copy the prompt',
+      attrs: { type: 'button', title: 'Carries the whole format — paste it into any AI' },
       on: { click: () => void copyPrompt(context) },
     }),
 
     el('button', {
       class: 'button button--ghost',
-      text: 'Paste plan from clipboard',
+      text: 'Paste the reply',
       attrs: { type: 'button', title: 'Or just press Ctrl-V anywhere on this page' },
       on: { click: () => void importFromClipboard(context) },
     }),
 
-    el('button', {
-      class: 'button button--ghost',
-      text: state.open ? 'Hide the paste box' : 'Use a paste box',
-      attrs: { type: 'button', 'aria-expanded': state.open },
-      on: {
-        click: () => {
-          state.open = !state.open;
-          context.render();
-        },
-      },
-    }),
-
-    renderFileButton(context),
-
     /*
-     * Offered rather than detected, because the app has no way to know what a
-     * user has configured in someone else's chat client. No consumer product
-     * ships this connector today, so it sits last and says what it is for.
+     * Two buttons, on purpose. The paste box, a plan file and the connector's
+     * short prompt were here too; the box still opens by itself whenever the
+     * clipboard is refused, a paste anywhere on the page still works, and the
+     * full prompt above works with any AI, connector or not.
      */
-    el('button', {
-      class: 'button button--ghost',
-      text: 'Copy short prompt (connector)',
-      attrs: { type: 'button', title: 'For clients with the Rack & File connector added' },
-      on: { click: () => void copyPrompt(context, 'connector') },
-    }),
   ]);
 }
 
@@ -580,7 +549,7 @@ function renderLaunchers(context: ViewContext): HTMLElement[] {
   return LLM_PROVIDERS.map((provider) =>
     el('button', {
       class: 'button button--primary',
-      text: provider.name,
+      text: `Open ${provider.name}`,
       attrs: { type: 'button' },
       on: { click: () => launch(context, provider.id) },
     }),
@@ -619,7 +588,7 @@ async function importFromClipboard(context: ViewContext): Promise<void> {
   }
 
   if (!pasted.trim()) {
-    state.error = "The clipboard is empty. Copy your LLM's reply first.";
+    state.error = "The clipboard is empty. Copy the AI's reply first.";
     context.render();
     return;
   }
@@ -644,7 +613,7 @@ function renderPasteBox(context: ViewContext): HTMLElement {
         autocapitalize: 'off',
         autocomplete: 'off',
         placeholder: 'Paste the whole reply here — the code fence and any surrounding text are fine.',
-        'aria-label': 'Paste a plan from your LLM',
+        'aria-label': 'Paste a plan from your AI',
       },
       on: {
         input: (event) => {
@@ -659,53 +628,6 @@ function renderPasteBox(context: ViewContext): HTMLElement {
       attrs: { type: 'button' },
       on: { click: () => review(context, state.pasted) },
     }),
-  ]);
-}
-
-/**
- * Open a plan saved to the device.
- *
- * Covers the phone case, and Google Drive along with it — on Android, Drive
- * mounts in the system file picker, so a plan saved there is reachable here
- * without this app touching a Google API or asking for an account.
- */
-function renderFileButton(context: ViewContext): HTMLElement {
-  const input = el('input', {
-    class: 'visually-hidden',
-    attrs: {
-      type: 'file',
-      accept: 'application/json,text/plain,text/markdown,.json,.txt,.md',
-      tabindex: '-1',
-    },
-    on: {
-      change: (event) => {
-        const target = event.target as HTMLInputElement;
-        const file = target.files?.[0];
-        if (!file) return;
-
-        void file
-          .text()
-          .then((contents) => review(context, contents))
-          .catch(() => {
-            state.error = 'That file could not be read.';
-            context.render();
-          })
-          // Cleared so choosing the same file twice fires `change` again.
-          .finally(() => {
-            target.value = '';
-          });
-      },
-    },
-  });
-
-  return div('', [
-    el('button', {
-      class: 'button button--ghost',
-      text: 'Open a plan file',
-      attrs: { type: 'button' },
-      on: { click: () => input.click() },
-    }),
-    input,
   ]);
 }
 
@@ -766,7 +688,7 @@ function reviewPlan(context: ViewContext, incoming: UserPlan, incomplete: readon
   state.incomplete = incomplete;
   state.error = validation.ok
     ? null
-    : 'That plan has problems the app cannot work with. The details are below — ask your LLM to fix them and send the new version.';
+    : 'That plan has problems the app cannot work with. The details are below — ask the AI to fix them and send the new version.';
 
   showPending(context);
 }
@@ -880,7 +802,7 @@ async function copyPrompt(context: ViewContext, mode: PromptMode = 'full'): Prom
     context.render();
     toast(
       context.state.prefs.gym
-        ? 'Prompt copied — paste it to your LLM'
+        ? 'Prompt copied — paste it into your AI'
         : 'Prompt copied. Tip: describe your gym above',
     );
   } catch {

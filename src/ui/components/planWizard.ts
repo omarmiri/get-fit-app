@@ -40,7 +40,7 @@ const STEPS: readonly Step[] = [
   },
   {
     title: 'How you train',
-    next: 'Next — send it',
+    next: 'Next — ask ChatGPT',
     render: (context) => [
       ...gym(context, 'habits'),
       renderPlanInputs(() => {
@@ -49,7 +49,7 @@ const STEPS: readonly Step[] = [
     ],
   },
   {
-    title: 'Send it',
+    title: 'Ask ChatGPT',
     next: '',
     render: (context) => [renderPromptPreview(context), renderPlanImport(context)],
   },

@@ -1,12 +1,13 @@
 import type { Child } from '../dom';
 import { div, el, eyebrow, text } from '../dom';
 import { toast } from '../toast';
+import { signInWithGoogle } from '@/services/account';
 import type { ViewContext } from './context';
 
 /**
  * The first thing a new user sees.
  *
- * ## Why this is two buttons
+ * ## Why this is two buttons (and a way back in)
  *
  * It used to be four screens of scroll. Venue, eleven equipment chips,
  * outdoors, days a week, minutes per session, what you enjoy, then the prompt
@@ -46,17 +47,14 @@ export function renderWelcomeView(context: ViewContext): Child[] {
   return [
     div('spine', [
       eyebrow('Rack & File'),
-      el('h1', { text: 'Your week, on this phone' }),
-      text(
-        'spine__sub',
-        'Nothing leaves the device. No account. Start with the built-in rotation and change it whenever you like.',
-      ),
+      el('h1', { text: 'Your gym plan, on your phone' }),
+      text('spine__sub', 'Pick a plan and start training. You can change it any time.'),
     ]),
 
     div('doors', [
       renderDoor({
-        label: 'Start training now',
-        hint: 'Seven-day rotation, ready',
+        label: 'Use the starter plan',
+        hint: 'Seven days that work in any gym',
         primary: true,
         onChoose: () => {
           context.store.setWelcomed(true);
@@ -65,18 +63,38 @@ export function renderWelcomeView(context: ViewContext): Child[] {
         },
       }),
       renderDoor({
-        label: 'Bring a plan from an LLM',
-        hint: 'Six questions, about a minute',
+        label: 'Make my own plan with ChatGPT',
+        hint: 'Answer a few questions and ChatGPT writes it',
         primary: false,
         onChoose: () => {
           // Still the built-in week underneath, so there is something to train
           // against if the plan-writing flow is abandoned half way.
           context.store.setWelcomed(true);
           context.ui.tab = 'plan';
+          context.ui.planRoute = 'write';
+          context.ui.writeStep = 0;
           context.render();
         },
       }),
     ]),
+
+    /*
+     * For a second device. Without it, someone setting up their phone has to
+     * pick a plan they do not want before they can sign in and get their own
+     * back. After the round trip to Google, the first sync brings the
+     * account's plans and settings — including having been welcomed — so
+     * this screen does not come back.
+     */
+    el('button', {
+      class: 'button button--ghost',
+      text: 'I already have an account — sign in',
+      attrs: { type: 'button' },
+      on: {
+        click: () => {
+          signInWithGoogle().catch(() => toast('Sign-in is not available right now'));
+        },
+      },
+    }),
 
     text(
       'welcome__safety',
