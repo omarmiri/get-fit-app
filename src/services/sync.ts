@@ -149,20 +149,15 @@ export function forgetSyncBase(): void {
 /* ------------------------------------------------------------------ steps */
 
 async function run(appStore: AppStore, asked: boolean): Promise<void> {
-  if (workoutOpen(appStore.getState())) {
-    // Opening the app or coming back to it mid-workout syncs nothing; only
-    // "Sync now" does. See "Not during a workout" above.
-    if (!asked) return;
-    heldBack = false;
-    try {
-      await pushIfUnmoved(appStore);
-    } catch (error) {
-      // The account moved on. Expected, not an error: it is merged once the
-      // workout is over.
-      if (!(error instanceof AccountError && error.status === 409)) throw error;
-    }
-    return;
-  }
+  /*
+   * Opening the app or coming back to it mid-workout syncs nothing. "Sync now"
+   * does a full sync regardless — it used to only push, which on a device
+   * never synced before did nothing at all while still reporting success —
+   * but keeps this device's plan in force, so the week being trained does not
+   * change mid-session.
+   */
+  const midWorkout = workoutOpen(appStore.getState());
+  if (midWorkout && !asked) return;
 
   // A full sync carries anything held back during a workout.
   heldBack = false;
@@ -195,6 +190,17 @@ async function run(appStore: AppStore, asked: boolean): Promise<void> {
       merged = mergeStates(local, theirs, saved?.base ?? null);
     }
 
+    /*
+     * Mid-workout, this device keeps the plan it is training on — but only on
+     * screen. The account still gets the merge's own choice, and the base
+     * records this device's plan as what it last agreed to, so the next sync
+     * after the workout sees an unchanged local choice and takes the other
+     * device's. Pushing the held plan instead would overwrite a newer choice
+     * made elsewhere and lose it for good.
+     */
+    const held = midWorkout ? local.activePlanId : undefined;
+    const shown = held === undefined ? merged : holdPlan(merged, local);
+
     // Something was tapped while the pull was in flight. Start again from the
     // newer state rather than applying a merge built on the old one.
     if (appStore.getState() !== local) {
@@ -202,24 +208,27 @@ async function run(appStore: AppStore, asked: boolean): Promise<void> {
       continue;
     }
 
-    if (merged !== local && !sameContent(merged, local)) {
+    if (shown !== local && !sameContent(shown, local)) {
       applying = true;
       try {
-        appStore.replaceState(merged);
+        appStore.replaceState(shown);
       } finally {
         applying = false;
       }
-      merged = appStore.getState();
     }
 
-    if (theirs && sameContent(merged, theirs)) {
-      writeBase(user.id, remote.updatedAt, merged);
+    // What goes up: the merge, carrying the held plan's record if the other
+    // copy had dropped it, so the week being trained is never deleted.
+    const upload = held === undefined ? merged : { ...merged, plans: shown.plans };
+
+    if (theirs && sameContent(upload, theirs)) {
+      writeBase(user.id, remote.updatedAt, upload, held);
       return;
     }
 
     try {
-      const updatedAt = await pushState(merged, remote.updatedAt);
-      writeBase(user.id, updatedAt, merged);
+      const updatedAt = await pushState(upload, remote.updatedAt);
+      writeBase(user.id, updatedAt, upload, held);
       return;
     } catch (error) {
       // Another device wrote between the pull and the push. Pull its copy and
@@ -245,8 +254,19 @@ async function pushIfUnmoved(appStore: AppStore): Promise<void> {
 }
 
 /** Today's session is open. A stale one from an earlier day does not count. */
+/**
+ * How long an open session holds back sync. No workout runs this long; a
+ * session still open past it was forgotten, and must not keep another
+ * device's changes away for the rest of the day.
+ */
+const WORKOUT_HOLD_MS = 3 * 60 * 60 * 1000;
+
+/** Today's session is open, and recent enough to be a real workout in progress. */
 function workoutOpen(state: AppState): boolean {
-  return state.active !== null && state.active.date === todayIso();
+  const active = state.active;
+  if (active?.date !== todayIso() || !active) return false;
+  // Sessions saved before `startedAt` was recorded carry zero; trust the date.
+  return active.startedAt <= 0 || Date.now() - active.startedAt < WORKOUT_HOLD_MS;
 }
 
 /* ------------------------------------------------------------------- base */
@@ -262,9 +282,29 @@ function readBase(uid: string): StoredBase | null {
   }
 }
 
-function writeBase(uid: string, updatedAt: number | null, state: AppState): void {
+/** The merged state with this device's plan still in force, and still present. */
+function holdPlan(merged: AppState, local: AppState): AppState {
+  const own = local.plans.find((plan) => plan.id === local.activePlanId);
+  const plans =
+    own && !merged.plans.some((plan) => plan.id === own.id) ? [...merged.plans, own] : merged.plans;
+  return { ...merged, plans, activePlanId: local.activePlanId };
+}
+
+/**
+ * Record what this device and the account last agreed on.
+ *
+ * `heldPlan`, when given, is recorded as the agreed plan in force instead of
+ * the one in `state` — see the mid-workout note in `run`.
+ */
+function writeBase(uid: string, updatedAt: number | null, state: AppState, heldPlan?: string | null): void {
   try {
-    const stored: StoredBase = { uid, updatedAt, base: fingerprint(state), active: hash(state.active) };
+    const base = fingerprint(state);
+    const stored: StoredBase = {
+      uid,
+      updatedAt,
+      base: heldPlan === undefined ? base : { ...base, activePlanId: hash(heldPlan) },
+      active: hash(state.active),
+    };
     localStorage.setItem(BASE_KEY, JSON.stringify(stored));
   } catch {
     // Without a base the next sync treats everything as new and unions it,

@@ -80,6 +80,8 @@ async function device(initial: AppState = defaultState()): Promise<Device> {
   const sync = await import('@/services/sync');
   const store = new AppStore({ initialState: initial, store: createMemoryStore(), saveDelayMs: 0 });
   sync.initSync(store);
+  // Let the sync that starts with the app settle, as it does long before anyone taps anything.
+  await sync.syncNow();
 
   return {
     store,
@@ -256,5 +258,46 @@ describe('during a workout', () => {
     phone.store.finishActive('mon', 30);
     await phone.autoSync();
     expect(server.state?.sessions).toHaveLength(1);
+  });
+});
+
+describe('Sync now, mid-workout', () => {
+  it('brings plans in on a device that never synced, without switching the plan being trained', async () => {
+    const web = await device();
+    web.store.adoptPlan(plan('w1'));
+    web.store.adoptPlan(plan('w2'));
+    await web.sync();
+
+    // The phone: its own plan, a workout under way, never synced before.
+    const phone = await device();
+    phone.store.adoptPlan(plan('p1'));
+    phone.store.startSession('mon');
+    await phone.sync();
+
+    const state = phone.store.getState();
+    expect(state.plans.map((p) => p.id).sort()).toEqual(['p1', 'w1', 'w2']);
+    expect(state.activePlanId).toBe('p1');
+    expect(state.active).not.toBeNull();
+    expect(server.state?.plans.map((p) => p.id).sort()).toEqual(['p1', 'w1', 'w2']);
+  });
+});
+
+describe('a session left open', () => {
+  it('stops holding sync back once it is older than any real workout', async () => {
+    const web = await device();
+    web.store.adoptPlan(plan('w1'));
+    await web.sync();
+
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const phone = await device();
+      phone.store.startSession('mon');
+      vi.setSystemTime(Date.now() + 4 * 60 * 60 * 1000);
+
+      await phone.autoSync();
+      expect(phone.store.getState().plans.map((p) => p.id)).toEqual(['w1']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
