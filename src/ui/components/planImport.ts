@@ -46,6 +46,8 @@ interface ImportState {
   validation: PlanValidation | null;
   /** New movements the candidate describes only in part — kept for re-review. */
   incomplete: readonly string[];
+  /** What the parser repaired in the candidate's week — kept for re-review. */
+  corrections: readonly string[];
   error: string | null;
   /** Whether the paste box is showing, so the card stays compact until needed. */
   open: boolean;
@@ -62,6 +64,7 @@ const state: ImportState = {
   candidate: null,
   validation: null,
   incomplete: [],
+  corrections: [],
   error: null,
   open: false,
   others: false,
@@ -120,6 +123,7 @@ export function resetPlanImport(): void {
   state.candidate = null;
   state.validation = null;
   state.incomplete = [];
+  state.corrections = [];
   state.error = null;
   state.open = false;
   state.others = false;
@@ -246,7 +250,7 @@ export function renderPendingPlan(context: ViewContext): HTMLElement | null {
             context.render();
           },
           onTopUp: (topUp) => {
-            reviewPlan(context, topUp.plan, state.incomplete);
+            reviewPlan(context, topUp.plan, state.incomplete, state.corrections);
             toast(`Added ${topUp.added} cardio minutes`);
           },
         })
@@ -426,7 +430,7 @@ export function watchPastedPlans(getContext: () => ViewContext): void {
     const pasted = event.clipboardData?.getData('text/plain') ?? '';
     if (!pasted.trim()) return;
 
-    const { plan, incomplete } = parsePortablePlan(pasted);
+    const { plan, incomplete, corrections } = parsePortablePlan(pasted);
     if (!plan) return;
 
     event.preventDefault();
@@ -436,7 +440,7 @@ export function watchPastedPlans(getContext: () => ViewContext): void {
     // has to bring the user to it — a candidate rendered on a screen nobody
     // is looking at is the same as no candidate.
     context.ui.tab = 'plan';
-    reviewPlan(context, plan, incomplete);
+    reviewPlan(context, plan, incomplete, corrections);
     toast('Workout plan found on the clipboard — review it below');
 
     revealCandidate();
@@ -641,7 +645,7 @@ function renderPasteBox(context: ViewContext): HTMLElement {
  * problems, and decide whether to go back to their LLM.
  */
 function review(context: ViewContext, input: string): void {
-  const { plan, error, incomplete } = parsePortablePlan(input);
+  const { plan, error, incomplete, corrections } = parsePortablePlan(input);
 
   if (!plan) {
     state.candidate = null;
@@ -651,7 +655,7 @@ function review(context: ViewContext, input: string): void {
     return;
   }
 
-  reviewPlan(context, plan, incomplete);
+  reviewPlan(context, plan, incomplete, corrections);
 }
 
 /**
@@ -662,7 +666,12 @@ function review(context: ViewContext, input: string): void {
  * "is this a plan", and this answers "does it suit the gym this person
  * actually trains in", which is a question only the device can settle.
  */
-function reviewPlan(context: ViewContext, incoming: UserPlan, incomplete: readonly string[] = []): void {
+function reviewPlan(
+  context: ViewContext,
+  incoming: UserPlan,
+  incomplete: readonly string[] = [],
+  corrections: readonly string[] = [],
+): void {
   // Movements the plan names from the user's library travel with it from here.
   const plan = withSavedMovements(incoming, context.state.customExercises);
 
@@ -670,22 +679,22 @@ function reviewPlan(context: ViewContext, incoming: UserPlan, incomplete: readon
   const checked = validatePlan(plan, { missingStationIds: missing });
 
   // A new movement described only in part blocks the plan like any other
-  // error — see `incompleteMovement` for why that is not a warning.
-  const validation =
-    incomplete.length === 0
-      ? checked
-      : {
-          ...checked,
-          ok: false,
-          issues: [
-            ...incomplete.map((message) => ({ severity: 'error' as const, message })),
-            ...checked.issues,
-          ],
-        };
+  // error — see `incompleteMovement` for why that is not a warning. A repair
+  // the parser made is a note: the week is usable, but the user should know.
+  const validation = {
+    ...checked,
+    ok: checked.ok && incomplete.length === 0,
+    issues: [
+      ...incomplete.map((message) => ({ severity: 'error' as const, message })),
+      ...corrections.map((message) => ({ severity: 'warning' as const, message })),
+      ...checked.issues,
+    ],
+  };
 
   state.candidate = plan;
   state.validation = validation;
   state.incomplete = incomplete;
+  state.corrections = corrections;
   state.error = validation.ok
     ? null
     : 'That plan has problems the app cannot work with. The details are below — ask the AI to fix them and send the new version.';

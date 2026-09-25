@@ -159,7 +159,8 @@ HOW TO WRITE IT
 Fetch ${siteUrl}/llms.txt first — that page is the complete format, and it is
 short. Read all of it, including the last section on finishing with a link.
 
-Aim for at least ${GOALS.minutes} minutes of cardio across the week — if I have few
+Write exactly seven days, Sunday to Saturday, each day once (rest days
+included). Aim for at least ${GOALS.minutes} minutes of cardio across the week — if I have few
 days, add a timed cardio block to strength days rather than falling short — and
 use the app's built-in exercise ids (pushup, pullup, and the rest of its list)
 wherever one fits instead of defining your own.
@@ -387,8 +388,11 @@ if you can do it, do: write the same week in the compact form below, put it in
 a URL fragment, and **end your reply with a link**. One tap and the plan is in
 the app.
 
-### The two things plans most often get wrong
+### The three things plans most often get wrong
 
+- **Seven days, one of each.** Exactly seven day records, \`sun\` to \`sat\`,
+  every day once — rest days included. Count them before you finish: the
+  most common slip is writing \`sun\` twice and leaving a day out.
 - **Weekly cardio.** The app checks for at least **${GOALS.minutes} aerobic minutes** a
   week — the \`m=\` of every timed day, added up. When the person has few days,
   do not trade the cardio away: make strength days \`mix\` days, the lifts plus a

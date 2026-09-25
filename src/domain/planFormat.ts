@@ -1,10 +1,10 @@
-import type { Exercise, ExerciseCues, UserPlan, UserPlanDay, WeightUnit } from '@/types';
+import type { DayKey, Exercise, ExerciseCues, UserPlan, UserPlanDay, WeightUnit } from '@/types';
 // Relative rather than `@/` on purpose — see the note in `src/spec/planSpec.ts`.
 // This module is reachable from the build-time spec generator, which loads it
 // outside Vite's alias resolution.
 import { ALL_EXERCISES, getBuiltinExercise } from '../data/exercises';
 import { getStation } from '../data/equipment';
-import { isDayKey } from '../data/plan';
+import { DAY_KEYS, isDayKey } from '../data/plan';
 import { isWeightUnit } from './units';
 import { expandCompactPlan } from './compactPlan';
 
@@ -374,6 +374,11 @@ export interface ParsedPlan {
    * `incompleteMovements`.
    */
   readonly incomplete: readonly string[];
+  /**
+   * What the parser changed to make the week whole, one sentence each — see
+   * `repairWeek`. Shown to the user; never silent.
+   */
+  readonly corrections?: readonly string[];
 }
 
 /**
@@ -455,9 +460,10 @@ export function parsePortablePlan(input: unknown): ParsedPlan {
   // redundant rather than broken.
   const byId = new Map(exercises.map((exercise) => [exercise.id, exercise]));
 
-  const days = raw['days']
+  const parsedDays = raw['days']
     .map((day) => parseDay(day, new Set(byId.keys()), aliases))
     .filter((day): day is UserPlanDay => day !== null);
+  const { days, corrections } = repairWeek(parsedDays);
 
   if (days.length === 0) {
     return { plan: null, error: 'None of the days in that plan could be read.', incomplete: [] };
@@ -476,7 +482,88 @@ export function parsePortablePlan(input: unknown): ParsedPlan {
     },
     error: null,
     incomplete,
+    ...(corrections.length > 0 ? { corrections } : {}),
   };
+}
+
+/* --------------------------------------------------------------- the week */
+
+/** Full names, for the sentences that explain a repair. */
+const DAY_FULL: Readonly<Record<DayKey, string>> = {
+  sun: 'Sunday',
+  mon: 'Monday',
+  tue: 'Tuesday',
+  wed: 'Wednesday',
+  thu: 'Thursday',
+  fri: 'Friday',
+  sat: 'Saturday',
+};
+
+const nextDay = (key: DayKey): DayKey => DAY_KEYS[(DAY_KEYS.indexOf(key) + 1) % DAY_KEYS.length] ?? key;
+const previousDay = (key: DayKey): DayKey =>
+  DAY_KEYS[(DAY_KEYS.indexOf(key) + DAY_KEYS.length - 1) % DAY_KEYS.length] ?? key;
+
+/**
+ * Mend the two ways a model most often gets the seven days wrong.
+ *
+ * - **One day twice, one missing**, e.g. Sun…Fri then Sun again with no Sat.
+ *   The model was counting through the week and wrote the wrong key on one
+ *   record; the order says which. The duplicate that breaks the sequence —
+ *   the one whose neighbours say it should be the missing day — is relabelled.
+ * - **Eight days that wrap**, e.g. Sun…Sat then Sun again, all seven present.
+ *   The last record repeats the first; it is dropped.
+ *
+ * Anything messier is left for the validator to refuse. A guess there would
+ * put a workout on the wrong day without anyone noticing, which is worse than
+ * asking the model again.
+ */
+export function repairWeek(days: readonly UserPlanDay[]): { days: UserPlanDay[]; corrections: string[] } {
+  const keys = days.map((day) => day.dayKey);
+  const counts = new Map<DayKey, number>();
+  for (const key of keys) counts.set(key, (counts.get(key) ?? 0) + 1);
+  const missing = DAY_KEYS.filter((key) => !counts.has(key));
+  const repeated = [...counts].filter(([, count]) => count > 1).map(([key]) => key);
+
+  const [twice] = repeated;
+  if (repeated.length !== 1 || twice === undefined || (counts.get(twice) ?? 0) !== 2) {
+    return { days: [...days], corrections: [] };
+  }
+
+  if (days.length === 8 && missing.length === 0 && keys[0] === twice && keys[7] === twice) {
+    return {
+      days: days.slice(0, 7),
+      corrections: [
+        `${DAY_FULL[twice]} was listed twice, at the start and end of the week; the second was left out.`,
+      ],
+    };
+  }
+
+  const [gap] = missing;
+  if (days.length === 7 && missing.length === 1 && gap !== undefined) {
+    const misplaced = keys.findIndex((key, i) => {
+      if (key !== twice) return false;
+      const before = keys[i - 1];
+      const after = keys[i + 1];
+      return (
+        (before !== undefined && nextDay(before) === gap) ||
+        (after !== undefined && previousDay(after) === gap)
+      );
+    });
+
+    const day = days[misplaced];
+    if (day) {
+      const repaired = [...days];
+      repaired[misplaced] = { ...day, dayKey: gap };
+      return {
+        days: repaired,
+        corrections: [
+          `${DAY_FULL[twice]} was listed twice and ${DAY_FULL[gap]} was missing; the ${DAY_FULL[twice]} that sat where ${DAY_FULL[gap]} belongs is now ${DAY_FULL[gap]}.`,
+        ],
+      };
+    }
+  }
+
+  return { days: [...days], corrections: [] };
 }
 
 /* -------------------------------------------------------- built-in matches */

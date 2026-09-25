@@ -55,6 +55,8 @@ export interface PushResult {
   readonly version: number;
   readonly accepted: number;
   readonly remaining: number;
+  /** What the parser mended in the week, when anything. */
+  readonly corrections?: readonly string[];
 }
 
 export function pushPlan(pushId: string, body: unknown): Promise<PushResult>;

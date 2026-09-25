@@ -437,7 +437,9 @@ app.post('/api/sessions/:pushId/plans', async (req, res) => {
     return res.status(201).json({
       ok: true,
       ...result,
-      message: `Plan received as version ${result.version}. It is waiting in the app for review.`,
+      message:
+        `Plan received as version ${result.version}. It is waiting in the app for review.` +
+        (result.corrections ? ` Corrected on arrival: ${result.corrections.join(' ')}` : ''),
     });
   } catch (error) {
     if (error instanceof DropError) {

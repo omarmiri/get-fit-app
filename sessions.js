@@ -217,7 +217,13 @@ export async function pushPlan(pushId, body) {
   const remaining = Math.max(0, record.expiresAt - Date.now());
   await kvSet(sessionKey(pushId), { ...record, plans }, remaining);
 
-  return { version, accepted: plans.length, remaining: MAX_PUSHES - plans.length };
+  return {
+    version,
+    accepted: plans.length,
+    remaining: MAX_PUSHES - plans.length,
+    // What the parser mended, so the model hears about it and does better next time.
+    ...(parsed.corrections?.length ? { corrections: parsed.corrections } : {}),
+  };
 }
 
 /**
