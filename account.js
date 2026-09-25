@@ -18,24 +18,49 @@
  * persisted state, so there is nothing to store — see `state/ephemeral.ts`.
  */
 
+import { gunzipSync, gzipSync } from 'node:zlib';
+
 import { KvConflict, kvGet, kvSet, kvSetIf } from './kv.js';
 
 const stateKey = (uid) => `fit:state:${uid}`;
 
 /**
- * Cap on a stored blob.
+ * Cap on a history as the client sends it.
  *
- * A long training history is genuinely large — years of sets — so this is
- * generous. It exists because an account is a place someone else's client
- * writes to, and "as much as you like" is not a size.
+ * A long training history is genuinely large — a year of four sessions a week
+ * is about half a megabyte of JSON — so this is generous: several years. It
+ * exists because an account is a place someone else's client writes to, and
+ * "as much as you like" is not a size. Kept under the 4mb body limit on the
+ * route in server.js.
  */
-export const MAX_STATE_BYTES = 2 * 1024 * 1024;
+export const MAX_STATE_BYTES = 3.5 * 1024 * 1024;
 
-/** The stored blob for an account, or `null` if there is none yet. */
+/**
+ * Cap on the stored, compressed copy.
+ *
+ * DynamoDB refuses any item over 400KB, key and attributes included. The
+ * history used to be stored as plain JSON and crossed that in about a year of
+ * regular training, after which every sync failed — silently, as sync is
+ * designed to. Gzipped it is about fifteen times smaller, so the 400KB wall is
+ * decades away for a real history; this margin keeps the item itself legal.
+ */
+const MAX_STORED_BYTES = 380 * 1024;
+
+/**
+ * The stored history for an account as `{ state, updatedAt }`, or `null`.
+ *
+ * Records written before compression hold `state` as plain JSON and are read
+ * as they are; each is rewritten compressed on its next save.
+ */
 export async function loadState(uid) {
   const record = await kvGet(stateKey(uid));
   if (!record || typeof record !== 'object') return null;
-  return record;
+
+  if (record.stateGz) {
+    const state = JSON.parse(gunzipSync(Buffer.from(record.stateGz)).toString('utf8'));
+    return { state, updatedAt: record.updatedAt ?? null };
+  }
+  return { state: record.state ?? null, updatedAt: record.updatedAt ?? null };
 }
 
 /**
@@ -60,9 +85,16 @@ export async function saveState(uid, state, baseUpdatedAt) {
     throw new AccountError('That backup is too large to store.', 413);
   }
 
+  // Compression also cuts the write cost by the same factor: DynamoDB bills a
+  // write per kilobyte of the item, and every sync rewrites the whole history.
+  const stateGz = gzipSync(serialized);
+  if (stateGz.length > MAX_STORED_BYTES) {
+    throw new AccountError('That backup is too large to store.', 413);
+  }
+
   // Strictly after the version it replaces, even within one millisecond, or a
   // stale base could match the new version and slip past the check.
-  const record = { state, updatedAt: Math.max(Date.now(), (baseUpdatedAt ?? 0) + 1) };
+  const record = { stateGz, updatedAt: Math.max(Date.now(), (baseUpdatedAt ?? 0) + 1) };
 
   if (baseUpdatedAt === undefined) {
     await kvSet(stateKey(uid), record);
