@@ -77,7 +77,7 @@ export function validatePlan(plan: UserPlan, context: ValidationContext = {}): P
     issues.push(...validateDay(day, plan, missing));
 
     if (day.aerobic && day.minutes) weeklyAerobicMinutes += day.minutes;
-    if (day.type === 'strength') strengthDays += 1;
+    if (isStrengthDay(day, plan)) strengthDays += 1;
   }
 
   issues.push(...validateCustomExercises(plan));
@@ -123,7 +123,7 @@ export function validatePlan(plan: UserPlan, context: ValidationContext = {}): P
     });
   }
 
-  const consecutive = consecutiveStrengthDays(byDay);
+  const consecutive = consecutiveStrengthDays(byDay, plan);
   if (consecutive.length > 0) {
     issues.push({
       severity: 'warning',
@@ -245,7 +245,12 @@ function validateDay(day: UserPlanDay, plan: UserPlan, missing: ReadonlySet<stri
 }
 
 /** Strength days that fall on consecutive calendar days, week wrapping included. */
-function consecutiveStrengthDays(byDay: ReadonlyMap<DayKey, UserPlanDay>): DayKey[] {
+function consecutiveStrengthDays(byDay: ReadonlyMap<DayKey, UserPlanDay>, plan: UserPlan): DayKey[] {
+  const lifting = (key: DayKey): boolean => {
+    const day = byDay.get(key);
+    return day !== undefined && isStrengthDay(day, plan);
+  };
+
   const flagged: DayKey[] = [];
 
   for (let i = 0; i < DAY_KEYS.length; i += 1) {
@@ -253,12 +258,27 @@ function consecutiveStrengthDays(byDay: ReadonlyMap<DayKey, UserPlanDay>): DayKe
     const nextKey = DAY_KEYS[(i + 1) % DAY_KEYS.length];
     if (!key || !nextKey) continue;
 
-    if (byDay.get(key)?.type === 'strength' && byDay.get(nextKey)?.type === 'strength') {
+    if (lifting(key) && lifting(nextKey)) {
       flagged.push(key, nextKey);
     }
   }
 
   return [...new Set(flagged)];
+}
+
+/**
+ * Whether a day is a strength session, for the weekly count and spacing.
+ *
+ * A mixed day counts when it includes loaded work: lifts with a cardio block
+ * after them are still a lifting day, which is exactly how a strength-heavy
+ * week reaches its cardio minutes. A mixed day of cardio and bodyweight core —
+ * the built-in Monday — does not; the strength target is about loading the
+ * major muscle groups, and a plank circuit is not that.
+ */
+function isStrengthDay(day: UserPlanDay, plan: UserPlan): boolean {
+  if (day.type === 'strength') return true;
+  if (day.type !== 'mixed') return false;
+  return (day.exerciseIds ?? []).some((id) => resolveExercise(id, { plan })?.loaded === true);
 }
 
 /** Only the blocking issues, for when a plan has to be rejected. */

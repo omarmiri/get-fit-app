@@ -1,6 +1,7 @@
 import type { UserPlan } from '@/types';
 import type { PlanValidation } from '@/domain/planValidation';
-import { DAY_NAMES } from '@/data/plan';
+import { DAY_NAMES, GOALS } from '@/data/plan';
+import { type CardioTopUp, topUpCardio } from '@/domain/cardioTopUp';
 import { div, el, eyebrow, text } from '../dom';
 
 /**
@@ -23,6 +24,8 @@ export interface PlanCandidateOptions {
   readonly onAccept: () => void;
   /** Absent when the caller has its own way out, e.g. "generate another". */
   readonly onDiscard?: () => void;
+  /** Replace the candidate with one topped up to the weekly cardio target. */
+  readonly onTopUp?: (topUp: CardioTopUp) => void;
 }
 
 export function renderPlanCandidate(options: PlanCandidateOptions): HTMLElement {
@@ -53,6 +56,7 @@ export function renderPlanCandidate(options: PlanCandidateOptions): HTMLElement 
     renderCustomExercises(plan),
     renderIssues('error', errors),
     renderIssues('warning', warnings),
+    options.onTopUp ? renderTopUp(plan, options.onTopUp) : null,
 
     validation.ok
       ? el('button', {
@@ -71,6 +75,33 @@ export function renderPlanCandidate(options: PlanCandidateOptions): HTMLElement 
           on: { click: options.onDiscard },
         })
       : null,
+  ]);
+}
+
+/**
+ * The offer to add the missing cardio minutes, with exactly what it changes.
+ *
+ * Shown under the warning it answers. Listing the changes before the tap is
+ * the point: this edits a plan someone else wrote, and the user should see
+ * which days grow before they agree to it.
+ */
+function renderTopUp(plan: UserPlan, onTopUp: (topUp: CardioTopUp) => void): HTMLElement | null {
+  const topUp = topUpCardio(plan);
+  if (!topUp) return null;
+
+  return div('gen__issues', [
+    eyebrow(`Reach ${GOALS.minutes} cardio minutes`),
+    el(
+      'ul',
+      {},
+      topUp.changes.map((change) => el('li', { text: change })),
+    ),
+    el('button', {
+      class: 'button button--ghost',
+      text: `Add ${topUp.added} minutes of cardio`,
+      attrs: { type: 'button' },
+      on: { click: () => onTopUp(topUp) },
+    }),
   ]);
 }
 

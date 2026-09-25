@@ -44,6 +44,8 @@ interface ImportState {
   pasted: string;
   candidate: UserPlan | null;
   validation: PlanValidation | null;
+  /** New movements the candidate describes only in part — kept for re-review. */
+  incomplete: readonly string[];
   error: string | null;
   /** Whether the paste box is showing, so the card stays compact until needed. */
   open: boolean;
@@ -59,6 +61,7 @@ const state: ImportState = {
   pasted: '',
   candidate: null,
   validation: null,
+  incomplete: [],
   error: null,
   open: false,
   others: false,
@@ -116,6 +119,7 @@ export function resetPlanImport(): void {
   state.pasted = '';
   state.candidate = null;
   state.validation = null;
+  state.incomplete = [];
   state.error = null;
   state.open = false;
   state.others = false;
@@ -252,6 +256,10 @@ export function renderPendingPlan(context: ViewContext): HTMLElement | null {
             state.validation = null;
             state.error = null;
             context.render();
+          },
+          onTopUp: (topUp) => {
+            reviewPlan(context, topUp.plan, state.incomplete);
+            toast(`Added ${topUp.added} cardio minutes`);
           },
         })
       : null,
@@ -755,6 +763,7 @@ function reviewPlan(context: ViewContext, incoming: UserPlan, incomplete: readon
 
   state.candidate = plan;
   state.validation = validation;
+  state.incomplete = incomplete;
   state.error = validation.ok
     ? null
     : 'That plan has problems the app cannot work with. The details are below — ask your LLM to fix them and send the new version.';
