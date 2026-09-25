@@ -52,6 +52,14 @@ export interface PromptContext {
   readonly notes?: string;
   /** Equipment they have marked as absent. */
   readonly missingEquipment?: readonly string[];
+  /**
+   * Movements an earlier plan defined, which a new plan can use by id.
+   *
+   * Listed so the model reuses them instead of describing the same movement
+   * again — and so a movement the user has already been doing keeps its id,
+   * which is what keeps its history and progression continuous.
+   */
+  readonly savedMovements?: readonly { readonly id: string; readonly name: string }[];
 }
 
 /**
@@ -99,6 +107,12 @@ function describe(context: PromptContext): string {
   if (context.likes) person.push(`- Movements I enjoy or want to avoid: ${context.likes}`);
   if (context.missingEquipment?.length) {
     person.push(`- My gym does NOT have: ${context.missingEquipment.join(', ')}`);
+  }
+  if (context.savedMovements?.length) {
+    const listed = context.savedMovements.map((movement) => `${movement.id} (${movement.name})`).join(', ');
+    person.push(
+      `- Movements I already have saved — use these ids as they are, without defining them again: ${listed}`,
+    );
   }
 
   return person.length > 0
@@ -390,7 +404,7 @@ x|<movement name>|d=<what it physically is>|q=<equipment>|s=<sets>|r=<8-12>|w=<4
 | \`<type>\` | day | \`str\` strength · \`dur\` timed · \`int\` intervals · \`mix\` both · \`rest\` |
 | \`l=\` | day | The day's title. |
 | \`o=\` | day | **Required.** 2–4 steps, separated by \`;\`. |
-| \`e=\` | day | Exercise ids, comma-separated. Built-in ids, or \`x:\`-prefixed ones you defined. |
+| \`e=\` | day | Exercise ids, comma-separated. Built-in ids, \`x:\`-prefixed ones you defined, or ones the person listed as already saved. |
 | \`m=\` | day | Minutes, on a timed day. |
 | \`d=\` | day | What the cardio is done on — a station id, or plain English. |
 | \`n=\` | day | A sentence on how to run the session. |
@@ -402,6 +416,7 @@ x|<movement name>|d=<what it physically is>|q=<equipment>|s=<sets>|r=<8-12>|w=<4
 | \`rest=\` | movement | Seconds between sets. Say it whenever it is not an ordinary 90. |
 | \`i=1\` | movement | **Assisted machines and band-assisted work**, where a higher number is *easier*. |
 | \`like=\` | movement | A built-in id this is a variant of. See below — this is the one that pays. |
+| \`cs=\` \`ce=\` \`ca=\` | movement | Cues: setup · how to perform it · the most common mistake. **Required for a new movement without \`like=\`.** |
 | \`st=\` | movement | A built-in station id, if one fits. Lets the app offer alternatives when it is busy. |
 
 **A movement with \`w=\` is treated as loaded; one without is bodyweight.**
@@ -427,8 +442,21 @@ The second line is the case worth remembering: \`like=assistedpullup\` carries
 the assisted machine's load direction, so you cannot forget \`i=1\`.
 
 Use \`like=\` whenever a movement is a variant of something in the catalogue —
-most are. If a week genuinely needs a movement unlike anything built in, define
-it fully and send the JSON as well, so the user can choose the richer version.
+most are.
+
+### A movement unlike anything built in
+
+It must be complete, or the whole plan is refused: \`d=\`, \`q=\` (or \`st=\`),
+\`s=\`, \`r=\` and all three cues. The person at the machine has nothing else to
+go on, so the app will not guess at how to perform a movement it has never
+seen.
+
+\`\`\`
+x|Sled push|d=Drive a loaded sled across the turf with arms locked|q=push sled and plates|s=4|r=20-30s|w=90lb|cs=Hands high on the posts, body at 45 degrees|ce=Short fast steps, push through the balls of the feet|ca=Standing upright, which turns it into a walk
+\`\`\`
+
+If the person lists movements they already have saved, use those ids in \`e=\`
+exactly as given and do not define them again.
 
 ### A complete week
 
@@ -573,27 +601,32 @@ it. A defined movement renders exactly like a built-in one.
 | --- | --- | --- |
 | \`id\` | string | Referenced from a day's \`exerciseIds\`. Slugged from \`name\` if omitted. Namespaced on import, so it can never collide with a built-in id. |
 | \`name\` | string | **Required.** Up to 80 characters. |
-| \`summary\` | string | **Write this.** One plain sentence saying what the movement physically *is* — "sit and push a weighted platform away with both legs". Exercise names are jargon; a name the user cannot picture is a movement they skip. |
-| \`equipment\` | string | **Write this for anything loaded.** Plain English: \`"adjustable bench and one dumbbell"\`. This is the authoritative description of what they need. |
+| \`summary\` | string | **Required.** One plain sentence saying what the movement physically *is* — "sit and push a weighted platform away with both legs". Exercise names are jargon; a name the user cannot picture is a movement they skip. |
+| \`equipment\` | string | **Required** unless \`stationId\` names a built-in station. Plain English: \`"adjustable bench and one dumbbell"\`. This is the authoritative description of what they need. |
 | \`stationId\` | string | Optional. A built-in station id, if one happens to fit. When it matches, the app can offer alternatives if the machine is busy. An unrecognised value is dropped harmlessly. |
-| \`sets\` | integer | Working sets. 1–12. Defaults to 3. |
-| \`repMin\` / \`repMax\` | integer | The rep range as numbers. The app renders the display range itself. |
+| \`sets\` | integer | **Required.** Working sets. 1–12. |
+| \`repMin\` / \`repMax\` | integer | **\`repMin\` required.** The rep range as numbers; \`repMax\` defaults to \`repMin\`. The app renders the display range itself. |
 | \`repMetric\` | \`reps\`\\|\`seconds\` | \`seconds\` for holds and carries. Defaults to \`reps\`. |
-| \`loaded\` | boolean | **Required for anything with weight.** \`false\` for bodyweight movements — it decides whether a weight stepper appears at all. |
+| \`loaded\` | boolean | **Required.** \`false\` for bodyweight movements — it decides whether a weight stepper appears at all. |
 | \`restSeconds\` | integer | Rest between sets. 0–600. Defaults to 90 (45 for timed holds). |
-| \`cues.setup\` | string | How to get into position before the first rep. |
-| \`cues.execute\` | string | What to do during the rep. |
-| \`cues.avoid\` | string | The single most common way this movement goes wrong. |
+| \`cues.setup\` | string | **Required.** How to get into position before the first rep. |
+| \`cues.execute\` | string | **Required.** What to do during the rep. |
+| \`cues.avoid\` | string | **Required.** The single most common way this movement goes wrong. |
 | \`alternative\` | string | An easier or equipment-free substitute. |
 | \`muscles\` | string[] | Primary muscles worked. |
 | \`tips\` | string[] | Up to 6 extra coaching notes. |
 | \`openingWeight\` | \`{ value, unit }\` | See below. |
 | \`inverseLoad\` | boolean | **Set this for assisted machines and band-assisted work**, where a higher number means *easier*. See below. |
 
-Write all three cues. They are the difference between a movement someone
-performs correctly and one they perform approximately. If you leave them out
-the app fills in a line saying the plan did not supply them, which is honest
-but useless to the person in the gym.`;
+**A movement missing any required field is refused, and so is the plan that
+defines it.** The error names every missing field, so a rejected plan can be
+fixed in one pass. The cues are the difference between a movement someone
+performs correctly and one they perform approximately, and the app will not
+invent them for a movement it has never seen.
+
+If the person lists movements they already have saved, reference those ids in
+\`exerciseIds\` exactly as given and leave them out of \`exercises\`. The app
+fills in the saved definition, and keeping the id keeps their history for it.`;
 }
 
 function loadSection(): string {

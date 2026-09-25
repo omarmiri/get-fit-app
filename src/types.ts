@@ -671,6 +671,21 @@ export interface AppState {
    * every plan ever tried.
    */
   readonly exerciseArchive: readonly Exercise[];
+  /**
+   * Movements an LLM defined for this user, kept beyond the plan that brought
+   * them.
+   *
+   * The built-in catalogue cannot hold every movement anyone will ever do, so
+   * a plan may define its own. Keeping those here means the next plan can
+   * refer to one by id instead of describing it again, and the prompt can tell
+   * the model which ones already exist. Personal by design: nothing here is
+   * shared with other users.
+   *
+   * Distinct from `exerciseArchive`, which freezes a definition as it was when
+   * first logged so history stays true. This is the current definition, and
+   * the newest plan to describe a movement replaces what was here.
+   */
+  readonly customExercises: readonly Exercise[];
 }
 
 /* ------------------------------------------------------------------- views */

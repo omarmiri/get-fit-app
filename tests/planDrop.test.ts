@@ -91,6 +91,16 @@ describe('pushPlan', () => {
     await expect(pushPlan(pushId, { plan: { formatVersion: 1 } })).rejects.toThrow(/days/);
   });
 
+  it('refuses a new movement that is not fully described, naming what is missing', async () => {
+    const { pushId } = await createSession();
+    const plan = { ...validPlan, exercises: [{ id: 'sled-push', name: 'Sled push', loaded: true }] };
+
+    await expect(pushPlan(pushId, { plan })).rejects.toMatchObject({
+      code: 'incomplete_movement',
+      message: expect.stringContaining('cues.setup') as unknown,
+    });
+  });
+
   it('rate limits a burst within one minute', async () => {
     // In front of the lifetime cap, and much tighter: a person iterating on a
     // plan with an LLM does not push six times in a minute, but a loop does.

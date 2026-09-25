@@ -19,8 +19,8 @@ import type { AppState, Exercise, Session, UserPlan } from '@/types';
  *
  * ## The rules, per record
  *
- * Sessions, plans and archived movements are merged by id; preferences key by
- * key; the plan in force as one value. For each:
+ * Sessions, plans, archived movements and the user's own movements are merged
+ * by id; preferences key by key; the plan in force as one value. For each:
  *
  * - Changed on one side only: that side wins, including a deletion.
  * - Deleted on one side, edited on the other: the edit wins. Losing a change
@@ -36,6 +36,8 @@ export interface SyncBase {
   readonly sessions: Readonly<Record<string, string>>;
   readonly plans: Readonly<Record<string, string>>;
   readonly archive: Readonly<Record<string, string>>;
+  /** Optional: a base saved before the library existed has none. */
+  readonly library?: Readonly<Record<string, string>>;
   readonly prefs: Readonly<Record<string, string>>;
   readonly activePlanId: string;
 }
@@ -45,6 +47,7 @@ export function fingerprint(state: AppState): SyncBase {
     sessions: byId(state.sessions),
     plans: byId(state.plans),
     archive: byId(state.exerciseArchive),
+    library: byId(state.customExercises),
     prefs: Object.fromEntries(Object.entries(state.prefs).map(([key, value]) => [key, hash(value)])),
     activePlanId: hash(state.activePlanId),
   };
@@ -81,6 +84,12 @@ export function mergeStates(local: AppState, remote: AppState, base: SyncBase | 
     base?.archive,
     (l) => l,
   );
+  const customExercises = mergeRecords(
+    local.customExercises,
+    remote.customExercises,
+    base?.library,
+    (l, r) => (preferRemote ? r : l),
+  );
 
   const mine: Readonly<Record<string, unknown>> = { ...local.prefs };
   const theirs: Readonly<Record<string, unknown>> = { ...remote.prefs };
@@ -105,6 +114,7 @@ export function mergeStates(local: AppState, remote: AppState, base: SyncBase | 
     sessions: sortSessions(sessions),
     plans: [...plans].sort((a, b) => a.generatedAt - b.generatedAt || a.id.localeCompare(b.id)),
     exerciseArchive,
+    customExercises,
     prefs: prefs as unknown as AppState['prefs'],
     activePlanId,
     // Never merged: see the module note.

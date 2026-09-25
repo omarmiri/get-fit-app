@@ -20,14 +20,16 @@ import { ALL_EXERCISES, getBuiltinExercise } from './exercises';
  *
  * ## Precedence, and why
  *
- * Plan, then archive, then built-in.
+ * Plan, then archive, then the user's library, then built-in.
  *
  * Built-in ids cannot collide with the other two, which are namespaced under
  * `x:`. Plan and archive genuinely can: a movement is archived when first
  * logged, and the plan that defines it may since have been regenerated with a
  * revised version of the same id. The plan wins, because it describes what the
  * user is being asked to do *now*; the archive exists to explain what they
- * did *then*, and is consulted only when nothing current can.
+ * did *then*, and is consulted only when nothing current can. The library is
+ * last among the custom sources because it only matters for a movement that
+ * neither the plan in force nor the history describes.
  */
 
 export interface ExerciseSource {
@@ -35,6 +37,8 @@ export interface ExerciseSource {
   readonly plan?: UserPlan | null;
   /** Definitions retained for movements already logged against. */
   readonly exerciseArchive?: readonly Exercise[];
+  /** The user's own movements, kept beyond the plans that defined them. */
+  readonly customExercises?: readonly Exercise[];
 }
 
 /**
@@ -51,7 +55,11 @@ export function activePlan(state: Pick<AppState, 'plans' | 'activePlanId'>): Use
 
 /** Everything needed to resolve an exercise id, derived from state. */
 export function exerciseSourceOf(state: AppState): ExerciseSource {
-  return { plan: activePlan(state), exerciseArchive: state.exerciseArchive };
+  return {
+    plan: activePlan(state),
+    exerciseArchive: state.exerciseArchive,
+    customExercises: state.customExercises,
+  };
 }
 
 /**
@@ -68,6 +76,9 @@ export function resolveExercise(id: string, source: ExerciseSource): Exercise | 
 
   const archived = source.exerciseArchive?.find((exercise) => exercise.id === id);
   if (archived) return archived;
+
+  const saved = source.customExercises?.find((exercise) => exercise.id === id);
+  if (saved) return saved;
 
   return getBuiltinExercise(id);
 }
@@ -89,4 +100,23 @@ export function catalogueFor(source: ExerciseSource): readonly Exercise[] {
   const extra = [...fromPlan, ...archived.filter((exercise) => !seen.has(exercise.id))];
 
   return [...ALL_EXERCISES, ...extra];
+}
+
+/**
+ * Copy into a plan the saved movements it refers to but does not define.
+ *
+ * A plan may name `x:sled-push` because the prompt listed it as one the user
+ * already has. The plan then carries its own copy, so it stays complete on
+ * its own — through sync to another device, after the library entry changes,
+ * or if the library is ever cleared. Anything still unresolved afterwards is
+ * reported by `validatePlan` like any other unknown id.
+ */
+export function withSavedMovements(plan: UserPlan, saved: readonly Exercise[]): UserPlan {
+  const defined = new Set((plan.exercises ?? []).map((exercise) => exercise.id));
+  const wanted = new Set(plan.days.flatMap((day) => day.exerciseIds ?? []));
+
+  const borrowed = saved.filter((exercise) => wanted.has(exercise.id) && !defined.has(exercise.id));
+  if (borrowed.length === 0) return plan;
+
+  return { ...plan, exercises: [...(plan.exercises ?? []), ...borrowed] };
 }

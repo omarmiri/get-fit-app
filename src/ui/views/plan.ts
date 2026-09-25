@@ -458,6 +458,8 @@ function eraseAll(context: ViewContext): void {
     // The archive only exists to explain logged sets. With none left it
     // explains nothing, and the plan still defines whatever it defines.
     exerciseArchive: [],
+    // Kept for the same reason as the plans: these are definitions, not history.
+    customExercises: context.state.customExercises,
   });
   toast('All data erased');
   context.render();

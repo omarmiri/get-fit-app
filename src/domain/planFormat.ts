@@ -326,11 +326,17 @@ function resolveExerciseIds(raw: unknown, knownCustomIds: ReadonlySet<string>): 
     // Try the plan's own vocabulary first, then the built-in catalogue. An
     // author referencing "legpress" almost certainly means the catalogue's.
     const namespaced = isCustomExerciseId(id) ? id : `${CUSTOM_ID_PREFIX}${id.replace(/[^a-z0-9]+/g, '-')}`;
+    /*
+     * An `x:` id this plan does not define is kept rather than dropped: it may
+     * name a movement the user already has saved, which the prompt told the
+     * model about. Only the device knows the library, so it is resolved there
+     * — and reported by the validator if it turns out to be nothing.
+     */
     const match = knownCustomIds.has(namespaced)
       ? namespaced
       : getBuiltinExercise(id)
         ? id
-        : knownCustomIds.has(id)
+        : knownCustomIds.has(id) || isCustomExerciseId(id)
           ? id
           : null;
 
@@ -351,6 +357,14 @@ export interface ParsedPlan {
    * file, not for a log — they are the one who has to fix it.
    */
   readonly error: string | null;
+  /**
+   * New movements the plan did not describe fully, one message each.
+   *
+   * The plan still parses, so the device can show it with these listed as
+   * problems. It must not be adopted while any remain — see
+   * `incompleteMovements`.
+   */
+  readonly incomplete: readonly string[];
 }
 
 /**
@@ -362,15 +376,23 @@ export function parsePortablePlan(input: unknown): ParsedPlan {
   const raw = typeof input === 'string' ? decode(input) : input;
 
   if (raw === null) {
-    return { plan: null, error: 'That does not look like JSON. Paste the whole plan file, braces included.' };
+    return {
+      plan: null,
+      error: 'That does not look like JSON. Paste the whole plan file, braces included.',
+      incomplete: [],
+    };
   }
   if (!isRecord(raw)) {
-    return { plan: null, error: 'A plan file has to be a JSON object.' };
+    return { plan: null, error: 'A plan file has to be a JSON object.', incomplete: [] };
   }
 
   const kind = typeof raw['kind'] === 'string' ? raw['kind'] : '';
   if (kind && kind !== PLAN_KIND) {
-    return { plan: null, error: `That file says it is "${kind}", which is not a plan for this app.` };
+    return {
+      plan: null,
+      error: `That file says it is "${kind}", which is not a plan for this app.`,
+      incomplete: [],
+    };
   }
 
   const version = raw['formatVersion'];
@@ -378,12 +400,20 @@ export function parsePortablePlan(input: unknown): ParsedPlan {
     return {
       plan: null,
       error: `That plan uses format version ${version}, but this app understands version ${PLAN_FORMAT_VERSION}. Update the app.`,
+      incomplete: [],
     };
   }
 
   if (!Array.isArray(raw['days'])) {
-    return { plan: null, error: 'The plan has no "days" array.' };
+    return { plan: null, error: 'The plan has no "days" array.', incomplete: [] };
   }
+
+  const authored: readonly unknown[] = Array.isArray(raw['exercises'])
+    ? raw['exercises'].slice(0, LIMITS.exercisesPerPlan)
+    : [];
+  const incomplete = authored
+    .map(incompleteMovement)
+    .filter((problem): problem is string => problem !== null);
 
   const exercises = Array.isArray(raw['exercises'])
     ? raw['exercises']
@@ -402,7 +432,7 @@ export function parsePortablePlan(input: unknown): ParsedPlan {
     .filter((day): day is UserPlanDay => day !== null);
 
   if (days.length === 0) {
-    return { plan: null, error: 'None of the days in that plan could be read.' };
+    return { plan: null, error: 'None of the days in that plan could be read.', incomplete: [] };
   }
 
   const model = str(raw['author'] ?? raw['model'], LIMITS.name) || 'imported';
@@ -417,7 +447,52 @@ export function parsePortablePlan(input: unknown): ParsedPlan {
       model,
     },
     error: null,
+    incomplete,
   };
+}
+
+/* ------------------------------------------------------------ completeness */
+
+/**
+ * What a new movement has to say before the app will accept it.
+ *
+ * The parser is lenient everywhere else, filling a missing rest interval or rep
+ * range with a sensible default. Not for a movement the app has never seen:
+ * the person at the machine has nothing else to go on, and a card reading "the
+ * plan did not describe how to perform this movement" is a card that gets the
+ * movement skipped — or done wrong. So a new movement is accepted complete or
+ * not at all, and the author is told exactly which parts are missing.
+ *
+ * Checked on the authored object, before defaults are applied, because after
+ * that every field is present by construction. Rest seconds and an opening
+ * weight are not required: a default rest is a fine answer, and the first
+ * weight is estimated from the user's profile when the author gives none.
+ */
+export function incompleteMovement(raw: unknown): string | null {
+  if (!isRecord(raw)) return 'A movement in "exercises" is not an object.';
+
+  const name = str(raw['name'], LIMITS.name);
+  const missing: string[] = [];
+
+  if (!name) missing.push('name');
+  if (!str(raw['summary'], LIMITS.summary)) missing.push('summary (what it physically is)');
+
+  const stations = resolveStationIds(raw['stationId'], raw['stationIds']);
+  if (!str(raw['equipment'], LIMITS.equipment) && stations.length === 0) {
+    missing.push('equipment (or a known stationId)');
+  }
+
+  if (typeof raw['sets'] !== 'number' || !Number.isFinite(raw['sets'])) missing.push('sets');
+  if (typeof raw['repMin'] !== 'number' || !Number.isFinite(raw['repMin'])) missing.push('repMin');
+  if (typeof raw['loaded'] !== 'boolean') missing.push('loaded (true or false)');
+
+  const cues = isRecord(raw['cues']) ? raw['cues'] : {};
+  for (const cue of ['setup', 'execute', 'avoid'] as const) {
+    if (!str(cues[cue], LIMITS.cue)) missing.push(`cues.${cue}`);
+  }
+
+  if (missing.length === 0) return null;
+  return `New movement "${name || 'unnamed'}" is incomplete — missing ${missing.join(', ')}.`;
 }
 
 /**

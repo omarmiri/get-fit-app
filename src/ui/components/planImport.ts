@@ -3,6 +3,7 @@ import { ALL_STATIONS, stationName } from '@/data/equipment';
 import { LLM_PROVIDERS, fitsInLink } from '@/data/llmProviders';
 import { type PlanValidation, validatePlan } from '@/domain/planValidation';
 import { parsePortablePlan } from '@/domain/planFormat';
+import { withSavedMovements } from '@/data/catalogue';
 import { buildBriefPrompt, buildLinkPrompt, buildPrompt } from '@/spec/planSpec';
 import { clearDrop, currentDrop, dropEndpoint, openDrop, pollDrop } from '@/services/planDrop';
 import { conditionsList, getNotes } from '@/state/ephemeral';
@@ -10,6 +11,9 @@ import { card, div, el, eyebrow, text } from '../dom';
 import { toast } from '../toast';
 import type { ViewContext } from '../views/context';
 import { renderPlanCandidate } from './planCandidate';
+
+/** How many of the user's saved movements a prompt names. */
+const SAVED_MOVEMENTS_IN_PROMPT = 30;
 
 /**
  * Bring in a plan written by whichever LLM the user prefers.
@@ -395,7 +399,7 @@ export function watchPastedPlans(getContext: () => ViewContext): void {
     const pasted = event.clipboardData?.getData('text/plain') ?? '';
     if (!pasted.trim()) return;
 
-    const { plan } = parsePortablePlan(pasted);
+    const { plan, incomplete } = parsePortablePlan(pasted);
     if (!plan) return;
 
     event.preventDefault();
@@ -405,7 +409,7 @@ export function watchPastedPlans(getContext: () => ViewContext): void {
     // has to bring the user to it — a candidate rendered on a screen nobody
     // is looking at is the same as no candidate.
     context.ui.tab = 'plan';
-    reviewPlan(context, plan);
+    reviewPlan(context, plan, incomplete);
     toast('Plan found on the clipboard — review it below');
 
     revealCandidate();
@@ -650,7 +654,7 @@ function renderFileButton(context: ViewContext): HTMLElement {
  * problems, and decide whether to go back to their LLM.
  */
 function review(context: ViewContext, input: string): void {
-  const { plan, error } = parsePortablePlan(input);
+  const { plan, error, incomplete } = parsePortablePlan(input);
 
   if (!plan) {
     state.candidate = null;
@@ -660,7 +664,7 @@ function review(context: ViewContext, input: string): void {
     return;
   }
 
-  reviewPlan(context, plan);
+  reviewPlan(context, plan, incomplete);
 }
 
 /**
@@ -671,9 +675,26 @@ function review(context: ViewContext, input: string): void {
  * "is this a plan", and this answers "does it suit the gym this person
  * actually trains in", which is a question only the device can settle.
  */
-function reviewPlan(context: ViewContext, plan: UserPlan): void {
+function reviewPlan(context: ViewContext, incoming: UserPlan, incomplete: readonly string[] = []): void {
+  // Movements the plan names from the user's library travel with it from here.
+  const plan = withSavedMovements(incoming, context.state.customExercises);
+
   const missing = context.state.prefs.missingStations ?? [];
-  const validation = validatePlan(plan, { missingStationIds: missing });
+  const checked = validatePlan(plan, { missingStationIds: missing });
+
+  // A new movement described only in part blocks the plan like any other
+  // error — see `incompleteMovement` for why that is not a warning.
+  const validation =
+    incomplete.length === 0
+      ? checked
+      : {
+          ...checked,
+          ok: false,
+          issues: [
+            ...incomplete.map((message) => ({ severity: 'error' as const, message })),
+            ...checked.issues,
+          ],
+        };
 
   state.candidate = plan;
   state.validation = validation;
@@ -751,6 +772,15 @@ async function buildPromptText(context: ViewContext, mode: PromptMode = 'full'):
     // as "available" would be a claim the app cannot support.
     ...(missing.size > 0
       ? { missingEquipment: ALL_STATIONS.filter((s) => missing.has(s.id)).map((s) => stationName(s.id)) }
+      : {}),
+    // The newest few, so a long library does not crowd the link prompt past
+    // what fits in a URL. Older ones are still resolved if a plan names them.
+    ...(context.state.customExercises.length > 0
+      ? {
+          savedMovements: context.state.customExercises
+            .slice(-SAVED_MOVEMENTS_IN_PROMPT)
+            .map((exercise) => ({ id: exercise.id, name: exercise.name })),
+        }
       : {}),
   };
 

@@ -279,6 +279,17 @@ function readExercise(parts: readonly string[]): Record<string, unknown> | null 
   const station = keys.get('st');
   const reps = readReps(keys.get('r') ?? '');
   const weight = readWeight(keys.get('w') ?? '');
+
+  // Cues, when the movement is new rather than a variant: a new movement has
+  // to describe itself fully, and `like=` is the only other source of them.
+  const inherited = (base['cues'] ?? {}) as Record<string, unknown>;
+  // An empty `cs=` is no cue at all, so it falls back like an absent one.
+  const cue = (key: string, field: string): unknown => {
+    const own = keys.get(key);
+    if (own) return own;
+    return inherited[field];
+  };
+  const cues = { setup: cue('cs', 'setup'), execute: cue('ce', 'execute'), avoid: cue('ca', 'avoid') };
   const sets = Number.parseInt(keys.get('s') ?? '', 10);
   const rest = Number.parseInt(keys.get('rest') ?? '', 10);
 
@@ -299,6 +310,7 @@ function readExercise(parts: readonly string[]): Record<string, unknown> | null 
     ...(Number.isFinite(sets) ? { sets } : {}),
     ...(Number.isFinite(rest) ? { restSeconds: rest } : {}),
     ...reps,
+    cues,
     loaded,
     ...(weight ? { openingWeight: weight } : {}),
     /*

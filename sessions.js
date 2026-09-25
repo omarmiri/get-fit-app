@@ -189,6 +189,15 @@ export async function pushPlan(pushId, body) {
   if (!parsed.plan) {
     throw new DropError(parsed.error ?? 'That is not a plan this app can read.', 422, 'invalid_plan');
   }
+  /*
+   * Refused here rather than left for the device, because here the author is
+   * still listening: the model that pushed it reads this error on its next
+   * turn and can fill in what is missing. The device can only show the user a
+   * plan they cannot adopt.
+   */
+  if (parsed.incomplete.length > 0) {
+    throw new DropError(parsed.incomplete.join(' '), 422, 'incomplete_movement');
+  }
 
   const version = (record.plans?.length ?? 0) + 1;
   const entry = {

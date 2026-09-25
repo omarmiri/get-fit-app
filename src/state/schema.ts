@@ -31,7 +31,7 @@ import { isWeightUnit } from '@/domain/units';
  *   add a step whenever a persisted shape changes.
  */
 
-export const CURRENT_SCHEMA_VERSION = 13;
+export const CURRENT_SCHEMA_VERSION = 14;
 
 /**
  * Ceiling on saved plans.
@@ -51,6 +51,16 @@ const MAX_PLANS = 50;
  * server can come and fix.
  */
 const MAX_ARCHIVED_EXERCISES = 300;
+
+/**
+ * Ceiling on the user's own movement library.
+ *
+ * It grows with every plan that invents something, which is an action the
+ * user takes but not one they think of as adding to a list. Oldest entries
+ * are the ones dropped, since a movement nobody has planned in a long time is
+ * the cheapest to describe again.
+ */
+export const MAX_CUSTOM_EXERCISES = 300;
 
 /**
  * Longest free-text gym description kept.
@@ -98,6 +108,7 @@ export function defaultState(): AppState {
     plans: [],
     activePlanId: null,
     exerciseArchive: [],
+    customExercises: [],
   };
 }
 
@@ -440,10 +451,38 @@ export function parseState(raw: unknown): ParseResult {
         ...ordered,
         ...(active ? [active] : []),
       ]),
+      customExercises: parseCustomLibrary(raw['customExercises'], plans),
     },
     dropped,
     recognised: true,
   };
+}
+
+/**
+ * Parse the user's own movement library.
+ *
+ * Schema 14 introduced it. A state from before then has no library, so one is
+ * seeded from the movements its saved plans define — oldest plan first, so
+ * the newest definition of a movement is the one kept. Upgrading therefore
+ * loses nothing: every movement an LLM ever described for this user is still
+ * there to be reused.
+ */
+function parseCustomLibrary(raw: unknown, plans: readonly UserPlan[]): readonly Exercise[] {
+  const source: readonly unknown[] = Array.isArray(raw)
+    ? raw
+    : [...plans].sort((a, b) => a.generatedAt - b.generatedAt).flatMap((plan) => plan.exercises ?? []);
+
+  const byId = new Map<string, Exercise>();
+  for (const item of source) {
+    const exercise = parseCustomExercise(item);
+    if (!exercise) continue;
+    // Re-inserted so a later definition also moves to the end, which is what
+    // makes the cap below drop the stalest entries.
+    byId.delete(exercise.id);
+    byId.set(exercise.id, exercise);
+  }
+
+  return [...byId.values()].slice(-MAX_CUSTOM_EXERCISES);
 }
 
 /**

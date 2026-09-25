@@ -2,6 +2,7 @@ import type {
   AppState,
   DayKey,
   Effort,
+  Exercise,
   UserPlan,
   LoggedSet,
   Session,
@@ -11,6 +12,7 @@ import type {
 } from '@/types';
 import type { GymProfile } from '@/domain/gymProfile';
 import { activePlan } from '@/data/catalogue';
+import { MAX_CUSTOM_EXERCISES } from './schema';
 import { describeGym } from '@/domain/gymProfile';
 import { todayIso } from '@/domain/dates';
 import { clampMinutes, clampReps, clampWeight } from '@/domain/limits';
@@ -120,6 +122,7 @@ export class AppStore {
     this.#commit({
       ...this.#state,
       plans,
+      customExercises: saveMovements(this.#state.customExercises, plan.exercises ?? []),
       activePlanId: plan.id,
       // Adopting a plan answers the welcome screen's only question.
       prefs: { ...this.#state.prefs, welcomed: true },
@@ -602,6 +605,21 @@ export class AppStore {
   replaceState(state: AppState): void {
     this.#commit({ ...state, sessions: sortSessions([...state.sessions]) });
   }
+}
+
+/**
+ * Add a plan's own movements to the user's library.
+ *
+ * The plan's version replaces any saved one with the same id and moves to the
+ * end, so the newest description wins and the cap drops the stalest.
+ */
+function saveMovements(library: readonly Exercise[], incoming: readonly Exercise[]): readonly Exercise[] {
+  if (incoming.length === 0) return library;
+
+  const replaced = new Set(incoming.map((exercise) => exercise.id));
+  return [...library.filter((exercise) => !replaced.has(exercise.id)), ...incoming].slice(
+    -MAX_CUSTOM_EXERCISES,
+  );
 }
 
 /** Oldest first, with a stable tie-break so equal dates keep a fixed order. */
