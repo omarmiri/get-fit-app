@@ -7,11 +7,13 @@ import { activePlan } from '@/data/catalogue';
 import { daysBetween, todayIso } from '@/domain/dates';
 import { UNIT_LABEL, formatWeight } from '@/domain/units';
 import { currentUser } from '@/services/account';
+import { resetEverything } from '@/services/sync';
+import { resetEphemeral } from '@/state/ephemeral';
 import { card, div, el, eyebrow, text } from '../dom';
 import { toast } from '../toast';
 import { renderAccountCard } from '../components/accountCard';
 import { renderOnboarding } from '../components/onboarding';
-import { renderPendingPlan } from '../components/planImport';
+import { renderPendingPlan, resetPlanImport } from '../components/planImport';
 import { renderPlanWizard } from '../components/planWizard';
 import { renderPlanLibrary } from '../components/planLibrary';
 import type { PlanRoute, ViewContext } from './context';
@@ -373,7 +375,41 @@ function renderEraseCard(context: ViewContext): HTMLElement {
       attrs: { type: 'button' },
       on: { click: () => eraseAll(context) },
     }),
+    el('button', {
+      class: 'button button--ghost button--danger',
+      text: currentUser() ? 'Reset account and start over' : 'Start over',
+      attrs: { type: 'button' },
+      on: { click: () => void startOver(context) },
+    }),
   ]);
+}
+
+/**
+ * Everything back to a first launch: plans, workouts, saved movements and
+ * settings — and the account's copy too, when signed in. The sign-in itself
+ * stays, so the same account keeps working.
+ */
+async function startOver(context: ViewContext): Promise<void> {
+  const signedIn = currentUser() !== null;
+  const where = signedIn ? 'on this phone, in your account and on your other devices' : 'on this phone';
+
+  if (!confirm(`Delete all your plans, workouts and settings ${where}, and start from scratch?`)) return;
+  if (!confirm('This cannot be undone. Start over?')) return;
+
+  resetEphemeral();
+  resetPlanImport();
+  context.ui.tab = 'today';
+  context.ui.planRoute = 'menu';
+  context.ui.viewDay = null;
+
+  try {
+    await resetEverything();
+    toast(signedIn ? 'Account reset — starting fresh' : 'Starting fresh');
+  } catch {
+    // The phone is reset; the account catches up on the next sync.
+    toast('Reset on this phone — your account will follow when you are back online');
+  }
+  context.render();
 }
 
 function eraseAll(context: ViewContext): void {

@@ -1,6 +1,6 @@
 import type { AppState } from '@/types';
 import { todayIso } from '@/domain/dates';
-import { CURRENT_SCHEMA_VERSION, parseState } from '@/state/schema';
+import { CURRENT_SCHEMA_VERSION, defaultState, parseState } from '@/state/schema';
 import { type SyncBase, fingerprint, hash, mergeStates, sameContent } from '@/state/merge';
 import type { AppStore } from '@/state/store';
 import { AccountError, currentUser, pullState, pushState } from './account';
@@ -143,6 +143,50 @@ export function forgetSyncBase(): void {
     localStorage.removeItem(BASE_KEY);
   } catch {
     // Nothing to forget, or storage is blocked. Either way nothing is stale.
+  }
+}
+
+/**
+ * Start from scratch: this device, and the account when signed in.
+ *
+ * The account is not deleted — the same sign-in keeps working — but its copy
+ * becomes a fresh, empty state, written like any other sync with the usual
+ * version check. Other devices then lose the same plans and workouts on their
+ * next sync, through the ordinary three-way merge: what they last agreed on
+ * and have not changed since is gone from the account, so it goes from them
+ * too. Anything they added in the meantime survives, as edits always do.
+ *
+ * Resolves once the device is reset. Throws only if the account could not be
+ * written; the device is reset regardless, and the next sync carries the
+ * reset up as deletions.
+ */
+export async function resetEverything(): Promise<void> {
+  if (!store) return;
+  if (timer !== null) clearTimeout(timer);
+  timer = null;
+  heldBack = false;
+
+  const fresh = defaultState();
+  applying = true;
+  try {
+    store.replaceState(fresh);
+  } finally {
+    applying = false;
+  }
+
+  const user = currentUser();
+  if (!user) return;
+
+  for (let attempt = 1; ; attempt++) {
+    const remote = await pullState();
+    try {
+      const updatedAt = await pushState(fresh, remote.updatedAt);
+      writeBase(user.id, updatedAt, fresh);
+      return;
+    } catch (error) {
+      if (error instanceof AccountError && error.status === 409 && attempt < MAX_ATTEMPTS) continue;
+      throw error;
+    }
   }
 }
 

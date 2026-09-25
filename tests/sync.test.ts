@@ -64,6 +64,8 @@ interface Device {
   autoSync(): Promise<void>;
   /** The app being closed. */
   close(): Promise<void>;
+  /** "Reset account and start over". */
+  reset(): Promise<void>;
 }
 
 async function device(initial: AppState = defaultState()): Promise<Device> {
@@ -92,6 +94,10 @@ async function device(initial: AppState = defaultState()): Promise<Device> {
     async autoSync() {
       use();
       await sync.syncNow();
+    },
+    async reset() {
+      use();
+      await sync.resetEverything();
     },
     async close() {
       use();
@@ -299,5 +305,32 @@ describe('a session left open', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('starting over', () => {
+  it('empties the account, and other devices follow — except what they added since', async () => {
+    const pc = await device();
+    pc.store.adoptPlan(plan('p1'));
+    pc.store.finishActive('mon', 30);
+    await pc.sync();
+
+    const phone = await device();
+    await phone.sync();
+    expect(phone.store.getState().plans).toHaveLength(1);
+
+    // Added on the PC after its last sync, so it is not part of what was reset.
+    pc.store.adoptPlan(plan('p2'));
+
+    await phone.reset();
+    expect(phone.store.getState().plans).toEqual([]);
+    expect(phone.store.getState().sessions).toEqual([]);
+    expect(phone.store.getState().prefs.welcomed).not.toBe(true);
+    expect(server.state?.plans).toEqual([]);
+    expect(server.state?.sessions).toEqual([]);
+
+    await pc.sync();
+    expect(pc.store.getState().plans.map((p) => p.id)).toEqual(['p2']);
+    expect(pc.store.getState().sessions).toEqual([]);
   });
 });

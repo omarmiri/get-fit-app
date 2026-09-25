@@ -1,7 +1,7 @@
 import type { Child } from '../dom';
 import { div, el, eyebrow, text } from '../dom';
 import { toast } from '../toast';
-import { signInWithGoogle } from '@/services/account';
+import { currentUser, signInWithGoogle } from '@/services/account';
 import type { ViewContext } from './context';
 
 /**
@@ -85,16 +85,18 @@ export function renderWelcomeView(context: ViewContext): Child[] {
      * account's plans and settings — including having been welcomed — so
      * this screen does not come back.
      */
-    el('button', {
-      class: 'button button--ghost',
-      text: 'I already have an account — sign in',
-      attrs: { type: 'button' },
-      on: {
-        click: () => {
-          signInWithGoogle().catch(() => toast('Sign-in is not available right now'));
-        },
-      },
-    }),
+    currentUser()
+      ? null
+      : el('button', {
+          class: 'button button--ghost',
+          text: 'I already have an account — sign in',
+          attrs: { type: 'button' },
+          on: {
+            click: () => {
+              signInWithGoogle().catch(() => toast('Sign-in is not available right now'));
+            },
+          },
+        }),
 
     text(
       'welcome__safety',
