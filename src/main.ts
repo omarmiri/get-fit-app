@@ -13,6 +13,7 @@ import { activePlan } from './data/catalogue';
 import { AppStore } from './state/store';
 import { loadState, resolveBrowserStore } from './state/storage';
 import { toast } from './ui/toast';
+import { hasPendingPlan } from './ui/components/planImport';
 
 /**
  * Entry point.
@@ -63,17 +64,50 @@ function boot(): void {
  * Offer the new build rather than swapping it in mid-session.
  *
  * Reloading underneath someone who is halfway through logging a set would be
- * hostile, so the update waits for an explicit confirmation.
+ * hostile, so the update waits for an explicit confirmation — and is not
+ * offered at all while a proposed workout plan is waiting for review, because
+ * a reload would throw that plan away. It is offered again on the next return
+ * to the app.
+ *
+ * ## Checking while the app stays open
+ *
+ * The browser only looks for a new service worker when the page loads. An
+ * installed app on a phone can stay loaded for days, so a deploy went unseen
+ * until something happened to reload it. It now also checks on coming back to
+ * the app, at most every ten minutes.
  */
+const UPDATE_CHECK_GAP_MS = 10 * 60 * 1000;
+
 function registerUpdates(): void {
+  let waiting = false;
+  let lastCheck = Date.now();
+
+  const offer = (): void => {
+    if (!waiting || hasPendingPlan()) return;
+    waiting = false;
+    if (confirm('A new version of Rack & File is ready. Reload now?')) {
+      void updateSW(true);
+    }
+  };
+
   const updateSW = registerSW({
     onNeedRefresh() {
-      if (confirm('A new version of Rack & File is ready. Reload now?')) {
-        void updateSW(true);
-      }
+      waiting = true;
+      offer();
     },
     onOfflineReady() {
       toast('Ready to work offline');
+    },
+    onRegisteredSW(_url, registration) {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'visible') return;
+        offer();
+        if (!registration || Date.now() - lastCheck < UPDATE_CHECK_GAP_MS) return;
+        lastCheck = Date.now();
+        void registration.update().catch(() => {
+          // Offline, most likely. The next return tries again.
+        });
+      });
     },
   });
 }

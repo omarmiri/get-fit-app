@@ -1,6 +1,7 @@
 import { activePlan } from '@/data/catalogue';
 import { describePlanName } from '@/data/activePlan';
 import { card, div, el, eyebrow, text } from '../dom';
+import { daysOfPlan, daysOfStarter, renderWeekDays } from './weekBreakdown';
 import { toast } from '../toast';
 import type { ViewContext } from '../views/context';
 
@@ -106,5 +107,37 @@ function renderRow(
           }),
         ])
       : null,
+
+    // Last, and full width: it wraps under the name and the actions.
+    renderWeekToggle(plan),
   ]);
+}
+
+/** Plans whose week is showing, kept across re-renders. */
+const openPlans = new Set<string>();
+
+/**
+ * The plan's whole week, one tap away, so choosing between plans is choosing
+ * between what they ask for — not between their names.
+ */
+function renderWeekToggle(plan: ViewContext['state']['plans'][number] | null): HTMLElement {
+  const scope = plan?.id ?? 'starter';
+
+  return el(
+    'details',
+    {
+      class: 'planlist__week',
+      attrs: { open: openPlans.has(scope) },
+      on: {
+        toggle: (event) => {
+          if ((event.target as HTMLDetailsElement).open) openPlans.add(scope);
+          else openPlans.delete(scope);
+        },
+      },
+    },
+    [
+      el('summary', { class: 'planlist__weektoggle', text: 'See the week' }),
+      renderWeekDays(scope, plan ? daysOfPlan(plan) : daysOfStarter()),
+    ],
+  );
 }

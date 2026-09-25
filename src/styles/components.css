@@ -1072,6 +1072,7 @@
 
 .planlist__item {
   display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
   gap: var(--space-2);
   border: var(--border);
@@ -1191,6 +1192,44 @@
 .gen__day {
   padding: var(--space-2) 0;
   border-bottom: 1px solid var(--iron-2);
+}
+
+/* A saved plan's week, folded under its row in the plan list. */
+.planlist__week {
+  flex-basis: 100%;
+  padding: 0 var(--space-3) var(--space-2);
+  border-top: 1px solid var(--iron-2);
+}
+
+.planlist__weektoggle {
+  cursor: pointer;
+  color: var(--dim);
+  font-size: var(--t-hint);
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+}
+
+.planlist__week[open] .planlist__weektoggle {
+  color: var(--chalk);
+}
+
+.planlist__weektoggle {
+  list-style: none;
+  justify-content: space-between;
+}
+
+.planlist__weektoggle::-webkit-details-marker {
+  display: none;
+}
+
+.planlist__weektoggle::after {
+  content: '▾';
+  transition: transform var(--transition);
+}
+
+.planlist__week[open] > .planlist__weektoggle::after {
+  transform: rotate(180deg);
 }
 
 /* The day's headline row; the whole row is the tap target when it opens. */
