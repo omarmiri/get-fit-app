@@ -105,7 +105,7 @@ function startWatching(context: ViewContext): void {
          * is what `validatePlan` answers.
          */
         reviewPlan(context, latest.plan);
-        toast(latest.version > 1 ? `Version ${latest.version} arrived` : 'Your plan arrived');
+        toast(latest.version > 1 ? `Version ${latest.version} arrived` : 'Your workout plan arrived');
       } catch {
         // A failed poll is not worth surfacing: the next one is four seconds
         // away, and the paste box is right there either way.
@@ -151,7 +151,7 @@ export function renderPlanImport(context: ViewContext): HTMLElement {
     // No heading: the wizard step above it is already titled "Ask ChatGPT".
     text(
       'prose',
-      'ChatGPT opens with your answers already typed in. When it has written your plan, tap the "Open in Rack & File" link at the end of its reply and the plan comes straight back here.',
+      'ChatGPT opens with your answers already typed in. When it has written your workout plan, tap the "Open in Rack & File" link at the end of its reply and the plan comes straight back here.',
     ),
 
     ...renderLaunchers(context),
@@ -236,7 +236,7 @@ export function renderPendingPlan(context: ViewContext): HTMLElement | null {
             if (!state.candidate) return;
             context.store.adoptPlan(state.candidate);
             resetPlanImport();
-            toast('Saved to your plans and switched to it');
+            toast('Saved to your workout plans and switched to it');
             context.render();
           },
           onDiscard: () => {
@@ -437,7 +437,7 @@ export function watchPastedPlans(getContext: () => ViewContext): void {
     // is looking at is the same as no candidate.
     context.ui.tab = 'plan';
     reviewPlan(context, plan, incomplete);
-    toast('Plan found on the clipboard — review it below');
+    toast('Workout plan found on the clipboard — review it below');
 
     revealCandidate();
   });

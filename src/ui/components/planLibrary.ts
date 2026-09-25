@@ -21,8 +21,8 @@ export function renderPlanLibrary(context: ViewContext): HTMLElement {
   const current = activePlan(context.state);
 
   return card([
-    eyebrow('Your plans'),
-    text('prose', 'Tap a plan to switch to it. Your workout history stays the same.'),
+    eyebrow('Your workout plans'),
+    text('prose', 'Tap a workout plan to switch to it. Your history stays the same.'),
 
     el('ul', { class: 'planlist' }, [
       renderRow(context, null, current === null),
@@ -37,7 +37,7 @@ function renderRow(
   plan: (typeof context.state.plans)[number] | null,
   isActive: boolean,
 ): HTMLElement {
-  const name = plan ? describePlanName(plan) : 'Starter plan';
+  const name = plan ? describePlanName(plan) : 'Starter workout plan';
   // A plan with an empty summary shows no subtitle rather than a stray blank
   // line, so this is a deliberate falsy check and not a nullish one.
   const sub = plan ? (plan.summary ? plan.summary : '') : 'Seven days that work in any gym. Always here.';
@@ -82,7 +82,7 @@ function renderRow(
             attrs: { type: 'button', 'aria-label': `Rename ${name}` },
             on: {
               click: () => {
-                const next = prompt('Name this plan', plan.name ?? '');
+                const next = prompt('Name this workout plan', plan.name ?? '');
                 // `null` is cancel; an empty string is a deliberate clear, and
                 // restores the model-and-date label.
                 if (next === null) return;
@@ -99,7 +99,7 @@ function renderRow(
               click: () => {
                 if (!confirm(`Delete "${name}"? Your logged sessions are not affected.`)) return;
                 context.store.deletePlan(plan.id);
-                toast(isActive ? 'Deleted — back to the starter plan' : 'Plan deleted');
+                toast(isActive ? 'Deleted — back to the starter workout plan' : 'Workout plan deleted');
                 context.render();
               },
             },

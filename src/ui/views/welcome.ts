@@ -47,13 +47,13 @@ export function renderWelcomeView(context: ViewContext): Child[] {
   return [
     div('spine', [
       eyebrow('Rack & File'),
-      el('h1', { text: 'Your gym plan, on your phone' }),
-      text('spine__sub', 'Pick a plan and start training. You can change it any time.'),
+      el('h1', { text: 'Your workout plan, on your phone' }),
+      text('spine__sub', 'Pick a workout plan and start training. You can change it any time.'),
     ]),
 
     div('doors', [
       renderDoor({
-        label: 'Use the starter plan',
+        label: 'Use the starter workout plan',
         hint: 'Seven days that work in any gym',
         primary: true,
         onChoose: () => {
@@ -63,7 +63,7 @@ export function renderWelcomeView(context: ViewContext): Child[] {
         },
       }),
       renderDoor({
-        label: 'Make my own plan with ChatGPT',
+        label: 'Make my own workout plan with ChatGPT',
         hint: 'Answer a few questions and ChatGPT writes it',
         primary: false,
         onChoose: () => {

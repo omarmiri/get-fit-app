@@ -76,7 +76,7 @@ function renderSignedIn(context: ViewContext, email: string): HTMLElement {
      * this device with the account's copy) was the one destructive action
      * here, made unnecessary by merging.
      */
-    text('prose', 'Your plans and workouts stay in sync on every device you sign in on.'),
+    text('prose', 'Your workout plans and history stay in sync on every device you sign in on.'),
 
     el('button', {
       class: 'button button--ghost',
@@ -104,7 +104,7 @@ function renderSignedOut(context: ViewContext): HTMLElement {
     eyebrow('Account'),
     text(
       'prose',
-      'Sign in to keep your plans and workouts on all your devices. Optional — the app works the same without it.',
+      'Sign in to keep your workout plans and history on all your devices. Optional — the app works the same without it.',
     ),
 
     el('button', {

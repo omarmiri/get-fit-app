@@ -50,7 +50,7 @@ function renderPlanRoute(context: ViewContext): Child[] {
     case 'week':
       return renderRoute(context, 'This week', [renderRotation(context), renderPlateLine()]);
     case 'write':
-      return renderRoute(context, 'New plan with ChatGPT', renderPlanWizard(context));
+      return renderRoute(context, 'New workout plan with ChatGPT', renderPlanWizard(context));
     case 'settings':
       // Everything that is configuration, on one screen, account first: it is
       // the one most people come here for.
@@ -78,7 +78,7 @@ function renderMenu(context: ViewContext): Child[] {
   ];
 
   return [
-    div('spine', [eyebrow(`${inForceName(context)} · active`), el('h1', { text: 'Plan' })]),
+    div('spine', [eyebrow(`${inForceName(context)} · active`), el('h1', { text: 'Workout plans' })]),
 
     // The list is the tab: which plan you are on, and switching, is what
     // people come here for. Making a new one is the one action under it.
@@ -86,7 +86,7 @@ function renderMenu(context: ViewContext): Child[] {
 
     el('button', {
       class: 'button button--primary',
-      text: 'New plan with ChatGPT',
+      text: 'New workout plan with ChatGPT',
       attrs: { type: 'button' },
       on: {
         click: () => {
@@ -125,7 +125,7 @@ function renderMenu(context: ViewContext): Child[] {
 /** What to call the plan in force: its name, or the built-in rotation. */
 function inForceName(context: ViewContext): string {
   const plan = activePlan(context.state);
-  return plan ? describePlanName(plan) : 'Starter plan';
+  return plan ? describePlanName(plan) : 'Starter workout plan';
 }
 
 /** A destination, with the way back out of it. */
@@ -366,8 +366,8 @@ function renderEraseCard(context: ViewContext): HTMLElement {
     text(
       'prose',
       currentUser()
-        ? 'Your plans and workouts are saved on this phone and synced to your account.'
-        : 'Your plans and workouts are saved on this phone. Sign in above to keep a copy in your account.',
+        ? 'Your workout plans and history are saved on this phone and synced to your account.'
+        : 'Your workout plans and history are saved on this phone. Sign in above to keep a copy in your account.',
     ),
     el('button', {
       class: 'button button--ghost button--danger',
@@ -393,7 +393,10 @@ async function startOver(context: ViewContext): Promise<void> {
   const signedIn = currentUser() !== null;
   const where = signedIn ? 'on this phone, in your account and on your other devices' : 'on this phone';
 
-  if (!confirm(`Delete all your plans, workouts and settings ${where}, and start from scratch?`)) return;
+  if (
+    !confirm(`Delete all your workout plans, logged workouts and settings ${where}, and start from scratch?`)
+  )
+    return;
   if (!confirm('This cannot be undone. Start over?')) return;
 
   resetEphemeral();
@@ -421,7 +424,7 @@ function eraseAll(context: ViewContext): void {
   if (
     // Sync carries deletions, so signed in this reaches every device — say so.
     !confirm(
-      `Permanently erase all ${count} logged workouts${currentUser() ? ' on all your devices' : ''}? Your plans are kept.`,
+      `Permanently erase all ${count} logged workouts${currentUser() ? ' on all your devices' : ''}? Your workout plans are kept.`,
     )
   ) {
     return;

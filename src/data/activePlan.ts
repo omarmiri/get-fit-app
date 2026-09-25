@@ -99,7 +99,7 @@ function resolveDay(day: UserPlanDay, plan: UserPlan): PlanDay | null {
 
 /** A one-line description of which plan is in force, for the Plan tab. */
 export function describePlanSource(plan: UserPlan | null): string {
-  if (!plan) return 'Starter plan';
+  if (!plan) return 'Starter workout plan';
   const when = new Date(plan.generatedAt).toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
