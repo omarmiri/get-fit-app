@@ -743,8 +743,11 @@ plan to avoid defining your own.
 cables, free weights, bodyweight, core and conditioning. The first rows are the
 app's own default week, not a recommended shortlist — pick whatever best fits
 the person's equipment, experience, goals and stated likes, and vary movements
-between days rather than repeating the same few. Define a movement yourself only
-when nothing here fits.
+between days rather than repeating the same few. Favour movements people know by
+name — push-ups, squats, rows, planks, crunches — over niche ones such as dead
+bugs or bird dogs, unless the person asks for them: a movement someone cannot
+picture is one they skip. Define a movement yourself only when nothing here
+fits.
 
 | id | Name | Muscles |
 | --- | --- | --- |

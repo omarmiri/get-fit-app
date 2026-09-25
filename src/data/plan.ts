@@ -1,5 +1,5 @@
 import type { DayKey, Goals, PlanDay } from '@/types';
-import { CORE, STRENGTH_A, STRENGTH_B } from './exercises';
+import { STARTER_CORE, STRENGTH_A, STRENGTH_B } from './exercises';
 import { PLATE } from './plates';
 
 /**
@@ -21,7 +21,7 @@ export const PLAN: Readonly<Record<DayKey, PlanDay>> = {
     aerobic: true,
     modalityStations: ['treadmill', 'elliptical', 'arctrainer', 'recumbentbike', 'cardiocinema'],
     mobilityStations: ['stretcharea', 'foamroller', 'mat'],
-    exercises: CORE,
+    exercises: STARTER_CORE,
     outline: [
       'Steady cardio — 35 to 45 minutes, conversational pace',
       'Core circuit — all 3 movements, 2 to 3 times through',

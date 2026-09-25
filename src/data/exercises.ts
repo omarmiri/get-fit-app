@@ -586,6 +586,27 @@ export const STRENGTH_B: readonly Exercise[] = [
 
 export const CORE: readonly Exercise[] = [PLANK, DEAD_BUG, BIRD_DOG];
 
+function libraryMovement(id: string): Exercise {
+  const found = MORE_CORE.find((exercise) => exercise.id === id);
+  if (!found) throw new Error(`No built-in movement "${id}"`);
+  return found;
+}
+
+/**
+ * The starter plan's core circuit: movements people know by name.
+ *
+ * It was plank, dead bug and bird dog — kind to the back and a sound circuit,
+ * but two names nobody recognises, and a movement you cannot picture is one
+ * you skip. Side plank and reverse crunch are as easy on the back. Dead bug
+ * and bird dog stay in the catalogue, so sessions already logged against them
+ * keep their meaning and any plan can still ask for them.
+ */
+export const STARTER_CORE: readonly Exercise[] = [
+  PLANK,
+  libraryMovement('sideplank'),
+  libraryMovement('reversecrunch'),
+];
+
 /** Every exercise the app knows about, in a stable order. */
 /**
  * Movements the built-in plan does not use but the app knows.
