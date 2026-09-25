@@ -1,6 +1,9 @@
-import type { UserPlan } from '@/types';
+import type { Exercise, UserPlan, UserPlanDay } from '@/types';
 import type { PlanValidation } from '@/domain/planValidation';
 import { DAY_NAMES, GOALS } from '@/data/plan';
+import { resolveExercise } from '@/data/catalogue';
+import { stationName } from '@/data/equipment';
+import { isCustomExerciseId } from '@/domain/planFormat';
 import { type CardioTopUp, topUpCardio } from '@/domain/cardioTopUp';
 import { div, el, eyebrow, text } from '../dom';
 
@@ -42,15 +45,7 @@ export function renderPlanCandidate(options: PlanCandidateOptions): HTMLElement 
     el(
       'ul',
       { class: 'gen__days' },
-      plan.days.map((day) =>
-        el('li', { class: 'gen__day' }, [
-          el('span', { class: 'gen__daykey', text: DAY_NAMES[day.dayKey] }),
-          div('', [
-            text('gen__daylabel', day.label),
-            text('gen__daysub', day.sub || describeDay(day.type, day.minutes)),
-          ]),
-        ]),
-      ),
+      plan.days.map((day) => renderDay(plan, day)),
     ),
 
     renderCustomExercises(plan),
@@ -102,6 +97,106 @@ function renderTopUp(plan: UserPlan, onTopUp: (topUp: CardioTopUp) => void): HTM
       attrs: { type: 'button' },
       on: { click: () => onTopUp(topUp) },
     }),
+  ]);
+}
+
+/**
+ * Days opened for a closer look, so a re-render — a sync landing, the top-up
+ * button — does not snap them shut under the reader.
+ */
+const openDays = new Set<string>();
+
+/**
+ * One day of the proposed week: the headline, and on tap what it actually asks
+ * for — the steps, the minutes, and each movement with its sets and what it is.
+ *
+ * The one-line summary was all the review used to show, which asked people to
+ * accept a week of training on the strength of its labels. Rest days have
+ * nothing to open.
+ */
+function renderDay(plan: UserPlan, day: UserPlanDay): HTMLElement {
+  const headline = [
+    el('span', { class: 'gen__daykey', text: DAY_NAMES[day.dayKey] }),
+    div('gen__dayhead', [
+      text('gen__daylabel', day.label),
+      text('gen__daysub', day.sub || describeDay(day.type, day.minutes)),
+    ]),
+  ];
+
+  if (day.type === 'rest') return el('li', { class: 'gen__day' }, [div('gen__summary', headline)]);
+
+  const key = `${plan.id}:${day.dayKey}`;
+  return el('li', { class: 'gen__day' }, [
+    el(
+      'details',
+      {
+        class: 'gen__detail',
+        attrs: { open: openDays.has(key) },
+        on: {
+          toggle: (event) => {
+            if ((event.target as HTMLDetailsElement).open) openDays.add(key);
+            else openDays.delete(key);
+          },
+        },
+      },
+      [
+        el('summary', { class: 'gen__summary' }, [
+          ...headline,
+          el('span', { class: 'gen__chevron', text: '▾', attrs: { 'aria-hidden': 'true' } }),
+        ]),
+        renderBreakdown(plan, day),
+      ],
+    ),
+  ]);
+}
+
+function renderBreakdown(plan: UserPlan, day: UserPlanDay): HTMLElement {
+  const where = day.modality ?? (day.modalityStations ?? []).map(stationName).join(', ');
+  const movements = (day.exerciseIds ?? [])
+    .map((id) => resolveExercise(id, { plan }))
+    .filter((exercise): exercise is Exercise => exercise !== undefined);
+
+  return div('gen__breakdown', [
+    day.outline.length > 0
+      ? el(
+          'ol',
+          { class: 'gen__steps' },
+          day.outline.map((step) => el('li', { text: step })),
+        )
+      : null,
+
+    day.minutes ? text('gen__cardio', `${day.minutes} min${where ? ` · ${where}` : ''}`) : null,
+
+    movements.length > 0
+      ? el(
+          'ul',
+          { class: 'gen__moves' },
+          movements.map((exercise) => renderMovement(exercise)),
+        )
+      : null,
+
+    day.note ? text('gen__daysub', day.note) : null,
+  ]);
+}
+
+function renderMovement(exercise: Exercise): HTMLElement {
+  const unit = exercise.repMetric === 'seconds' ? ' sec' : '';
+  const range = exercise.repRange.replace(/ sec$/, '');
+  const equipment =
+    exercise.equipment ??
+    (exercise.stations ?? [])
+      .slice(0, 2)
+      .map((station) => stationName(station.stationId))
+      .join(' or ');
+
+  return el('li', { class: 'gen__move' }, [
+    div('gen__movehead', [
+      el('span', { class: 'gen__movename', text: exercise.name }),
+      isCustomExerciseId(exercise.id) ? el('span', { class: 'swap__tag', text: 'New' }) : null,
+      el('span', { class: 'gen__movesets', text: `${exercise.sets} × ${range}${unit}` }),
+    ]),
+    exercise.summary ? text('gen__daysub', exercise.summary) : null,
+    equipment ? text('gen__daysub', equipment) : null,
   ]);
 }
 

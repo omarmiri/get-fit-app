@@ -1189,11 +1189,86 @@
 }
 
 .gen__day {
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--iron-2);
+}
+
+/* The day's headline row; the whole row is the tap target when it opens. */
+.gen__summary {
   display: flex;
   gap: var(--space-3);
   align-items: baseline;
+}
+
+.gen__detail > .gen__summary {
+  list-style: none;
+  cursor: pointer;
+  min-height: var(--tap);
+  align-items: center;
+}
+
+.gen__detail > .gen__summary::-webkit-details-marker {
+  display: none;
+}
+
+.gen__dayhead {
+  flex: 1;
+  min-width: 0;
+}
+
+.gen__chevron {
+  color: var(--dim);
+  transition: transform var(--transition);
+}
+
+.gen__detail[open] .gen__chevron {
+  transform: rotate(180deg);
+}
+
+.gen__breakdown {
+  margin: var(--space-2) 0 var(--space-1) calc(34px + var(--space-3));
+}
+
+.gen__steps {
+  margin: 0 0 var(--space-2);
+  padding-left: 1.2em;
+  font-size: var(--t-hint);
+  color: var(--dim);
+}
+
+.gen__cardio {
+  font-size: var(--t-body);
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+
+.gen__moves {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.gen__move {
   padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--iron-2);
+  border-top: 1px solid var(--iron-2);
+}
+
+.gen__movehead {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.gen__movename {
+  font-weight: 600;
+}
+
+.gen__movesets {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--dim);
+  white-space: nowrap;
 }
 
 .gen__day:last-child {
