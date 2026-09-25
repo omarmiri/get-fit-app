@@ -24,6 +24,7 @@ import { renderGoalsCard } from '../components/goalsCard';
 import { renderMovementBars } from '../components/movementBars';
 import { elapsedMs, resetCardioTicker } from '../components/cardioTimer';
 import { elapsedSessionMinutes, renderSessionClock } from '../components/sessionClock';
+import { renderWeekCheckIn } from '../components/weekCheckIn';
 import type { ViewContext } from './context';
 
 /**
@@ -77,6 +78,7 @@ function renderPrepScreen(context: ViewContext, dayKey: DayKey, day: PlanDay): C
   resetFocusTicker();
 
   return [
+    renderWeekCheckIn(context),
     renderHeader(day),
     renderStaleBanner(context),
     renderDateNotice(context, dayKey),

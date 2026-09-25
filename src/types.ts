@@ -610,6 +610,15 @@ export interface Preferences {
    * good answer — it just has to be an answer, not a default.
    */
   readonly welcomed?: boolean;
+  /**
+   * The Sunday of the last week the user chose a workout plan for.
+   *
+   * The Today screen asks once a week — keep this plan, switch, or make a new
+   * one — and this is how it knows the question has been answered. A
+   * preference rather than device state, so answering on one device answers
+   * it on all of them.
+   */
+  readonly weekChosen?: IsoDate;
   /*
    * Health context deliberately does not live here.
    *

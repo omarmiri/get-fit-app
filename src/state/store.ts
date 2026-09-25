@@ -14,7 +14,7 @@ import type { GymProfile } from '@/domain/gymProfile';
 import { activePlan } from '@/data/catalogue';
 import { MAX_CUSTOM_EXERCISES } from './schema';
 import { describeGym } from '@/domain/gymProfile';
-import { todayIso } from '@/domain/dates';
+import { startOfWeek, toIsoDate, todayIso } from '@/domain/dates';
 import { clampMinutes, clampReps, clampWeight } from '@/domain/limits';
 import { type KeyValueStore, type SaveFailure, debounce, saveState } from './storage';
 
@@ -124,8 +124,9 @@ export class AppStore {
       plans,
       customExercises: saveMovements(this.#state.customExercises, plan.exercises ?? []),
       activePlanId: plan.id,
-      // Adopting a plan answers the welcome screen's only question.
-      prefs: { ...this.#state.prefs, welcomed: true },
+      // Adopting a plan answers the welcome screen's question, and this
+      // week's "which plan?" too.
+      prefs: { ...this.#state.prefs, welcomed: true, weekChosen: thisWeek() },
     });
   }
 
@@ -189,7 +190,29 @@ export class AppStore {
    * making them then dismiss the screen would be asking twice.
    */
   setWelcomed(welcomed: boolean): void {
-    this.#commit({ ...this.#state, prefs: { ...this.#state.prefs, welcomed } });
+    // Choosing how to train on the welcome screen is this week's choice made.
+    const prefs = welcomed
+      ? { ...this.#state.prefs, welcomed, weekChosen: thisWeek() }
+      : { ...this.#state.prefs, welcomed };
+    this.#commit({ ...this.#state, prefs });
+  }
+
+  /**
+   * Record that this week's workout plan has been chosen.
+   *
+   * Called by every answer to the weekly check-in, including "keep", and once
+   * silently for anyone who was already using the app before the check-in
+   * existed, so nobody is asked in the middle of a week.
+   */
+  confirmWeek(): void {
+    if (this.#state.prefs.weekChosen === thisWeek()) return;
+    this.#commit({ ...this.#state, prefs: { ...this.#state.prefs, weekChosen: thisWeek() } });
+  }
+
+  /** Whether a new week has started since a workout plan was last chosen. */
+  needsWeekChoice(): boolean {
+    const chosen = this.#state.prefs.weekChosen;
+    return this.#state.prefs.welcomed === true && chosen !== undefined && chosen < thisWeek();
   }
 
   /** Record that onboarding has been offered, whether or not it was filled in. */
@@ -620,6 +643,11 @@ function saveMovements(library: readonly Exercise[], incoming: readonly Exercise
   return [...library.filter((exercise) => !replaced.has(exercise.id)), ...incoming].slice(
     -MAX_CUSTOM_EXERCISES,
   );
+}
+
+/** The Sunday that starts the current week, matching the week strip. */
+function thisWeek(): string {
+  return toIsoDate(startOfWeek());
 }
 
 /** Oldest first, with a stable tie-break so equal dates keep a fixed order. */

@@ -324,6 +324,7 @@ function parsePreferences(raw: unknown): Preferences {
     ...(likes.length === 0 ? {} : { likes }),
     ...(raw['onboarded'] === true || profile !== undefined ? { onboarded: true } : {}),
     ...(raw['welcomed'] === true ? { welcomed: true } : {}),
+    ...(isValidIsoDate(raw['weekChosen']) ? { weekChosen: raw['weekChosen'] } : {}),
   };
 }
 

@@ -98,6 +98,14 @@ export class App {
     captureIncomingPlan(this.#context(this.#store.getState()));
 
     /*
+     * Anyone using the app before the weekly check-in existed has no record of
+     * a week chosen. Record this one silently, so the first question comes at
+     * the start of next week rather than in the middle of this one.
+     */
+    const prefs = this.#store.getState().prefs;
+    if (prefs.welcomed === true && prefs.weekChosen === undefined) this.#store.confirmWeek();
+
+    /*
      * The one route in that no browser can refuse. Registered once, for the
      * life of the app, and given a getter rather than a context because it
      * fires long after this moment — by which time the state captured here
