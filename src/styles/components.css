@@ -10,6 +10,15 @@
   margin-bottom: var(--space-3);
 }
 
+/*
+ * A label partway down a card starts a new section, so it needs room above it.
+ * The first label in a card already sits under the card's padding; without
+ * this the later ones — "1 · Send the prompt" — touched the text before them.
+ */
+.card > .eyebrow:not(:first-child) {
+  margin-top: var(--space-5);
+}
+
 .card--flush {
   padding: 0;
   overflow: hidden;
