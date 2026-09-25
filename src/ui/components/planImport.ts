@@ -1,6 +1,6 @@
 import type { UserPlan } from '@/types';
 import { ALL_STATIONS, stationName } from '@/data/equipment';
-import { LLM_PROVIDERS, fitsInLink } from '@/data/llmProviders';
+import { LLM_PROVIDERS, MAIN_PROVIDER, fitsInLink } from '@/data/llmProviders';
 import { type PlanValidation, validatePlan } from '@/domain/planValidation';
 import { parsePortablePlan } from '@/domain/planFormat';
 import { withSavedMovements } from '@/data/catalogue';
@@ -158,7 +158,7 @@ export function renderPlanImport(context: ViewContext): HTMLElement {
       'ChatGPT opens with your answers already typed in. When it has written your workout plan, tap the "Open in Rack & File" link at the end of its reply and the plan comes straight back here.',
     ),
 
-    ...renderLaunchers(context),
+    ...renderLaunchers(context, 'main'),
 
     /* ---------------------------------------------------------- everything else */
 
@@ -284,9 +284,12 @@ function showPending(context: ViewContext): void {
  */
 function renderOtherWays(context: ViewContext): HTMLElement {
   return div('gen__group', [
+    text('prose', 'Claude and Grok open with your answers typed in, the same as ChatGPT:'),
+    ...renderLaunchers(context, 'others'),
+
     text(
       'prose',
-      'Claude, Grok, Gemini or any other AI: copy the prompt, paste it in, then copy the whole reply and paste it back here. This also works if ChatGPT writes the plan but no link.',
+      'Any other AI: copy the prompt, paste it in, then copy the whole reply and paste it back here. This also works if an AI writes the plan but no link.',
     ),
 
     /*
@@ -549,14 +552,16 @@ function launch(context: ViewContext, providerId: string): void {
   else window.location.assign(provider.link(prompt));
 }
 
-function renderLaunchers(context: ViewContext): HTMLElement[] {
-  return LLM_PROVIDERS.map((provider) =>
-    el('button', {
-      class: 'button button--primary',
-      text: `Open ${provider.name}`,
-      attrs: { type: 'button' },
-      on: { click: () => launch(context, provider.id) },
-    }),
+/** `main` is the one up-front button; the rest go under "Use a different AI". */
+function renderLaunchers(context: ViewContext, which: 'main' | 'others'): HTMLElement[] {
+  return LLM_PROVIDERS.filter((provider) => (provider.id === MAIN_PROVIDER) === (which === 'main')).map(
+    (provider) =>
+      el('button', {
+        class: which === 'main' ? 'button button--primary' : 'button button--ghost',
+        text: `Open ${provider.name}`,
+        attrs: { type: 'button' },
+        on: { click: () => launch(context, provider.id) },
+      }),
   );
 }
 

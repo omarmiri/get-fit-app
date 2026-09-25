@@ -23,14 +23,22 @@
  * empty chat box with exactly the right thing already copied, which is the
  * failure this feature is meant to avoid anyway.
  *
- * ## Only ChatGPT is a button
+ * ## ChatGPT up front, the rest one tap further
  *
- * The one-tap route is offered for ChatGPT alone, by name, because it is the
- * name people know — the way "Coke" stands for soda. Claude and Grok prefill
- * and write a good week too, and were buttons until the screen was simplified;
- * they are served by "Use a different AI" (copy the prompt, paste the reply),
- * which works in any model. Their links, should they come back:
- * `https://claude.ai/new?q=` and `https://grok.com/?q=`.
+ * ChatGPT is the main button, by name, because it is the name people know —
+ * the way "Coke" stands for soda. Claude and Grok prefill and write a good
+ * week too, and sit under "Use a different AI" beside copy-and-paste.
+ *
+ * ## Why every launcher carries the short prompt, not the full one
+ *
+ * The full prompt is about 30K characters, 48K once encoded into a URL.
+ * Measured against the sites themselves: ChatGPT's and Claude's servers
+ * accept a 48K address; Grok refuses one of 8K; HuggingChat and DeepSeek
+ * answer 414 and Kimi 431 at 16K; Gemini 400; Qwen takes 32K but not 48K;
+ * Mistral and Perplexity sit behind bot walls that would not say. So the full
+ * prompt cannot travel by link to anything but the first two, and the short
+ * prompt — which has the model fetch `/llms.txt` — is what every launcher
+ * sends.
  *
  * ## Who was tested, and how it went
  *
@@ -73,7 +81,20 @@ export const LLM_PROVIDERS: readonly LlmProvider[] = [
     name: 'ChatGPT',
     link: (prompt) => `https://chatgpt.com/?q=${encodeURIComponent(prompt)}`,
   },
+  {
+    id: 'claude',
+    name: 'Claude',
+    link: (prompt) => `https://claude.ai/new?q=${encodeURIComponent(prompt)}`,
+  },
+  {
+    id: 'grok',
+    name: 'Grok',
+    link: (prompt) => `https://grok.com/?q=${encodeURIComponent(prompt)}`,
+  },
 ];
+
+/** The one launcher on the main screen; the rest sit under "Use a different AI". */
+export const MAIN_PROVIDER = 'chatgpt';
 
 /**
  * The longest URL worth attempting.
