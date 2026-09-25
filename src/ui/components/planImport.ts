@@ -768,7 +768,7 @@ async function buildPromptText(context: ViewContext, mode: PromptMode = 'full'):
     // per plan and never stored. See `state/ephemeral.ts`.
     ...(conditionsList().length > 0 ? { conditions: conditionsList() } : {}),
     ...(getNotes() ? { notes: getNotes() } : {}),
-    // Only what they have actually crossed off. Listing all forty stations
+    // Only what they have actually crossed off. Listing every station
     // as "available" would be a claim the app cannot support.
     ...(missing.size > 0
       ? { missingEquipment: ALL_STATIONS.filter((s) => missing.has(s.id)).map((s) => stationName(s.id)) }

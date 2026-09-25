@@ -1,4 +1,7 @@
 import type { Exercise } from '@/types';
+import { LEGS } from './library/legs';
+import { BACK, CHEST, SHOULDERS } from './library/upper';
+import { ARMS, CONDITIONING, MORE_CORE } from './library/armsCore';
 
 /**
  * The exercise catalogue.
@@ -593,7 +596,32 @@ export const CORE: readonly Exercise[] = [PLANK, DEAD_BUG, BIRD_DOG];
  */
 export const EXTRAS: readonly Exercise[] = [ASSISTED_PULLUP, ASSISTED_DIP];
 
-export const ALL_EXERCISES: readonly Exercise[] = [...STRENGTH_A, ...STRENGTH_B, ...CORE, ...EXTRAS];
+/**
+ * The wider catalogue, by body region, in `./library`.
+ *
+ * None of these are in the built-in week. They are here so a plan from any
+ * LLM can name a common movement by id and get real cues, machine
+ * alternatives and a timid opening weight, rather than having to describe it
+ * from scratch — and so the app can refuse an incomplete description of
+ * anything it does not know without refusing half of what people actually do.
+ */
+export const LIBRARY: readonly Exercise[] = [
+  ...LEGS,
+  ...CHEST,
+  ...BACK,
+  ...SHOULDERS,
+  ...ARMS,
+  ...MORE_CORE,
+  ...CONDITIONING,
+];
+
+export const ALL_EXERCISES: readonly Exercise[] = [
+  ...STRENGTH_A,
+  ...STRENGTH_B,
+  ...CORE,
+  ...EXTRAS,
+  ...LIBRARY,
+];
 
 const BY_ID = new Map<string, Exercise>(ALL_EXERCISES.map((e) => [e.id, e]));
 

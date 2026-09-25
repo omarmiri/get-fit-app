@@ -76,6 +76,12 @@ const CARDIO: readonly Station[] = [
   station('cardiocinema', 'Theatre cardio room', 'cardio', 'cardio-cinema', {
     note: 'Darkened room of treadmills and ellipticals, where a gym has one. Good for long steady work.',
   }),
+  station('airbike', 'Air bike', 'cardio', 'cardio-floor', {
+    note: 'Fan resistance: the harder you push, the harder it gets. Built for intervals.',
+  }),
+  station('skimachine', 'Ski machine', 'cardio', 'cardio-floor', {
+    note: 'Standing double-pole pull. Upper-body cardio that spares the knees.',
+  }),
   station('poollaps', 'Pool — laps', 'water', 'pool', {
     note: 'Check the posted lane schedule; lanes get shared at peak times.',
   }),
@@ -109,6 +115,19 @@ const STRENGTH: readonly Station[] = [
   station('squatrack', 'Squat rack', 'rack', 'free-weights', {
     note: 'Set the safety pins before you load the bar.',
   }),
+  station('beltsquatmachine', 'Belt squat', 'plate-loaded', 'strength-machines', {
+    note: 'Load hangs from a hip belt, so the legs work without anything on the spine.',
+  }),
+  station('hipthrustmachine', 'Hip thrust machine', 'plate-loaded', 'strength-machines', {
+    note: 'Pad across the hips instead of a barbell. Much quicker to set up.',
+  }),
+  station('hipabductor', 'Hip abductor', 'selectorized', 'strength-machines', {
+    note: 'Knees push out against the pads. Often shares a frame with the adductor.',
+  }),
+  station('hipadductor', 'Hip adductor', 'selectorized', 'strength-machines'),
+  station('glutekickbackmachine', 'Glute kickback machine', 'selectorized', 'strength-machines'),
+  station('standingcalfmachine', 'Standing calf raise', 'selectorized', 'strength-machines'),
+  station('seatedcalfmachine', 'Seated calf raise', 'plate-loaded', 'strength-machines'),
   station('olympicplatform', 'Olympic lifting platform', 'rack', 'free-weights'),
 
   // Push
@@ -119,6 +138,9 @@ const STRENGTH: readonly Station[] = [
   station('inclinepressmachine', 'Incline press machine', 'plate-loaded', 'strength-machines'),
   station('pecdeck', 'Pec deck / chest fly', 'selectorized', 'strength-machines'),
   station('shoulderpressmachine', 'Shoulder press machine', 'selectorized', 'strength-machines'),
+  station('lateralraisemachine', 'Lateral raise machine', 'selectorized', 'strength-machines'),
+  station('tricepsmachine', 'Triceps extension machine', 'selectorized', 'strength-machines'),
+  station('bicepsmachine', 'Biceps curl machine', 'selectorized', 'strength-machines'),
   station('dipstation', 'Dip / assisted dip station', 'bodyweight', 'strength-machines', {
     note: 'The assisted version counterweights you — a higher number means easier.',
   }),
@@ -132,6 +154,12 @@ const STRENGTH: readonly Station[] = [
   station('assistedpullup', 'Assisted pull-up', 'bodyweight', 'strength-machines', {
     note: 'Counterweighted. A higher setting takes more of your bodyweight off.',
   }),
+  station('pullupbar', 'Pull-up bar', 'bodyweight', 'free-weights', {
+    note: 'Often part of a power rack or the assisted pull-up frame.',
+  }),
+  station('tbarrowmachine', 'T-bar row', 'plate-loaded', 'strength-machines', {
+    note: 'Chest pad on most versions. Load is plates on one sleeve.',
+  }),
   station('backextension', 'Back extension', 'bodyweight', 'strength-machines'),
 
   // Cables and free weights
@@ -143,6 +171,16 @@ const STRENGTH: readonly Station[] = [
     note: 'The universal fallback. Rarely all taken at once.',
   }),
   station('barbell', 'Barbell', 'free-weight', 'free-weights'),
+  station('ezbar', 'EZ curl bar', 'free-weight', 'free-weights', {
+    note: 'Angled grips that are easier on the wrists than a straight bar.',
+  }),
+  station('trapbar', 'Trap bar', 'free-weight', 'free-weights', {
+    note: 'Hexagonal bar you stand inside. Handles sit at your sides.',
+  }),
+  station('landmine', 'Landmine', 'free-weight', 'free-weights', {
+    note: 'One end of a barbell anchored to the floor. A corner and a towel will do.',
+  }),
+  station('preacherbench', 'Preacher curl bench', 'bench', 'free-weights'),
   station('kettlebells', 'Kettlebells', 'free-weight', 'turf'),
   station('flatbench', 'Flat bench', 'bench', 'free-weights'),
   station('adjustablebench', 'Adjustable bench', 'bench', 'free-weights', {
@@ -165,6 +203,19 @@ const CORE_MOBILITY: readonly Station[] = [
     note: 'Vertical knee raise. Back flat against the pad.',
   }),
   station('abmachine', 'Ab crunch machine', 'selectorized', 'strength-machines'),
+  station('abwheel', 'Ab wheel', 'bodyweight', 'stretch-area'),
+  station('resistancebands', 'Resistance bands', 'bodyweight', 'stretch-area', {
+    note: 'Loop and handled bands. Light enough to live in a gym bag.',
+  }),
+  station('suspensiontrainer', 'Suspension trainer', 'bodyweight', 'turf', {
+    note: 'Adjustable straps from an anchor. Walk your feet forward to make it harder.',
+  }),
+  station('plyobox', 'Plyo box', 'bench', 'turf', {
+    note: 'Stable box for step-ups. Pick the height, not the heroics.',
+  }),
+  station('pushsled', 'Push sled', 'plate-loaded', 'turf'),
+  station('battleropes', 'Battle ropes', 'open-space', 'turf'),
+  station('jumprope', 'Jump rope', 'bodyweight', 'turf'),
   station('stabilityball', 'Stability ball', 'bodyweight', 'stretch-area'),
   station('foamroller', 'Foam roller', 'bodyweight', 'stretch-area', {
     note: 'Slow passes. Spend longest where it is least comfortable.',
