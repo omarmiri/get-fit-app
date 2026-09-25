@@ -4,7 +4,7 @@ import { LLM_PROVIDERS, fitsInLink } from '@/data/llmProviders';
 import { type PlanValidation, validatePlan } from '@/domain/planValidation';
 import { parsePortablePlan } from '@/domain/planFormat';
 import { withSavedMovements } from '@/data/catalogue';
-import { buildBriefPrompt, buildLinkPrompt, buildPrompt } from '@/spec/planSpec';
+import { type PromptContext, buildBriefPrompt, buildLinkPrompt, buildPrompt } from '@/spec/planSpec';
 import { clearDrop, currentDrop, dropEndpoint, openDrop, pollDrop } from '@/services/planDrop';
 import { conditionsList, getNotes } from '@/state/ephemeral';
 import { card, div, el, eyebrow, text } from '../dom';
@@ -527,38 +527,45 @@ function renderWaiting(context: ViewContext): HTMLElement {
  * `opener` is cleared before navigating, so the page that opens cannot reach
  * back into this one.
  */
-async function launch(context: ViewContext, providerId: string): Promise<void> {
+function launch(context: ViewContext, providerId: string): void {
   const provider = LLM_PROVIDERS.find((p) => p.id === providerId);
   if (!provider) return;
 
-  const tab = window.open('', '_blank');
-  if (tab) tab.opener = null;
-
-  const prompt = await buildPromptText(context, 'link');
+  const prompt = buildLinkPrompt(describePerson(context), location.origin);
 
   /*
    * Copied as well as linked. These query parameters are not promised by
    * anyone and can stop working without notice; when that happens the user
    * lands on an empty chat box with the right text already on the clipboard
-   * rather than on nothing at all.
+   * rather than on nothing at all. Started before the window opens, while
+   * this page still has focus — the clipboard refuses a page that does not.
    */
-  try {
-    await navigator.clipboard.writeText(prompt);
-  } catch {
+  const copied = navigator.clipboard?.writeText(prompt).catch(() => {
     // Clipboard refused. The link is still the main path.
-  }
+  });
 
-  if (!prompt || !fitsInLink(provider, prompt)) {
-    tab?.close();
-    state.error = 'That prompt is too long to send by link. It is on your clipboard — paste it instead.';
-    context.render();
+  if (!fitsInLink(provider, prompt)) {
+    void copied?.then(() => {
+      state.error = 'That prompt is too long to send by link. It is on your clipboard — paste it instead.';
+      context.render();
+    });
     return;
   }
 
-  if (tab) tab.location.href = provider.link(prompt);
+  /*
+   * Opened with the real address, synchronously, inside the tap.
+   *
+   * This used to open a blank window first and point it at the chatbot once
+   * the prompt was ready — the usual way to keep an async click from being
+   * treated as a pop-up. In the Android app it left a white screen: a Trusted
+   * Web Activity hands a new window to the browser as a separate task, which
+   * this page cannot script, so the blank window never went anywhere. Building
+   * the prompt synchronously removes the need for the trick. The browser (or
+   * the chatbot's own app, when installed) opens the link directly.
+   */
+  const opened = window.open(provider.link(prompt), '_blank');
+  if (opened) opened.opener = null;
   else window.location.assign(provider.link(prompt));
-
-  context.render();
 }
 
 function renderLaunchers(context: ViewContext): HTMLElement[] {
@@ -567,7 +574,7 @@ function renderLaunchers(context: ViewContext): HTMLElement[] {
       class: 'button button--primary',
       text: provider.name,
       attrs: { type: 'button' },
-      on: { click: () => void launch(context, provider.id) },
+      on: { click: () => launch(context, provider.id) },
     }),
   );
 }
@@ -756,54 +763,15 @@ function reviewPlan(context: ViewContext, incoming: UserPlan, incomplete: readon
 }
 
 /**
- * Open a session and build the prompt that names it.
- *
- * Shared by the copy buttons and the launcher links, so that whichever route
- * someone takes, the app is watching the same session the prompt mentions.
- *
- * Opening the session is best-effort. If it fails — offline, or the server is
- * down — the full prompt is still built and still works; it simply asks for
- * the JSON without offering anywhere to post it. Refusing to produce a prompt
- * because a convenience could not be arranged would be the wrong trade.
+ * The person, as the prompt describes them. Synchronous on purpose: the
+ * launchers have to build their prompt inside the tap — see `launch`.
  */
-/**
- * Which prompt, and therefore how much of the contract it has to carry.
- *
- * - `full` — the whole specification inline, ~15kb. For a paste.
- * - `link` — the person and where the format lives, ~1.8kb. Small enough to
- *   travel in a launcher URL, which is the only reason it exists.
- * - `connector` — the person and a session id. Only honest for a client with
- *   the MCP server added, so it is only ever built when the user says so.
- */
-type PromptMode = 'full' | 'link' | 'connector';
-
-async function buildPromptText(context: ViewContext, mode: PromptMode = 'full'): Promise<string> {
+function describePerson(context: ViewContext): PromptContext {
   const prefs = context.state.prefs;
   const profile = prefs.profile;
   const missing = new Set(prefs.missingStations ?? []);
 
-  /*
-   * A session is opened only for the connector prompt.
-   *
-   * The ordinary prompt used to open one too, and then ask every model to POST
-   * to it. None of the six tested could, so the app was minting a session, and
-   * showing a card waiting on it, for a delivery that never arrived — which
-   * reads as the app being broken rather than the chatbot being limited. The
-   * machinery is intact and the endpoint is still live; it is just no longer
-   * offered to clients that have no way to use it.
-   */
-  let drop: { pushId: string; endpoint: string } | undefined;
-  if (mode === 'connector') {
-    try {
-      const session = await openDrop();
-      drop = { pushId: session.pushId, endpoint: dropEndpoint(session.pushId) };
-      state.pushId = session.pushId;
-    } catch {
-      state.pushId = null;
-    }
-  }
-
-  const person = {
+  return {
     ...(prefs.gym ? { gym: prefs.gym } : {}),
     ...(prefs.likes ? { likes: prefs.likes } : {}),
     ...(profile
@@ -833,6 +801,53 @@ async function buildPromptText(context: ViewContext, mode: PromptMode = 'full'):
         }
       : {}),
   };
+}
+
+/**
+ * Which prompt, and therefore how much of the contract it has to carry.
+ *
+ * - `full` — the whole specification inline, ~15kb. For a paste.
+ * - `link` — the person and where the format lives, ~1.8kb. Small enough to
+ *   travel in a launcher URL, which is the only reason it exists.
+ * - `connector` — the person and a session id. Only honest for a client with
+ *   the MCP server added, so it is only ever built when the user says so.
+ */
+type PromptMode = 'full' | 'link' | 'connector';
+
+/**
+ * Open a session and build the prompt that names it.
+ *
+ * Shared by the copy buttons and the launcher links, so that whichever route
+ * someone takes, the app is watching the same session the prompt mentions.
+ *
+ * Opening the session is best-effort. If it fails — offline, or the server is
+ * down — the full prompt is still built and still works; it simply asks for
+ * the JSON without offering anywhere to post it. Refusing to produce a prompt
+ * because a convenience could not be arranged would be the wrong trade.
+ */
+async function buildPromptText(context: ViewContext, mode: PromptMode = 'full'): Promise<string> {
+  /*
+   * A session is opened only for the connector prompt.
+   *
+   * The ordinary prompt used to open one too, and then ask every model to POST
+   * to it. None of the six tested could, so the app was minting a session, and
+   * showing a card waiting on it, for a delivery that never arrived — which
+   * reads as the app being broken rather than the chatbot being limited. The
+   * machinery is intact and the endpoint is still live; it is just no longer
+   * offered to clients that have no way to use it.
+   */
+  let drop: { pushId: string; endpoint: string } | undefined;
+  if (mode === 'connector') {
+    try {
+      const session = await openDrop();
+      drop = { pushId: session.pushId, endpoint: dropEndpoint(session.pushId) };
+      state.pushId = session.pushId;
+    } catch {
+      state.pushId = null;
+    }
+  }
+
+  const person = describePerson(context);
 
   if (mode === 'link') return buildLinkPrompt(person, location.origin);
 
