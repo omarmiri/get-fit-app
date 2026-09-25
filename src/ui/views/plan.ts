@@ -2,6 +2,8 @@ import type { Child } from '../dom';
 import type { FitnessLevel, WeightUnit } from '@/types';
 import { DAY_NAMES, PLAN_ORDER } from '@/data/plan';
 import { ALL_STATIONS } from '@/data/equipment';
+import { describePlanName } from '@/data/activePlan';
+import { activePlan } from '@/data/catalogue';
 import { daysBetween, todayIso } from '@/domain/dates';
 import { UNIT_LABEL, formatWeight } from '@/domain/units';
 import { parseStateJson, serializeState } from '@/state/schema';
@@ -90,7 +92,9 @@ function renderMenu(context: ViewContext): Child[] {
   ];
 
   return [
-    div('spine', [eyebrow('Built-in rotation · in force'), el('h1', { text: 'Plan' })]),
+    // Names the week actually in force — it said "Built-in rotation" even
+    // with a saved plan selected, which is the one thing this line is for.
+    div('spine', [eyebrow(`${inForceName(context)} · in force`), el('h1', { text: 'Plan' })]),
 
     card(
       rows.map((row) =>
@@ -118,6 +122,12 @@ function renderMenu(context: ViewContext): Child[] {
 
     text('menufoot', 'Everything stays on this device. Nothing is sent anywhere unless you sign in.'),
   ];
+}
+
+/** What to call the plan in force: its name, or the built-in rotation. */
+function inForceName(context: ViewContext): string {
+  const plan = activePlan(context.state);
+  return plan ? describePlanName(plan) : 'Built-in rotation';
 }
 
 /** A destination, with the way back out of it. */
