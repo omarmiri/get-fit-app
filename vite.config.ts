@@ -109,6 +109,12 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         cleanupOutdatedCaches: true,
         navigateFallback: 'index.html',
+        /*
+         * Navigations the server must answer, not the app shell. Without this
+         * the worker served index.html for /auth/google, so sign-in landed
+         * back on the home screen without ever reaching Google.
+         */
+        navigateFallbackDenylist: [/^\/auth\//, /^\/api\//, /^\/mcp$/, /^\/health$/],
         runtimeCaching: [
           {
             // Roadmap: exercise photos and video posters served from /media.
