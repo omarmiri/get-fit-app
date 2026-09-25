@@ -26,9 +26,13 @@ import { AccountError, currentUser, pullState, pushState } from './account';
  *
  * While today's session is open, nothing from another device is applied here.
  * A plan switched on the PC must not rearrange the screen someone is halfway
- * through. Changes still go *up* when the account has not moved since the last
- * sync, because that needs no merge — so a phone that dies mid-workout has
- * still backed up everything but the last half minute.
+ * through.
+ *
+ * Nothing goes up either, except when the app is closed mid-workout or the
+ * user asks. It used to upload half a minute after every logged set, and each
+ * upload rewrites the whole history — twenty writes of the entire account per
+ * workout, to back up data the phone had already saved locally. Finishing the
+ * session is one sync, which is what the other device needs anyway.
  */
 
 /** Long enough that a working set does not trigger its own upload. */
@@ -57,14 +61,21 @@ let again = false;
 let lastRun = 0;
 /** Set while a merge is being applied, so applying it does not schedule another sync. */
 let applying = false;
+/** Changes made during a workout, held back until it ends or the app closes. */
+let heldBack = false;
 
 /** Wire sync to the store. Starts one sync straight away if signed in. */
 export function initSync(appStore: AppStore): void {
   store = appStore;
 
-  appStore.subscribe(() => {
+  appStore.subscribe((state) => {
     if (applying || !currentUser()) return;
     if (timer !== null) clearTimeout(timer);
+    timer = null;
+    if (workoutOpen(state)) {
+      heldBack = true;
+      return;
+    }
     timer = setTimeout(() => void syncNow(), QUIET_MS);
   });
 
@@ -96,7 +107,7 @@ export async function syncNow(options: { report?: boolean } = {}): Promise<void>
   }
 
   lastRun = Date.now();
-  running = run(store).finally(() => {
+  running = run(store, options.report === true).finally(() => {
     running = null;
     if (again) {
       again = false;
@@ -119,9 +130,10 @@ export async function syncNow(options: { report?: boolean } = {}): Promise<void>
  * merge — and if it has moved, the refusal is fine: the next open syncs.
  */
 export function flushSync(): void {
-  if (!store || !currentUser() || timer === null) return;
-  clearTimeout(timer);
+  if (!store || !currentUser() || (timer === null && !heldBack)) return;
+  if (timer !== null) clearTimeout(timer);
   timer = null;
+  heldBack = false;
   void pushIfUnmoved(store).catch(() => {});
 }
 
@@ -136,8 +148,12 @@ export function forgetSyncBase(): void {
 
 /* ------------------------------------------------------------------ steps */
 
-async function run(appStore: AppStore): Promise<void> {
+async function run(appStore: AppStore, asked: boolean): Promise<void> {
   if (workoutOpen(appStore.getState())) {
+    // Opening the app or coming back to it mid-workout syncs nothing; only
+    // "Sync now" does. See "Not during a workout" above.
+    if (!asked) return;
+    heldBack = false;
     try {
       await pushIfUnmoved(appStore);
     } catch (error) {
@@ -147,6 +163,9 @@ async function run(appStore: AppStore): Promise<void> {
     }
     return;
   }
+
+  // A full sync carries anything held back during a workout.
+  heldBack = false;
 
   for (let attempt = 1; ; attempt++) {
     const user = currentUser();

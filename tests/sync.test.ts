@@ -30,7 +30,10 @@ const server: {
   interfere: (() => void) | null;
 } = { state: null, updatedAt: null, clock: 1000, interfere: null };
 
+let writes = 0;
+
 function write(state: AppState): number {
+  writes += 1;
   server.state = JSON.parse(JSON.stringify(state)) as AppState;
   server.updatedAt = ++server.clock;
   return server.updatedAt;
@@ -55,7 +58,12 @@ vi.mock('@/services/account', () => ({
 
 interface Device {
   readonly store: AppStore;
+  /** "Sync now": the explicit kind, which also runs mid-workout. */
   sync(): Promise<void>;
+  /** The automatic kind — opening the app, or coming back to it. */
+  autoSync(): Promise<void>;
+  /** The app being closed. */
+  close(): Promise<void>;
 }
 
 async function device(initial: AppState = defaultState()): Promise<Device> {
@@ -78,6 +86,16 @@ async function device(initial: AppState = defaultState()): Promise<Device> {
     async sync() {
       use();
       await sync.syncNow({ report: true });
+    },
+    async autoSync() {
+      use();
+      await sync.syncNow();
+    },
+    async close() {
+      use();
+      sync.flushSync();
+      // flushSync is fire-and-forget; let its push settle.
+      await new Promise((resolve) => setTimeout(resolve, 0));
     },
   };
 }
@@ -216,6 +234,27 @@ describe('sync between two devices', () => {
 
     // …and picked up once it is over, without losing the session.
     expect(phone.store.getState().activePlanId).toBe('p1');
+    expect(server.state?.sessions).toHaveLength(1);
+  });
+});
+
+describe('during a workout', () => {
+  it('uploads nothing per set, one push if the app closes, and syncs when finished', async () => {
+    const phone = await device();
+    await phone.sync();
+
+    phone.store.startSession('mon');
+    const before = writes;
+    for (let set = 0; set < 5; set++) phone.store.logSet('mon', 'legpress', 100, 10, 'lb');
+    await phone.autoSync();
+    await phone.autoSync();
+    expect(writes).toBe(before);
+
+    await phone.close();
+    expect(writes).toBe(before + 1);
+
+    phone.store.finishActive('mon', 30);
+    await phone.autoSync();
     expect(server.state?.sessions).toHaveLength(1);
   });
 });
