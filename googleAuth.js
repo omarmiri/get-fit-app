@@ -34,6 +34,8 @@
  * at the time it is written, nobody knows who they are yet.
  */
 
+import { createHash } from 'node:crypto';
+
 import * as auth from './auth.js';
 import { kvDelete, kvGet, kvSet } from './kv.js';
 
@@ -97,7 +99,12 @@ export async function beginSignIn({ redirectUri, returnTo }) {
     // Supabase needs. The other two are what the app shows in the UI.
     scope: 'openid email profile',
     state,
-    nonce,
+    /*
+     * Hashed for Google, raw for Supabase. Supabase hashes the nonce it is
+     * given and compares that with the one inside the id_token, so sending the
+     * same raw value to both fails every sign-in with "Nonces mismatch".
+     */
+    nonce: createHash('sha256').update(nonce).digest('hex'),
     // Without this Google silently reuses a prior grant and never returns a
     // refresh token, which is fine here — the Supabase session is what gets
     // refreshed — but `select_account` is what makes a second sign-in on a
