@@ -17,8 +17,8 @@ import { fingerprint, mergeStates } from '@/state/merge';
  */
 
 const SLED = {
-  id: 'sled-push',
-  name: 'Sled push',
+  id: 'tire-flip',
+  name: 'Tire flip',
   summary: 'Drive a loaded sled across the turf with your arms locked.',
   equipment: 'push sled and plates',
   sets: 4,
@@ -58,7 +58,7 @@ describe('incompleteMovement', () => {
     const { cues: _cues, sets: _sets, equipment: _equipment, ...thin } = SLED;
     const problem = incompleteMovement(thin);
 
-    expect(problem).toContain('Sled push');
+    expect(problem).toContain('Tire flip');
     for (const field of ['sets', 'equipment', 'cues.setup', 'cues.execute', 'cues.avoid']) {
       expect(problem).toContain(field);
     }
@@ -78,42 +78,42 @@ describe('incompleteMovement', () => {
 describe('parsePortablePlan with new movements', () => {
   it('reports an incomplete movement without refusing to read the plan', () => {
     const { cues: _cues, ...thin } = SLED;
-    const parsed = parsePortablePlan(planUsing(['x:sled-push'], [thin]));
+    const parsed = parsePortablePlan(planUsing(['x:tire-flip'], [thin]));
 
     expect(parsed.plan).not.toBeNull();
     expect(parsed.incomplete).toHaveLength(1);
   });
 
   it('accepts a complete one', () => {
-    expect(parsePortablePlan(planUsing(['x:sled-push'], [SLED])).incomplete).toEqual([]);
+    expect(parsePortablePlan(planUsing(['x:tire-flip'], [SLED])).incomplete).toEqual([]);
   });
 
   it('keeps a reference to a saved movement the plan does not define', () => {
-    const parsed = parsePortablePlan(planUsing(['legpress', 'x:sled-push']));
+    const parsed = parsePortablePlan(planUsing(['legpress', 'x:tire-flip']));
     const tuesday = parsed.plan?.days.find((day) => day.dayKey === 'tue');
 
-    expect(tuesday?.exerciseIds).toEqual(['legpress', 'x:sled-push']);
+    expect(tuesday?.exerciseIds).toEqual(['legpress', 'x:tire-flip']);
   });
 });
 
 describe('the compact format', () => {
   const week = (movement: string): string =>
-    `rf1|Test~tue|str|l=Strength|o=Warm up;Lift|e=x:sled-push~${movement}~sun|rest|l=Rest|o=Rest;Walk`;
+    `rf1|Test~tue|str|l=Strength|o=Warm up;Lift|e=x:tire-flip~${movement}~sun|rest|l=Rest|o=Rest;Walk`;
 
   it('carries cues in cs, ce and ca', () => {
     const raw = expandCompactPlan(
-      week('x|Sled push|d=Push a sled|q=sled|s=4|r=20-30s|w=90lb|cs=Lean in|ce=Drive|ca=Standing up'),
+      week('x|Tire flip|d=Push a sled|q=sled|s=4|r=20-30s|w=90lb|cs=Lean in|ce=Drive|ca=Standing up'),
     );
     expect(parsePortablePlan(raw).incomplete).toEqual([]);
   });
 
   it('refuses a new movement with no cues and no like=', () => {
-    const raw = expandCompactPlan(week('x|Sled push|d=Push a sled|q=sled|s=4|r=20-30s|w=90lb'));
+    const raw = expandCompactPlan(week('x|Tire flip|d=Push a sled|q=sled|s=4|r=20-30s|w=90lb'));
     expect(parsePortablePlan(raw).incomplete[0]).toContain('cues.setup');
   });
 
   it('lets like= supply the cues', () => {
-    const raw = expandCompactPlan(week('x|Sled push|like=legpress|d=Push a sled|q=sled|s=4|r=20-30s|w=90lb'));
+    const raw = expandCompactPlan(week('x|Tire flip|like=legpress|d=Push a sled|q=sled|s=4|r=20-30s|w=90lb'));
     expect(parsePortablePlan(raw).incomplete).toEqual([]);
   });
 });
@@ -140,7 +140,7 @@ describe('the user’s movement library', () => {
   });
 
   const sled = (): Exercise => {
-    const parsed = parsePortablePlan(planUsing(['x:sled-push'], [SLED])).plan;
+    const parsed = parsePortablePlan(planUsing(['x:tire-flip'], [SLED])).plan;
     const exercise = parsed?.exercises?.[0];
     if (!exercise) throw new Error('fixture did not parse');
     return exercise;
@@ -151,17 +151,17 @@ describe('the user’s movement library', () => {
     store.adoptPlan(plan('p1', [sled()]));
     store.deletePlan('p1');
 
-    expect(store.getState().customExercises.map((exercise) => exercise.id)).toEqual(['x:sled-push']);
+    expect(store.getState().customExercises.map((exercise) => exercise.id)).toEqual(['x:tire-flip']);
   });
 
   it('lets a later plan use a saved movement by id alone', () => {
     const library = [sled()];
-    const later = parsePortablePlan(planUsing(['x:sled-push'])).plan;
+    const later = parsePortablePlan(planUsing(['x:tire-flip'])).plan;
     if (!later) throw new Error('fixture did not parse');
 
     const filled = withSavedMovements(later, library);
 
-    expect(filled.exercises?.map((exercise) => exercise.id)).toEqual(['x:sled-push']);
+    expect(filled.exercises?.map((exercise) => exercise.id)).toEqual(['x:tire-flip']);
     expect(validatePlan(filled).issues.filter((issue) => issue.severity === 'error')).toEqual([]);
   });
 
@@ -173,7 +173,7 @@ describe('the user’s movement library', () => {
   });
 
   it('resolves after the plan that defined it is gone', () => {
-    expect(resolveExercise('x:sled-push', { customExercises: [sled()] })?.name).toBe('Sled push');
+    expect(resolveExercise('x:tire-flip', { customExercises: [sled()] })?.name).toBe('Tire flip');
   });
 
   it('is seeded from saved plans when upgrading from before it existed', () => {
@@ -183,7 +183,7 @@ describe('the user’s movement library', () => {
     >;
     delete old['customExercises'];
 
-    expect(parseState(old).state.customExercises.map((exercise) => exercise.id)).toEqual(['x:sled-push']);
+    expect(parseState(old).state.customExercises.map((exercise) => exercise.id)).toEqual(['x:tire-flip']);
   });
 
   it('syncs between devices', () => {
@@ -208,5 +208,37 @@ describe('llms.txt examples', () => {
       const parsed = parsePortablePlan(input);
       if (parsed.plan) expect(parsed.incomplete).toEqual([]);
     }
+  });
+});
+
+describe('a half-described movement the catalogue already has', () => {
+  it('becomes the built-in instead of refusing the week', () => {
+    const parsed = parsePortablePlan(
+      planUsing(
+        ['x:push-ups', 'x:pull-ups'],
+        [{ name: 'Push-ups' }, { id: 'pull-ups', name: 'Pull ups', sets: 3 }],
+      ),
+    );
+    const tuesday = parsed.plan?.days.find((day) => day.dayKey === 'tue');
+
+    expect(parsed.incomplete).toEqual([]);
+    expect(tuesday?.exerciseIds).toEqual(['pushup', 'pullup']);
+    expect(parsed.plan?.exercises).toBeUndefined();
+  });
+
+  it('resolves a sloppy reference to a built-in with no definition at all', () => {
+    const tuesday = parsePortablePlan(planUsing(['push-ups', 'Pull-Ups'])).plan?.days.find(
+      (day) => day.dayKey === 'tue',
+    );
+
+    expect(tuesday?.exerciseIds).toEqual(['pushup', 'pullup']);
+  });
+
+  it('keeps a complete definition as the plan’s own, even under a built-in’s name', () => {
+    const parsed = parsePortablePlan(
+      planUsing(['x:push-ups'], [{ ...SLED, id: 'push-ups', name: 'Push-ups' }]),
+    );
+
+    expect(parsed.plan?.exercises?.[0]?.id).toBe('x:push-ups');
   });
 });

@@ -93,7 +93,7 @@ describe('pushPlan', () => {
 
   it('refuses a new movement that is not fully described, naming what is missing', async () => {
     const { pushId } = await createSession();
-    const plan = { ...validPlan, exercises: [{ id: 'sled-push', name: 'Sled push', loaded: true }] };
+    const plan = { ...validPlan, exercises: [{ id: 'tire-flip', name: 'Tire flip', loaded: true }] };
 
     await expect(pushPlan(pushId, { plan })).rejects.toMatchObject({
       code: 'incomplete_movement',

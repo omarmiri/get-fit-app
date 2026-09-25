@@ -159,6 +159,11 @@ HOW TO WRITE IT
 Fetch ${siteUrl}/llms.txt first — that page is the complete format, and it is
 short. Read all of it, including the last section on finishing with a link.
 
+Aim for at least ${GOALS.minutes} minutes of cardio across the week — if I have few
+days, add a timed cardio block to strength days rather than falling short — and
+use the app's built-in exercise ids (pushup, pullup, and the rest of its list)
+wherever one fits instead of defining your own.
+
 Then end your reply with an "Open in Rack & File" link, built the way that
 section describes: the week in the compact form, percent-encoded, after
 ${siteUrl}/#plan= — one line, spaces as %20. That link is how the plan gets
@@ -381,6 +386,19 @@ to copy out of your reply and paste into the app. There is a shorter way, and
 if you can do it, do: write the same week in the compact form below, put it in
 a URL fragment, and **end your reply with a link**. One tap and the plan is in
 the app.
+
+### The two things plans most often get wrong
+
+- **Weekly cardio.** The app checks for at least **${GOALS.minutes} aerobic minutes** a
+  week — the \`m=\` of every timed day, added up. When the person has few days,
+  do not trade the cardio away: make strength days \`mix\` days, the lifts plus a
+  timed cardio block (\`mix|l=Full body + bike|e=...|m=20|d=uprightbike\`).
+  Add up your \`m=\` values before you finish.
+- **Common movements are already built in.** Push-ups are \`pushup\`, pull-ups
+  \`pullup\`, a barbell squat \`backsquat\`, a plank \`plank\`. Check the built-in
+  list below before writing an \`x|\` line, and define only what is genuinely
+  not there — a definition of a built-in movement is refused if incomplete,
+  and redundant if not.
 
 ### The shape
 
@@ -694,7 +712,8 @@ function rulesSection(): string {
    know what they told you.
 8. Weekly targets the app checks against: at least **${GOALS.minutes} aerobic minutes**
    and **${GOALS.strength} strength sessions**. Falling short is allowed and warned about,
-   not blocked.
+   not blocked — but with few training days, reach the minutes with \`"type": "mixed"\`
+   days (exercises plus \`minutes\` of cardio) rather than falling short.
 9. Spread strength days apart rather than back to back.
 10. Emit only the JSON object. A fenced code block is fine; commentary around
     it is tolerated but unnecessary.`;

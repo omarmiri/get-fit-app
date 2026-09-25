@@ -2,7 +2,7 @@ import type { Exercise, ExerciseCues, UserPlan, UserPlanDay, WeightUnit } from '
 // Relative rather than `@/` on purpose — see the note in `src/spec/planSpec.ts`.
 // This module is reachable from the build-time spec generator, which loads it
 // outside Vite's alias resolution.
-import { getBuiltinExercise } from '../data/exercises';
+import { ALL_EXERCISES, getBuiltinExercise } from '../data/exercises';
 import { getStation } from '../data/equipment';
 import { isDayKey } from '../data/plan';
 import { isWeightUnit } from './units';
@@ -262,7 +262,11 @@ function parseOpeningWeight(raw: unknown): Exercise['openingWeight'] | null {
 
 /* ------------------------------------------------------------------- days */
 
-function parseDay(raw: unknown, knownExerciseIds: ReadonlySet<string>): UserPlanDay | null {
+function parseDay(
+  raw: unknown,
+  knownExerciseIds: ReadonlySet<string>,
+  aliases: ReadonlyMap<string, string> = new Map(),
+): UserPlanDay | null {
   if (!isRecord(raw)) return null;
 
   const dayKey = typeof raw['dayKey'] === 'string' ? raw['dayKey'].trim().toLowerCase() : '';
@@ -275,7 +279,7 @@ function parseDay(raw: unknown, knownExerciseIds: ReadonlySet<string>): UserPlan
   const rounds = str(raw['rounds'], 20);
   const modality = str(raw['modality'], LIMITS.equipment);
 
-  const exerciseIds = resolveExerciseIds(raw['exerciseIds'], knownExerciseIds);
+  const exerciseIds = resolveExerciseIds(raw['exerciseIds'], knownExerciseIds, aliases);
   const modalityStations = resolveStationIds(undefined, raw['modalityStations']);
   const outline = strings(raw['outline'], LIMITS.outlineSteps, LIMITS.outlineStep);
 
@@ -312,7 +316,11 @@ function parseSessionType(raw: unknown): UserPlanDay['type'] {
  * is dropped here and reported by the validator, which can see the whole plan
  * and say which day lost what.
  */
-function resolveExerciseIds(raw: unknown, knownCustomIds: ReadonlySet<string>): string[] {
+function resolveExerciseIds(
+  raw: unknown,
+  knownCustomIds: ReadonlySet<string>,
+  aliases: ReadonlyMap<string, string> = new Map(),
+): string[] {
   if (!Array.isArray(raw)) return [];
 
   const resolved: string[] = [];
@@ -332,13 +340,14 @@ function resolveExerciseIds(raw: unknown, knownCustomIds: ReadonlySet<string>): 
      * model about. Only the device knows the library, so it is resolved there
      * — and reported by the validator if it turns out to be nothing.
      */
-    const match = knownCustomIds.has(namespaced)
-      ? namespaced
-      : getBuiltinExercise(id)
-        ? id
-        : knownCustomIds.has(id) || isCustomExerciseId(id)
+    const match = aliases.has(namespaced)
+      ? (aliases.get(namespaced) ?? null)
+      : knownCustomIds.has(namespaced)
+        ? namespaced
+        : getBuiltinExercise(id)
           ? id
-          : null;
+          : (BUILTIN_BY_NAME.get(normalizeName(id)) ??
+            (knownCustomIds.has(id) || isCustomExerciseId(id) ? id : null));
 
     if (!match || seen.has(match)) continue;
     seen.add(match);
@@ -408,19 +417,38 @@ export function parsePortablePlan(input: unknown): ParsedPlan {
     return { plan: null, error: 'The plan has no "days" array.', incomplete: [] };
   }
 
-  const authored: readonly unknown[] = Array.isArray(raw['exercises'])
+  const listed: readonly unknown[] = Array.isArray(raw['exercises'])
     ? raw['exercises'].slice(0, LIMITS.exercisesPerPlan)
     : [];
+
+  /*
+   * An incomplete "new" movement that the catalogue already has by name —
+   * "Push-ups", "Pull ups" — is swapped for the built-in instead of refusing
+   * the week over it. Models do this often, and half-describe the familiar
+   * movement because they assume it needs no description.
+   *
+   * Only when incomplete. A complete definition is the author's deliberate
+   * version — a variant, possibly written with `like=` — and stays its own
+   * `x:` movement, as it always has: shadowing a name is a plan's business.
+   * And only by name, never by id, so a movement that merely borrowed a
+   * built-in's id is not mistaken for it.
+   */
+  const aliases = new Map<string, string>();
+  const authored = listed.filter((item) => {
+    const builtin = incompleteMovement(item) === null ? null : builtinNamed(item);
+    const parsed = builtin ? parseCustomExercise(item) : null;
+    if (!builtin || !parsed) return true;
+    aliases.set(parsed.id, builtin);
+    return false;
+  });
+
   const incomplete = authored
     .map(incompleteMovement)
     .filter((problem): problem is string => problem !== null);
 
-  const exercises = Array.isArray(raw['exercises'])
-    ? raw['exercises']
-        .slice(0, LIMITS.exercisesPerPlan)
-        .map(parseCustomExercise)
-        .filter((exercise): exercise is Exercise => exercise !== null)
-    : [];
+  const exercises = authored
+    .map(parseCustomExercise)
+    .filter((exercise): exercise is Exercise => exercise !== null);
 
   // Last definition wins on a duplicate id, and the map is what the days
   // resolve against, so a plan defining the same movement twice is merely
@@ -428,7 +456,7 @@ export function parsePortablePlan(input: unknown): ParsedPlan {
   const byId = new Map(exercises.map((exercise) => [exercise.id, exercise]));
 
   const days = raw['days']
-    .map((day) => parseDay(day, new Set(byId.keys())))
+    .map((day) => parseDay(day, new Set(byId.keys()), aliases))
     .filter((day): day is UserPlanDay => day !== null);
 
   if (days.length === 0) {
@@ -449,6 +477,35 @@ export function parsePortablePlan(input: unknown): ParsedPlan {
     error: null,
     incomplete,
   };
+}
+
+/* -------------------------------------------------------- built-in matches */
+
+/** Lowercase letters and digits only, with a plural `s` dropped. */
+function normalizeName(value: string): string {
+  const flat = value
+    .toLowerCase()
+    .replace(CUSTOM_ID_PREFIX, '')
+    .replace(/[^a-z0-9]/g, '');
+  return flat.length > 3 && flat.endsWith('s') ? flat.slice(0, -1) : flat;
+}
+
+/**
+ * Built-in ids by every spelling that should reach them: the id itself and
+ * the display name, both normalised. "Push-ups", "push up" and "pushup" all
+ * land on `pushup`.
+ */
+const BUILTIN_BY_NAME: ReadonlyMap<string, string> = new Map(
+  ALL_EXERCISES.flatMap((exercise) => [
+    [normalizeName(exercise.id), exercise.id] as const,
+    [normalizeName(exercise.name), exercise.id] as const,
+  ]),
+);
+
+/** The built-in an authored movement is named after, if any. */
+function builtinNamed(raw: unknown): string | null {
+  if (!isRecord(raw) || typeof raw['name'] !== 'string') return null;
+  return BUILTIN_BY_NAME.get(normalizeName(raw['name'])) ?? null;
 }
 
 /* ------------------------------------------------------------ completeness */

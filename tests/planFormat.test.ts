@@ -129,11 +129,11 @@ describe('custom exercise identity', () => {
   it('namespaces every authored id', () => {
     const { plan } = parsePortablePlan(
       minimalPlan({
-        exercises: [{ id: 'bulgarian-split-squat', name: 'Bulgarian split squat', loaded: true }],
+        exercises: [{ id: 'copenhagen-plank', name: 'Copenhagen plank', loaded: true }],
       }),
     );
 
-    expect(plan?.exercises?.[0]?.id).toBe(`${CUSTOM_ID_PREFIX}bulgarian-split-squat`);
+    expect(plan?.exercises?.[0]?.id).toBe(`${CUSTOM_ID_PREFIX}copenhagen-plank`);
     expect(isCustomExerciseId(plan?.exercises?.[0]?.id ?? '')).toBe(true);
   });
 
@@ -155,9 +155,9 @@ describe('custom exercise identity', () => {
   });
 
   it('does not double-prefix an id that already carries the namespace', () => {
-    const parsed = parseCustomExercise({ id: `${CUSTOM_ID_PREFIX}sled-push`, name: 'Sled push' });
+    const parsed = parseCustomExercise({ id: `${CUSTOM_ID_PREFIX}tire-flip`, name: 'Tire flip' });
 
-    expect(parsed?.id).toBe(`${CUSTOM_ID_PREFIX}sled-push`);
+    expect(parsed?.id).toBe(`${CUSTOM_ID_PREFIX}tire-flip`);
   });
 
   it('falls back to a slug of the name when no id is given', () => {
@@ -239,7 +239,7 @@ describe('custom exercise fields', () => {
 describe('opening weight', () => {
   it('keeps a plausible opening weight on a loaded movement', () => {
     const parsed = parseCustomExercise({
-      name: 'Sled push',
+      name: 'Tire flip',
       loaded: true,
       openingWeight: { value: 90, unit: 'lb' },
     });
@@ -299,7 +299,7 @@ describe('day references', () => {
   it('resolves ids against the built-in catalogue and the plan alike', () => {
     const { plan } = parsePortablePlan(
       minimalPlan({
-        exercises: [{ id: 'sled-push', name: 'Sled push', loaded: true }],
+        exercises: [{ id: 'tire-flip', name: 'Tire flip', loaded: true }],
         days: [
           {
             dayKey: 'mon',
@@ -309,13 +309,13 @@ describe('day references', () => {
             note: '',
             outline: ['Go'],
             aerobic: false,
-            exerciseIds: ['legpress', 'sled-push'],
+            exerciseIds: ['legpress', 'tire-flip'],
           },
         ],
       }),
     );
 
-    expect(plan?.days[0]?.exerciseIds).toEqual(['legpress', `${CUSTOM_ID_PREFIX}sled-push`]);
+    expect(plan?.days[0]?.exerciseIds).toEqual(['legpress', `${CUSTOM_ID_PREFIX}tire-flip`]);
   });
 
   it('drops a reference that resolves to nothing at all', () => {

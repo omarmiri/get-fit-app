@@ -22,9 +22,9 @@ const WEEK = [
   'tue|rest|l=Rest|o=Walk if you feel like it',
   'wed|str|l=Full body B|e=latpulldown,legcurl,shoulderpress|o=Warm up;Work through the lifts;Stretch',
   'thu|dur|l=Easy walk|m=30|d=outside|o=Thirty minutes at a conversational pace',
-  'fri|str|l=Full body C|e=chestpress,legpress,x:sled-push|o=Warm up;Lifts then the sled;Stretch',
+  'fri|str|l=Full body C|e=chestpress,legpress,x:tire-flip|o=Warm up;Lifts then the sled;Stretch',
   'sat|rest|l=Rest|o=Nothing planned',
-  'x|Sled push|d=Push a weighted sled the length of the turf|q=turf lane and a sled|s=4|r=20-30s|w=90lb',
+  'x|Tire flip|d=Push a weighted sled the length of the turf|q=turf lane and a sled|s=4|r=20-30s|w=90lb',
 ].join('~');
 
 /**
@@ -43,7 +43,7 @@ describe('fields the app computes with', () => {
   });
 
   it('does not invent inverseLoad when it was not stated', () => {
-    const { plan } = parsePortablePlan('rf1~x|Sled push|w=90lb~mon|str|e=x:sled-push|o=Push');
+    const { plan } = parsePortablePlan('rf1~x|Tire flip|w=90lb~mon|str|e=x:tire-flip|o=Push');
 
     expect(plan?.exercises?.[0]?.inverseLoad).toBeUndefined();
   });
@@ -107,9 +107,9 @@ describe('inheriting from a built-in movement', () => {
   });
 
   it('ignores a base that does not exist rather than failing the movement', () => {
-    const { plan } = parsePortablePlan('rf1~x|Sled push|like=notathing|d=Push a sled~mon|str|e=x:sled-push|o=Push');
+    const { plan } = parsePortablePlan('rf1~x|Tire flip|like=notathing|d=Push a sled~mon|str|e=x:tire-flip|o=Push');
 
-    expect(plan?.exercises?.[0]?.name).toBe('Sled push');
+    expect(plan?.exercises?.[0]?.name).toBe('Tire flip');
     expect(plan?.exercises?.[0]?.summary).toBe('Push a sled');
   });
 
@@ -210,9 +210,9 @@ describe('expandCompactPlan', () => {
 describe('defined movements', () => {
   it('carries enough to render one', () => {
     const { plan } = parsePortablePlan(WEEK);
-    const sled = plan?.exercises?.find((exercise) => exercise.name === 'Sled push');
+    const sled = plan?.exercises?.find((exercise) => exercise.name === 'Tire flip');
 
-    expect(sled?.id).toBe('x:sled-push');
+    expect(sled?.id).toBe('x:tire-flip');
     expect(sled?.summary).toContain('turf');
     expect(sled?.equipment).toContain('sled');
     expect(sled?.sets).toBe(4);
@@ -221,8 +221,8 @@ describe('defined movements', () => {
   });
 
   it('treats an opening weight as the signal that a movement is loaded', () => {
-    const loaded = parsePortablePlan('rf1~x|Sled push|w=90lb~mon|str|e=x:sled-push|o=Push');
-    const bodyweight = parsePortablePlan('rf1~x|Push-up|q=the floor~mon|str|e=x:push-up|o=Push');
+    const loaded = parsePortablePlan('rf1~x|Tire flip|w=90lb~mon|str|e=x:tire-flip|o=Push');
+    const bodyweight = parsePortablePlan('rf1~x|Crab walk|q=the floor~mon|str|e=x:crab-walk|o=Walk');
 
     expect(loaded.plan?.exercises?.[0]?.loaded).toBe(true);
     expect(loaded.plan?.exercises?.[0]?.openingWeight).toEqual({ value: 90, unit: 'lb' });
@@ -230,7 +230,7 @@ describe('defined movements', () => {
   });
 
   it('reads kilograms when they are what the author wrote', () => {
-    const { plan } = parsePortablePlan('rf1~x|Front squat|w=40kg~mon|str|e=x:front-squat|o=Squat');
+    const { plan } = parsePortablePlan('rf1~x|Zercher squat|w=40kg~mon|str|e=x:zercher-squat|o=Squat');
 
     expect(plan?.exercises?.[0]?.openingWeight).toEqual({ value: 40, unit: 'kg' });
   });
