@@ -64,12 +64,61 @@ export function lastHeartbeat() {
 }
 
 /**
- * Start beating against the Supabase project.
+ * Bump the project's heartbeat once, and record how it went.
  *
  * Calls a `beat()` function rather than writing to a table directly, so the
  * only thing the public anon key can do is bump one timestamp — see the SQL in
- * README. No-ops without a project configured, so local development and tests
- * make no outbound requests.
+ * README. Never throws: a failed beat is recorded and logged, which is all a
+ * caller can usefully do with it.
+ */
+export async function beatSupabase({ url, anonKey, log = console.log } = {}) {
+  if (!url || !anonKey) return null;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), HEARTBEAT_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${url}/rest/v1/rpc/beat`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        apikey: anonKey,
+        authorization: `Bearer ${anonKey}`,
+        'content-type': 'application/json',
+      },
+      body: '{}',
+    });
+
+    lastBeat = { at: Date.now(), ok: response.ok, status: response.status };
+
+    if (!response.ok) {
+      /*
+       * Worth saying out loud rather than swallowing. A 404 here means the
+       * `beat` function was never created, which means the project is not
+       * actually being kept alive — and the whole point of this is that the
+       * consequence would otherwise be invisible for a week.
+       */
+      log(`[heartbeat] supabase returned ${response.status} — is the beat() function created?`);
+    }
+  } catch (error) {
+    lastBeat = { at: Date.now(), ok: false, status: 0 };
+    log(`[heartbeat] failed: ${error?.message ?? 'unknown error'}`);
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  return lastBeat;
+}
+
+/**
+ * Start beating against the Supabase project.
+ *
+ * On Lambda this is a bonus rather than the schedule: a process only starts
+ * when someone uses the app, so a quiet week means no beats at all. The
+ * schedule there is the daily EventBridge rule in `infra/stack.yml`, which
+ * reaches `beatSupabase` through the `/events` route in server.js. No-ops
+ * without a project configured, so local development and tests make no
+ * outbound requests.
  *
  * Returns a stop function, or `null` when inactive.
  */
@@ -77,42 +126,7 @@ export function startSupabaseHeartbeat({ url, anonKey, log = console.log } = {})
   if (!url || !anonKey) return null;
   if (process.env.KEEP_ALIVE === 'false') return null;
 
-  const target = `${url}/rest/v1/rpc/beat`;
-
-  const beat = async () => {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), HEARTBEAT_TIMEOUT_MS);
-
-    try {
-      const response = await fetch(target, {
-        method: 'POST',
-        signal: controller.signal,
-        headers: {
-          apikey: anonKey,
-          authorization: `Bearer ${anonKey}`,
-          'content-type': 'application/json',
-        },
-        body: '{}',
-      });
-
-      lastBeat = { at: Date.now(), ok: response.ok, status: response.status };
-
-      if (!response.ok) {
-        /*
-         * Worth saying out loud rather than swallowing. A 404 here means the
-         * `beat` function was never created, which means the project is not
-         * actually being kept alive — and the whole point of this is that the
-         * consequence would otherwise be invisible for a week.
-         */
-        log(`[heartbeat] supabase returned ${response.status} — is the beat() function created?`);
-      }
-    } catch (error) {
-      lastBeat = { at: Date.now(), ok: false, status: 0 };
-      log(`[heartbeat] failed: ${error?.message ?? 'unknown error'}`);
-    } finally {
-      clearTimeout(timeout);
-    }
-  };
+  const beat = () => beatSupabase({ url, anonKey, log });
 
   const first = setTimeout(() => void beat(), HEARTBEAT_DELAY_MS);
   first.unref?.();

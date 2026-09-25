@@ -529,10 +529,11 @@ in, the Supabase database sees no traffic at all — so it will pause, and the
 failure is quiet. The account card still renders; sign-in simply stops working,
 and unpausing is a manual visit to a dashboard nobody is watching.
 
-`startSupabaseHeartbeat` calls a `beat()` function shortly after startup and
-every six hours thereafter. Startup is the real schedule: this process is
-restarted daily by Render's overnight spin-down and by every deploy, so a timer
-measured in days would be reset before it ever fired.
+A daily EventBridge rule (`KeepAliveSchedule` in `infra/stack.yml`) invokes the
+function, which the Lambda Web Adapter delivers to Express as `POST /events`,
+and that calls a `beat()` function in Supabase. A beat on process startup still
+happens too, but on Lambda it cannot be the schedule: a process only starts when
+someone uses the app, so a quiet week would mean no beats at all.
 
 Run this once in the Supabase SQL editor:
 

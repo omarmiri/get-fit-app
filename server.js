@@ -21,7 +21,7 @@ import helmet from 'helmet';
 import { AccountError, loadState, saveState } from './account.js';
 import * as auth from './auth.js';
 import * as google from './googleAuth.js';
-import { lastHeartbeat, startSupabaseHeartbeat } from './keepalive.js';
+import { beatSupabase, lastHeartbeat, startSupabaseHeartbeat } from './keepalive.js';
 import { handleMcpRequest } from './mcp.js';
 import { DropError, createSession, pushPlan, readSession } from './sessions.js';
 
@@ -138,6 +138,30 @@ app.get('/health', async (_req, res) => {
      */
     heartbeat: lastHeartbeat(),
   });
+});
+
+/**
+ * Where the daily EventBridge rule lands.
+ *
+ * The Lambda Web Adapter turns any invocation that is not an HTTP request into
+ * a POST to `/events`, so this is how a schedule reaches an Express app. Its
+ * one job is keeping Supabase from pausing — see `keepalive.js`.
+ *
+ * API Gateway forwards every path, so this is reachable from outside too. The
+ * most anyone can do with it is bump a timestamp, and a beat that succeeded in
+ * the last hour is reused rather than repeated, so hammering the route does not
+ * turn into hammering Supabase.
+ */
+app.post('/events', async (_req, res) => {
+  const recent = lastHeartbeat();
+  if (recent?.ok && Date.now() - recent.at < 60 * 60 * 1000) {
+    return res.json({ heartbeat: recent, reused: true });
+  }
+
+  const beat = await beatSupabase(
+    Object.assign({ anonKey: process.env.SUPABASE_ANON_KEY ?? '' }, auth.info()),
+  );
+  return res.status(beat?.ok === false ? 502 : 200).json({ heartbeat: beat });
 });
 
 /* --------------------------------------------------------------- plan API */
@@ -493,8 +517,8 @@ const server = app.listen(port, () => {
 /*
  * Supabase pauses a free project after about a week of inactivity, and this
  * app would otherwise give it none: identity is all it is used for, and every
- * training record lives in Upstash. Restarts are the schedule here — see the
- * note in keepalive.js.
+ * training record lives in the record store. On Lambda the real schedule is the
+ * EventBridge rule behind `/events`; this startup beat is a bonus.
  */
 const stopHeartbeat = startSupabaseHeartbeat(
   Object.assign({ anonKey: process.env.SUPABASE_ANON_KEY ?? '' }, auth.info()),

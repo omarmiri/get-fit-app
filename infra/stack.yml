@@ -170,6 +170,31 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
 
+  # Keeps the Supabase project from pausing after a week without traffic.
+  #
+  # A beat on process startup was enough on Render, which restarted daily. On
+  # Lambda a process only starts when someone uses the app, so a quiet week
+  # meant no beats and a paused project. The adapter hands this event to
+  # Express as POST /events, which bumps the heartbeat. Daily leaves six
+  # misses of margin against the seven-day limit.
+  KeepAliveSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: rackfile-keepalive
+      ScheduleExpression: rate(1 day)
+      State: ENABLED
+      Targets:
+        - Id: api
+          Arn: !GetAtt ApiFunction.Arn
+
+  KeepAliveInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ApiFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt KeepAliveSchedule.Arn
+
   # -------------------------------------------------------------- static
 
   SiteBucket:
