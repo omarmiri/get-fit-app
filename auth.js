@@ -11,13 +11,23 @@
  * else durable this app keeps. Running a second database for one JSON blob per
  * user would buy a second thing to operate and a second thing to be down.
  *
- * ## Why verification is a network call
+ * ## Why verification is local now
  *
- * `verifyToken` asks Supabase's own `/auth/v1/user` rather than checking a JWT
- * locally. That trades a round-trip — cached below — for not having to pick a
- * signing algorithm, ship a JWT library, or track which of HS256 and the JWKS
- * path a given project issues. At this traffic that is the right way round; if
- * it ever isn't, this is the only function that has to change.
+ * `verifyToken` used to ask Supabase's own `/auth/v1/user` on every request,
+ * which traded a round-trip for not having to verify a JWT. That stopped being
+ * the right way round once the question was scale: every authed request became
+ * a call to Supabase from AWS's shared egress addresses, which is both latency
+ * and a rate limit waiting to be hit.
+ *
+ * The project signs with ES256 and publishes its public keys at
+ * `/auth/v1/.well-known/jwks.json`, so the check is a signature, an expiry, an
+ * issuer and an audience — `node:crypto` does it, no library needed. What it
+ * gives up: a revoked session is honoured until its token expires, up to an
+ * hour, rather than refused on the next request. Standard for bearer JWTs.
+ *
+ * The network call stays as the fallback, for a legacy HS256 token or when the
+ * key set cannot be fetched, so an outage of the JWKS endpoint degrades to the
+ * old behaviour rather than to signing everybody out.
  *
  * ## Anonymous is not a degraded mode
  *
@@ -28,6 +38,8 @@
  * is deliberately only used where a request costs the operator money or
  * touches an account's stored state.
  */
+
+import { createPublicKey, verify as verifySignature } from 'node:crypto';
 
 /* Render's dashboard accepts hyphens in variable names, so read both. */
 function env(...names) {
@@ -153,12 +165,122 @@ function cacheSet(token, user) {
   tokenCache.set(cacheKey(token), { user, expires: Date.now() + TOKEN_TTL_MS });
 }
 
+/* ----------------------------------------------------- local verification */
+
+/** Slack on expiry for clocks that disagree by a few seconds. */
+const CLOCK_LEEWAY_S = 30;
+
+/** How long the published key set is trusted before it is fetched again. */
+const JWKS_TTL_MS = 10 * 60 * 1000;
+
+/**
+ * Floor between refetches prompted by an unknown key id. A rotated key is
+ * picked up promptly; a stream of forged key ids cannot turn into a stream of
+ * requests to Supabase.
+ */
+const JWKS_REFETCH_FLOOR_MS = 60 * 1000;
+
+/** `{ keys: Map<kid, KeyObject>, fetchedAt }`, or `null` before the first fetch. */
+let jwks = null;
+
+async function loadJwks() {
+  const response = await fetch(`${SUPA_URL}/auth/v1/.well-known/jwks.json`);
+  if (!response.ok) throw new Error(`jwks ${response.status}`);
+  const body = await response.json();
+
+  const keys = new Map();
+  for (const jwk of Array.isArray(body?.keys) ? body.keys : []) {
+    if (typeof jwk?.kid !== 'string' || jwk.kty !== 'EC' || jwk.crv !== 'P-256') continue;
+    keys.set(jwk.kid, createPublicKey({ key: jwk, format: 'jwk' }));
+  }
+  jwks = { keys, fetchedAt: Date.now() };
+}
+
+async function signingKey(kid) {
+  const stale = !jwks || Date.now() - jwks.fetchedAt > JWKS_TTL_MS;
+  if (stale) await loadJwks();
+
+  const known = jwks?.keys.get(kid);
+  if (known) return known;
+
+  // An unknown id may be a key rotated in since the last fetch.
+  if (!stale && jwks && Date.now() - jwks.fetchedAt > JWKS_REFETCH_FLOOR_MS) {
+    await loadJwks();
+    return jwks?.keys.get(kid) ?? null;
+  }
+  return null;
+}
+
+function decodeSegment(segment) {
+  return JSON.parse(Buffer.from(segment, 'base64url').toString('utf8'));
+}
+
+/**
+ * Check a token against the project's published keys.
+ *
+ * Returns the user, `null` for a token that is definitely not valid, or
+ * `undefined` when this cannot judge it — a legacy HS256 token, the key set
+ * unreachable, or claims shaped unexpectedly — so the caller can fall back to
+ * asking Supabase.
+ */
+async function verifyLocally(token) {
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+
+  let header;
+  let claims;
+  try {
+    header = decodeSegment(parts[0]);
+    claims = decodeSegment(parts[1]);
+  } catch {
+    return null;
+  }
+
+  if (header?.alg !== 'ES256' || typeof header.kid !== 'string') return undefined;
+
+  let key;
+  try {
+    key = await signingKey(header.kid);
+  } catch {
+    return undefined;
+  }
+  if (!key) return null;
+
+  const signed = verifySignature(
+    'sha256',
+    Buffer.from(`${parts[0]}.${parts[1]}`),
+    { key, dsaEncoding: 'ieee-p1363' },
+    Buffer.from(parts[2], 'base64url'),
+  );
+  if (!signed) return null;
+
+  const now = Date.now() / 1000;
+  const audiences = Array.isArray(claims?.aud) ? claims.aud : [claims?.aud];
+  if (typeof claims?.exp !== 'number' || claims.exp + CLOCK_LEEWAY_S < now) return null;
+  if (typeof claims.sub !== 'string' || !claims.sub) return null;
+  /*
+   * Signed by the project but not in the shape expected — a custom auth
+   * domain changes the issuer, for one. The signature already proves Supabase
+   * issued it, so ask Supabase rather than refusing: misreading a claim here
+   * must not sign every user out.
+   */
+  if (claims.iss !== `${SUPA_URL}/auth/v1` || !audiences.includes('authenticated')) return undefined;
+
+  return { id: claims.sub, email: typeof claims.email === 'string' ? claims.email : '' };
+}
+
 /** Resolve a bearer token to a user, or `null`. Never throws. */
 export async function verifyToken(token) {
   if (!configured() || !token) return null;
 
   const cached = cacheGet(token);
   if (cached) return cached;
+
+  const local = await verifyLocally(token);
+  if (local !== undefined) {
+    if (local) cacheSet(token, local);
+    return local;
+  }
 
   let response;
   try {
