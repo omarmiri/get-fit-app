@@ -1,0 +1,22 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.miriogames.rackandfile",
+      "sha256_cert_fingerprints": [
+        "63:41:72:2E:94:12:63:D5:20:F1:9A:62:4B:35:79:AA:19:21:A7:F6:D5:0C:0B:48:BE:B7:11:A9:A3:BC:CC:1D"
+      ]
+    }
+  },
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.miriogames.rackandfile.debug",
+      "sha256_cert_fingerprints": [
+        "63:41:72:2E:94:12:63:D5:20:F1:9A:62:4B:35:79:AA:19:21:A7:F6:D5:0C:0B:48:BE:B7:11:A9:A3:BC:CC:1D"
+      ]
+    }
+  }
+]
