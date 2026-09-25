@@ -121,6 +121,72 @@ function describe(context: PromptContext): string {
 }
 
 /**
+ * The whole format in about six thousand characters, for pasting.
+ *
+ * "Copy the prompt" used to carry all of `/llms.txt` inline — about thirty
+ * thousand characters, most of them tables of exercise names, muscles and
+ * equipment zones, and a JSON reference no link-writing model needs. That is
+ * a lot to paste on a phone, and measured against the chat sites it is also
+ * too long to travel by link to any but two of them.
+ *
+ * This keeps what a model needs to write a working link and nothing else:
+ * the compact format, the rules the app checks, bare id lists, and one
+ * complete example the tests import. It does not ask the model to fetch
+ * anything, so it works in models that cannot browse.
+ */
+export function buildCompactPrompt(context: PromptContext, siteUrl: string): string {
+  const exercises = ALL_EXERCISES.map((exercise) => exercise.id).join(', ');
+  const stations = ALL_STATIONS.map((station) => station.id).join(', ');
+
+  return `Please write me a one-week training plan for Rack & File (${siteUrl}).
+
+ABOUT ME
+${describe(context)}
+
+HOW TO SEND IT
+End your reply with a markdown link titled "Open in Rack & File" to ${siteUrl}/#plan= followed by the whole week in the format below, percent-encoded (spaces as %20) and on one line. Tapping it opens the plan in the app.
+
+FORMAT
+Records are separated by ~ and fields by |; neither may appear inside a value.
+rf1|<one-line summary>
+<day>|<type>|l=<title>|o=<step>;<step>|e=<id>,<id>|m=<minutes>|d=<where>|n=<note>
+x|<name>|d=<what it is>|q=<equipment>|s=<sets>|r=<8-12, or 20-45s for a hold>|w=<45lb>|cs=<setup>|ce=<how to do it>|ca=<the common mistake>
+- day: sun mon tue wed thu fri sat. Exactly seven day records, each day once, rest days included. Count them.
+- type: str strength, dur timed cardio, int intervals, mix strength plus a cardio block, rest.
+- o= 2 to 4 short steps a beginner can follow. n= one sentence on how to run the day.
+- e= built-in exercise ids from the list below. For a movement not on the list, add an x record and use x:<name in lowercase with hyphens>.
+- m= minutes on dur, int and mix days. d= an equipment id below, or plain words.
+- A new movement must have d, q, s, r and all three cues (cs, ce, ca), or like=<built-in id> to borrow cues from one it resembles. i=1 marks an assisted machine, where a higher number is easier.
+- Never give weights for individual sets: the app sets every load from the person's own logged sets. w= is only an opening weight for a new movement.
+
+RULES THE APP CHECKS
+- At least ${GOALS.minutes} cardio minutes a week (add up the m= values). With few training days, make strength days mix days rather than falling short.
+- At least ${GOALS.strength} strength days, spread apart.
+- Favour movements people know by name.
+
+EXERCISE IDS
+${exercises}
+
+EQUIPMENT IDS
+${stations}
+
+EXAMPLE (one week, on one line when you write it)
+${COMPACT_EXAMPLE}`;
+}
+
+/** A complete week in the compact format. Imported by the tests, so it cannot drift. */
+export const COMPACT_EXAMPLE = [
+  'rf1|Two strength days, three cardio days and two rest days',
+  'sun|rest|l=Rest|o=Walk if you feel like it;Stretch',
+  'mon|dur|l=Steady cardio|o=Warm up 5 minutes;Ride at a conversational pace|m=40|d=uprightbike',
+  'tue|str|l=Full body A|o=Warm up;Work through the lifts;Stretch|e=gobletsquat,dbbenchpress,dbrow,plank',
+  'wed|dur|l=Brisk walk|o=Walk at a brisk pace;Keep the incline gentle|m=45|d=treadmill',
+  'thu|rest|l=Rest|o=Rest;Stretch',
+  'fri|mix|l=Full body B + bike|o=Warm up;Lift;20 minutes easy on the bike|e=legpress,latpulldown,pushup|m=20|d=uprightbike',
+  'sat|dur|l=Long walk|o=Walk at an easy pace|m=50|d=treadmill',
+].join('~');
+
+/**
  * The prompt that travels in a launcher link.
  *
  * A URL holds a few thousand characters and the specification is fifteen

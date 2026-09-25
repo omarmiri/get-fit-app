@@ -661,6 +661,14 @@ function decode(text: string): unknown {
   candidates.push(...fences);
 
   /*
+   * The link itself, when what was pasted is a model's whole reply ending in
+   * "Open in Rack & File" — the compact prompt asks for exactly that, and
+   * "copy the whole reply" is the instruction that comes with it.
+   */
+  const linked = /[#?&]plan=([^\s)\]>"']+)/.exec(trimmed)?.[1];
+  if (linked) candidates.push(linked);
+
+  /*
    * Compact plans are expanded here rather than at the call sites, so that
    * every route in accepts one: a tapped link, a paste, a shared message, a
    * file. There is one parser and one validator, and this format is a way of

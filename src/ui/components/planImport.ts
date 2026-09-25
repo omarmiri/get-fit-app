@@ -4,7 +4,13 @@ import { LLM_PROVIDERS, MAIN_PROVIDER, fitsInLink } from '@/data/llmProviders';
 import { type PlanValidation, validatePlan } from '@/domain/planValidation';
 import { parsePortablePlan } from '@/domain/planFormat';
 import { withSavedMovements } from '@/data/catalogue';
-import { type PromptContext, buildBriefPrompt, buildLinkPrompt, buildPrompt } from '@/spec/planSpec';
+import {
+  type PromptContext,
+  buildBriefPrompt,
+  buildCompactPrompt,
+  buildLinkPrompt,
+  buildPrompt,
+} from '@/spec/planSpec';
 import { clearDrop, currentDrop, dropEndpoint, openDrop, pollDrop } from '@/services/planDrop';
 import { conditionsList, getNotes } from '@/state/ephemeral';
 import { card, div, el, text } from '../dom';
@@ -302,7 +308,7 @@ function renderOtherWays(context: ViewContext): HTMLElement {
       class: 'button button--ghost',
       text: 'Copy the prompt',
       attrs: { type: 'button', title: 'Carries the whole format — paste it into any AI' },
-      on: { click: () => void copyPrompt(context) },
+      on: { click: () => void copyPrompt(context, 'compact') },
     }),
 
     el('button', {
@@ -757,7 +763,7 @@ function describePerson(context: ViewContext): PromptContext {
  * - `connector` — the person and a session id. Only honest for a client with
  *   the MCP server added, so it is only ever built when the user says so.
  */
-type PromptMode = 'full' | 'link' | 'connector';
+type PromptMode = 'full' | 'compact' | 'link' | 'connector';
 
 /**
  * Open a session and build the prompt that names it.
@@ -795,6 +801,7 @@ async function buildPromptText(context: ViewContext, mode: PromptMode = 'full'):
   const person = describePerson(context);
 
   if (mode === 'link') return buildLinkPrompt(person, location.origin);
+  if (mode === 'compact') return buildCompactPrompt(person, location.origin);
 
   /*
    * The connector prompt is only honest if there is a session to name in it.
