@@ -9,6 +9,7 @@ import { card, div, el, eyebrow, text } from '../dom';
 import { toast } from '../toast';
 import { renderAccountCard } from '../components/accountCard';
 import { renderOnboarding } from '../components/onboarding';
+import { renderPendingPlan } from '../components/planImport';
 import { renderPlanWizard } from '../components/planWizard';
 import { renderPlanLibrary } from '../components/planLibrary';
 import type { PlanRoute, ViewContext } from './context';
@@ -35,6 +36,12 @@ import type { PlanRoute, ViewContext } from './context';
  * is one line in This week.
  */
 export function renderPlanView(context: ViewContext): Child[] {
+  // A plan that just arrived goes above whatever screen this is — see
+  // `renderPendingPlan` for why it is not left inside the wizard.
+  return [renderPendingPlan(context), ...renderPlanRoute(context)];
+}
+
+function renderPlanRoute(context: ViewContext): Child[] {
   switch (context.ui.planRoute) {
     case 'week':
       return renderRoute(context, 'This week', [renderRotation(context), renderPlateLine()]);

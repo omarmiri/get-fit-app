@@ -14,7 +14,7 @@ import { renderPlanView } from '@/ui/views/plan';
 import { renderTodayView } from '@/ui/views/today';
 import { renderWelcomeView } from '@/ui/views/welcome';
 import { renderWeekStrip } from '@/ui/components/weekStrip';
-import { captureIncomingPlan, watchPastedPlans } from '@/ui/components/planImport';
+import { captureIncomingPlan, hasPendingPlan, watchPastedPlans } from '@/ui/components/planImport';
 import { initAccountCard } from '@/ui/components/accountCard';
 import { captureRedirectSession, refreshIdentity } from '@/services/account';
 import { flushSync, initSync, syncNow } from '@/services/sync';
@@ -180,7 +180,9 @@ export class App {
      * showing them around a screen that asks which plan you want implies the
      * choice has already been made.
      */
-    const welcoming = state.prefs.welcomed !== true;
+    // A plan waiting for review outranks the welcome: someone who arrived by
+    // tapping their chatbot's link has already answered its question.
+    const welcoming = state.prefs.welcomed !== true && !hasPendingPlan();
     this.#weekStrip.parentElement?.toggleAttribute('hidden', welcoming);
     this.#nav.toggleAttribute('hidden', welcoming);
 

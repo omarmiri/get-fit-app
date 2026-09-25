@@ -716,6 +716,13 @@ about them: coaching cues, machine substitutions, load conversions and a
 conservative opening weight. Prefer them when they fit — but do not contort a
 plan to avoid defining your own.
 
+**Choose from the whole list.** It covers ${ALL_EXERCISES.length} movements across machines,
+cables, free weights, bodyweight, core and conditioning. The first rows are the
+app's own default week, not a recommended shortlist — pick whatever best fits
+the person's equipment, experience, goals and stated likes, and vary movements
+between days rather than repeating the same few. Define a movement yourself only
+when nothing here fits.
+
 | id | Name | Muscles |
 | --- | --- | --- |
 ${exercises}

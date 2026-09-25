@@ -191,8 +191,50 @@ export function renderPlanImport(context: ViewContext): HTMLElement {
     state.pushId && !state.candidate ? renderWaiting(context) : null,
 
     state.open ? renderPasteBox(context) : null,
+  ]);
+}
 
-    state.error ? div('notice notice--warn', [text('notice__body', state.error)]) : null,
+/**
+ * Whether a plan — or the reason one could not be read — is waiting to be seen.
+ *
+ * The shell asks this before deciding to show the welcome screen, because the
+ * most common first visit is someone tapping the link their chatbot just gave
+ * them. A welcome screen asking how they want to train, standing in front of
+ * the plan they already brought, reads as the link not working.
+ */
+export function hasPendingPlan(): boolean {
+  return state.candidate !== null || state.error !== null;
+}
+
+/**
+ * The plan that just arrived, or why it could not be read.
+ *
+ * Rendered at the top of the Plan tab whatever screen it is on, rather than
+ * inside the import card. That card lives on the last step of the "write me
+ * a new week" wizard, and a plan arriving by link, paste or push has nothing
+ * to do with where the wizard was — so it used to arrive, correctly parsed,
+ * on a screen nobody was looking at.
+ */
+export function renderPendingPlan(context: ViewContext): HTMLElement | null {
+  if (!hasPendingPlan()) return null;
+
+  return div('pending', [
+    state.error
+      ? div('notice notice--warn', [
+          text('notice__body', state.error),
+          el('button', {
+            class: 'button button--ghost',
+            text: 'Dismiss',
+            attrs: { type: 'button' },
+            on: {
+              click: () => {
+                state.error = null;
+                context.render();
+              },
+            },
+          }),
+        ])
+      : null,
 
     state.candidate && state.validation
       ? renderPlanCandidate({
@@ -208,11 +250,19 @@ export function renderPlanImport(context: ViewContext): HTMLElement {
           onDiscard: () => {
             state.candidate = null;
             state.validation = null;
+            state.error = null;
             context.render();
           },
         })
       : null,
   ]);
+}
+
+/** Bring the user to a plan that has just arrived, wherever they were. */
+function showPending(context: ViewContext): void {
+  context.ui.tab = 'plan';
+  context.render();
+  window.scrollTo(0, 0);
 }
 
 /**
@@ -660,7 +710,7 @@ function review(context: ViewContext, input: string): void {
     state.candidate = null;
     state.validation = null;
     state.error = error ?? 'That plan could not be read.';
-    context.render();
+    showPending(context);
     return;
   }
 
@@ -702,7 +752,7 @@ function reviewPlan(context: ViewContext, incoming: UserPlan, incomplete: readon
     ? null
     : 'That plan has problems the app cannot work with. The details are below — ask your LLM to fix them and send the new version.';
 
-  context.render();
+  showPending(context);
 }
 
 /**
