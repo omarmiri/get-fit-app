@@ -1,6 +1,8 @@
 import type { Child } from '../dom';
 import type { GymStep } from './gymSetup';
-import { div, el, text } from '../dom';
+import { card, div, el, eyebrow, text } from '../dom';
+import { toast } from '../toast';
+import { goalStarterName, goalStarterPlan, hasGoalStarter } from '@/data/goalPlans';
 import { renderGymStep, renderPromptPreview } from './gymSetup';
 import { renderPlanInputs } from './planInputs';
 import { renderPlanImport } from './planImport';
@@ -29,7 +31,7 @@ interface Step {
 
 const STEPS: readonly Step[] = [
   {
-    title: 'Where you train',
+    title: 'Goal and location',
     next: 'Next — what is there',
     render: (context) => gym(context, 'venue'),
   },
@@ -51,7 +53,11 @@ const STEPS: readonly Step[] = [
   {
     title: 'Ask ChatGPT',
     next: '',
-    render: (context) => [renderPromptPreview(context), renderPlanImport(context)],
+    render: (context) => [
+      renderPromptPreview(context),
+      renderPlanImport(context),
+      renderGoalStarter(context),
+    ],
   },
 ];
 
@@ -130,6 +136,45 @@ export function renderPlanWizard(context: ViewContext): Child[] {
         })
       : null,
   ];
+}
+
+/**
+ * The ready-made week for the goal picked on step one, for anyone who got
+ * this far and would rather train than open a chatbot.
+ *
+ * Last, under the ChatGPT route rather than in place of it: the generated
+ * week knows the gym and the days, and this one does not. "General fitness"
+ * points at the built-in week, which is exactly that plan.
+ */
+function renderGoalStarter(context: ViewContext): HTMLElement | null {
+  const goal = context.state.prefs.gymProfile?.goal;
+  const general = goal === 'general';
+  if (!general && !hasGoalStarter(goal)) return null;
+
+  const name = general ? 'Starter workout plan' : goalStarterName(goal);
+
+  return card([
+    eyebrow('Or skip ChatGPT'),
+    text(
+      'prose',
+      general
+        ? 'The built-in starter week is a general fitness plan: two strength days and 150 minutes of cardio.'
+        : 'A ready-made week for your goal. It won’t know your gym or your days, and you can swap it any time.',
+    ),
+    el('button', {
+      class: 'button button--ghost',
+      text: general ? 'Use the starter workout plan' : `Use the ${name}`,
+      attrs: { type: 'button' },
+      on: {
+        click: () => {
+          if (general) context.store.selectPlan(null);
+          else context.store.adoptPlan(goalStarterPlan(goal));
+          toast(`Switched to ${name}`);
+          backToMenu(context);
+        },
+      },
+    }),
+  ]);
 }
 
 function backToMenu(context: ViewContext): void {

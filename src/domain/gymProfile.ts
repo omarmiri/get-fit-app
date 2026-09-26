@@ -19,12 +19,43 @@
  * that makes a plan usable.
  */
 
+/**
+ * The one thing the week is for.
+ *
+ * Single-select on purpose. A multi-select of goals produces a prompt that
+ * asks for everything at once, and a model given five priorities has none —
+ * it writes the same balanced week whatever was ticked. One goal gives the
+ * prompt a clear lead; nuance goes in the free-text box on the last step.
+ */
+export type MainGoal = 'routine' | 'strength' | 'cardio' | 'general' | 'other';
+
+export const MAIN_GOALS: readonly { readonly id: MainGoal; readonly label: string }[] = [
+  { id: 'routine', label: 'Get back into a routine' },
+  { id: 'strength', label: 'Build strength' },
+  { id: 'cardio', label: 'Improve cardio' },
+  { id: 'general', label: 'General fitness' },
+  { id: 'other', label: 'Something else' },
+];
+
+const GOAL_SENTENCE: Readonly<Record<MainGoal, string>> = {
+  routine:
+    'My main goal is to get back into a routine — favour a week I will actually keep over one that is ambitious.',
+  strength: 'My main goal is to build strength — make that the priority of the week.',
+  cardio: 'My main goal is to improve my cardio — make that the priority of the week.',
+  general: 'My main goal is general fitness — a balanced week of strength and cardio.',
+  other: 'My main goal is not a standard one — see what I say below about what I want.',
+};
+
 export type VenueKind = 'chain' | 'rec' | 'apartment' | 'home' | 'outdoor';
 
 export interface VenueOption {
   readonly id: VenueKind;
   readonly label: string;
-  /** Examples, so someone recognises their own situation rather than guessing. */
+  /**
+   * Examples, so someone recognises their own situation rather than guessing.
+   * Kept to a line: five two-line cards push step one's Next button under the
+   * fold on a phone.
+   */
   readonly hint: string;
   /** Equipment ticked by default when this venue is chosen. */
   readonly implies: readonly EquipmentId[];
@@ -60,31 +91,31 @@ export const VENUES: readonly VenueOption[] = [
   {
     id: 'chain',
     label: 'Large gym chain',
-    hint: 'LA Fitness, Planet Fitness, 24 Hour Fitness, Gold’s',
+    hint: 'e.g. Planet Fitness',
     implies: ['dumbbells', 'barbell', 'machines', 'cables', 'bench', 'cardio'],
   },
   {
     id: 'rec',
     label: 'Rec center or YMCA',
-    hint: 'Community center, university gym, municipal leisure centre',
+    hint: 'Community or campus',
     implies: ['dumbbells', 'barbell', 'machines', 'bench', 'cardio', 'pool'],
   },
   {
     id: 'apartment',
-    label: 'Apartment or condo gym',
-    hint: 'Building gym — usually a few machines and a dumbbell rack',
+    label: 'Apartment gym',
+    hint: 'A few machines',
     implies: ['dumbbells', 'bench', 'cardio'],
   },
   {
     id: 'home',
-    label: 'Home or garage gym',
-    hint: 'Whatever you own — tick it below',
+    label: 'Home or garage',
+    hint: 'Your own kit',
     implies: ['dumbbells'],
   },
   {
     id: 'outdoor',
     label: 'No gym',
-    hint: 'Bodyweight, outdoors, whatever is to hand',
+    hint: 'Bodyweight and outdoors',
     implies: [],
   },
 ];
@@ -106,6 +137,8 @@ export const EQUIPMENT: readonly EquipmentOption[] = [
 
 /** The answers, all optional — every question can go unanswered. */
 export interface GymProfile {
+  /** What the week is for, above everything else. */
+  readonly goal?: MainGoal;
   readonly venue?: VenueKind;
   readonly equipment?: readonly EquipmentId[];
   /** Whether they can run or walk from their door. */
@@ -134,6 +167,9 @@ const VENUE_SENTENCE: Readonly<Record<VenueKind, string>> = {
  */
 export function describeGym(profile: GymProfile): string {
   const parts: string[] = [];
+
+  // First, because it is the answer every other one is weighed against.
+  if (profile.goal) parts.push(GOAL_SENTENCE[profile.goal]);
 
   if (profile.venue) parts.push(VENUE_SENTENCE[profile.venue]);
 
@@ -168,6 +204,7 @@ export function describeGym(profile: GymProfile): string {
 /** Whether anything has been answered at all. */
 export function hasAnswers(profile: GymProfile): boolean {
   return (
+    profile.goal !== undefined ||
     profile.venue !== undefined ||
     (profile.equipment?.length ?? 0) > 0 ||
     profile.outdoors !== undefined ||

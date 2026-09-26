@@ -1,5 +1,5 @@
 import type { GymProfile } from '@/domain/gymProfile';
-import { EQUIPMENT, VENUES, describeGym } from '@/domain/gymProfile';
+import { EQUIPMENT, MAIN_GOALS, VENUES, describeGym } from '@/domain/gymProfile';
 import type { Child } from '../dom';
 import { addDays } from '@/domain/dates';
 import { div, el, eyebrow, text } from '../dom';
@@ -65,11 +65,27 @@ export function renderGymStep(context: ViewContext, step: GymStep): Child[] {
 
   if (step === 'venue') {
     return [
-      text(
-        'prose',
-        'Where you train decides which movements are even possible. Nothing here is required, and you can change it later.',
-      ),
+      /*
+       * Chips, not cards: five goals as full-width cards would push the Next
+       * button under the fold on a phone, and each label says all it needs to.
+       */
       div('gen__group', [
+        eyebrow('What’s your main goal?'),
+        div(
+          'choices__wrap',
+          MAIN_GOALS.map((goal) =>
+            el('button', {
+              class:
+                profile.goal === goal.id ? 'optionbtn optionbtn--chip is-on' : 'optionbtn optionbtn--chip',
+              text: goal.label,
+              attrs: { type: 'button', 'aria-pressed': profile.goal === goal.id },
+              on: { click: () => update({ ...profile, goal: goal.id }) },
+            }),
+          ),
+        ),
+      ]),
+      div('gen__group', [
+        eyebrow('Where do you train?'),
         div(
           'choices__wrap',
           VENUES.map((venue) =>
@@ -267,7 +283,9 @@ function renderToggle(
   value: boolean | undefined,
   onChange: (value: boolean) => void,
 ): HTMLElement {
-  return div('gen__group', [
+  // One line, question beside the answer: a yes/no does not need a row of
+  // its own, and on step one that row is what the Next button is waiting on.
+  return div('gen__group gen__group--inline', [
     eyebrow(label),
     div('choices__row', [
       el('button', {

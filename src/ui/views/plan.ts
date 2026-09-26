@@ -50,7 +50,7 @@ function renderPlanRoute(context: ViewContext): Child[] {
     case 'week':
       return renderRoute(context, 'This week', [renderRotation(context), renderPlateLine()]);
     case 'write':
-      return renderRoute(context, 'New workout plan with ChatGPT', renderPlanWizard(context));
+      return renderRoute(context, 'New workout plan', renderPlanWizard(context));
     case 'settings':
       // Everything that is configuration, on one screen, account first: it is
       // the one most people come here for.

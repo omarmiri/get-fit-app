@@ -15,7 +15,7 @@ import { isDayKey } from '@/data/plan';
 import { isValidIsoDate } from '@/domain/dates';
 import { clampMinutes, clampNumber, clampReps, clampWeight } from '@/domain/limits';
 import type { GymProfile } from '@/domain/gymProfile';
-import { EQUIPMENT, VENUES, hasAnswers } from '@/domain/gymProfile';
+import { EQUIPMENT, MAIN_GOALS, VENUES, hasAnswers } from '@/domain/gymProfile';
 import { parseCustomExercise } from '@/domain/planFormat';
 import { isWeightUnit } from '@/domain/units';
 
@@ -339,6 +339,7 @@ function parsePreferences(raw: unknown): Preferences {
 function parseGymProfile(raw: unknown): GymProfile | undefined {
   if (!isRecord(raw)) return undefined;
 
+  const goal = MAIN_GOALS.find((option) => option.id === raw['goal'])?.id;
   const venue = VENUES.find((option) => option.id === raw['venue'])?.id;
 
   const rawEquipment = raw['equipment'];
@@ -351,6 +352,7 @@ function parseGymProfile(raw: unknown): GymProfile | undefined {
   const minutes = clampNumber(raw['sessionMinutes'], { min: 10, max: 240 }, 0);
 
   const profile: GymProfile = {
+    ...(goal === undefined ? {} : { goal }),
     ...(venue === undefined ? {} : { venue }),
     ...(equipment.length === 0 ? {} : { equipment }),
     ...(outdoors === undefined ? {} : { outdoors }),

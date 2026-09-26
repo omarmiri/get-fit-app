@@ -960,6 +960,18 @@
   margin-top: var(--space-4);
 }
 
+.gen__group--inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.gen__group--inline .choices__row {
+  flex: 0 0 auto;
+  margin-top: 0;
+}
+
 .gen__input {
   width: 100%;
   min-height: var(--tap);

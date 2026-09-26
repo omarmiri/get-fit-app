@@ -23,6 +23,12 @@ function store(): AppStore {
 }
 
 describe('describeGym', () => {
+  it('leads with the main goal, so the prompt has one clear priority', () => {
+    const text = describeGym({ goal: 'strength', venue: 'chain' });
+    expect(text.startsWith('My main goal is to build strength')).toBe(true);
+    expect(hasAnswers({ goal: 'other' })).toBe(true);
+  });
+
   it('says nothing when nothing has been answered', () => {
     // Must be indistinguishable from an absent profile, so the prompt falls
     // back to telling the model to assume rather than sending an empty claim.
@@ -122,11 +128,18 @@ describe('persistence', () => {
       sessions: [],
       prefs: {
         unit: 'lb',
-        gymProfile: { venue: 'home', equipment: ['dumbbells', 'bench'], outdoors: true, daysPerWeek: 4 },
+        gymProfile: {
+          goal: 'cardio',
+          venue: 'home',
+          equipment: ['dumbbells', 'bench'],
+          outdoors: true,
+          daysPerWeek: 4,
+        },
       },
     });
 
     expect(state.prefs.gymProfile).toEqual({
+      goal: 'cardio',
       venue: 'home',
       equipment: ['dumbbells', 'bench'],
       outdoors: true,
