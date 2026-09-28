@@ -1,6 +1,6 @@
 name: CI
 
-# Render deploys straight from main, so main must always be releasable.
+# Checks only. Deploys are run by hand to AWS with infra/deploy.sh.
 on:
   push:
     branches: [main]

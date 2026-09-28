@@ -34,7 +34,7 @@
  * ## Why on startup rather than on a long timer
  *
  * A once-a-week interval would almost never fire. This process is not
- * long-lived: Render spins the free instance down overnight and restarts it on
+ * long-lived: Lambda recycles idle environments and starts fresh ones on
  * every deploy, so a timer measured in days would be reset before reaching
  * zero. Beating once at startup turns the frequent restarts into the schedule,
  * and the slow interval below only matters if the process does stay up.

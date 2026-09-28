@@ -25,7 +25,7 @@ Then open http://localhost:5173.
 | ---------------- | ------------------------------------------------------------------ |
 | `npm run dev`    | Vite dev server with hot reload                                    |
 | `npm run build`  | Typecheck, then build to `dist/`                                   |
-| `npm start`      | Serve the built `dist/` on port 3000 — what Render runs            |
+| `npm start`      | Serve the built `dist/` and the API on port 3000                   |
 | `npm test`       | Run the test suite                                                 |
 | `npm run verify` | Typecheck, lint, format-check, test and build — everything CI runs |
 
@@ -170,25 +170,6 @@ Put files in `public/media/`. Anything served from that path is runtime-cached b
 
 ---
 
-## Deploying to Render
-
-The repo includes `render.yaml`, so the fastest route is **Render → Blueprints → New Blueprint Instance**, pointed at this repo.
-
-To configure it by hand instead:
-
-| Setting           | Value                                   |
-| ----------------- | --------------------------------------- |
-| Runtime           | Node                                    |
-| Build command     | `npm ci --include=dev && npm run build` |
-| Start command     | `npm start`                             |
-| Health check path | `/health`                               |
-
-`--include=dev` matters: Vite and TypeScript are devDependencies and the build fails without them.
-
-The server sets a strict Content-Security-Policy, serves fingerprinted assets as immutable, and forces revalidation on the HTML shell and service worker so a deploy actually reaches phones that already have the app installed.
-
----
-
 ## Data and privacy
 
 Everything stays in `localStorage` on the device. No analytics, no third-party requests, no network calls of any kind after the initial load. The export file is plain JSON — it is your data, in a format you can read.
@@ -210,35 +191,6 @@ The UI layer is verified by hand — the logic worth protecting from regressions
 
 ---
 
-## Keeping the free instance awake
-
-Render spins a free web service down after ~15 minutes idle, and the next
-request waits ~50 seconds for a cold start. The app itself opens fine from the
-service worker cache, so the only thing that really suffers is plan generation,
-which has to reach the server.
-
-Two layers, because neither is sufficient alone:
-
-| Layer                             | What it does                                    | What it cannot do                                                               |
-| --------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------- |
-| `keepalive.js`                    | Self-pings `/health` every 10 min while running | Wake a service that is already asleep — the pinging process is the sleeping one |
-| `.github/workflows/keepalive.yml` | External cron every 10 min                      | Nothing; this is the one that matters                                           |
-
-**The window is 8am–8pm New York time**, not around the clock. Free instance
-hours are capped at 750/month against a ~730-hour month, so staying up
-permanently would consume the entire allowance and leave nothing for a second
-service. The window costs roughly 395 hours.
-
-GitHub cron is UTC-only, so the schedule covers the union of the target window
-across both US Eastern offsets (12:00–01:59 UTC) and the job then checks the
-real New York hour and exits early outside it. `keepalive.js` reads the hour
-through `Intl` rather than applying a fixed offset — a hardcoded `-5` would
-silently shift the window by an hour for the eight months New York is on
-daylight time. `tests/keepalive.test.ts` pins both offsets and the boundaries.
-
-Set `KEEP_ALIVE=false` to disable the self-ping, and disable the workflow in the
-Actions tab, if you move to a paid instance where none of this is needed.
-
 ## Bringing a plan from an LLM
 
 The app accepts a training week written by any language model. The whole
@@ -249,13 +201,13 @@ form.
 
 Five ways in, all landing on the same parser and the same validator:
 
-| Route                    | For                                                                                                                                                       |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Tap a link**           | The normal path. The model ends its reply with **Open in Rack & File** and the week rides in the URL fragment — one tap, nothing to copy.                   |
-| **Open a chatbot**       | The other half of that. Opens ChatGPT with a short prompt already in the box; the model fetches `/llms.txt` for the format. Other AIs use the copy-and-paste route. |
-| **Copy the prompt**      | Any model, including one with no network. Carries the whole contract plus your gym, profile and health context.                                            |
-| **Paste anywhere**       | When the model could not manage a link. A paste event needs no permission in any browser, so Ctrl-V on the page — or long-press and Paste — opens review.   |
-| **Open a plan file**     | Whatever the model handed you as a download. On Android this covers Google Drive too, since Drive mounts in the system file picker.                        |
+| Route                | For                                                                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Tap a link**       | The normal path. The model ends its reply with **Open in Rack & File** and the week rides in the URL fragment — one tap, nothing to copy.                           |
+| **Open a chatbot**   | The other half of that. Opens ChatGPT with a short prompt already in the box; the model fetches `/llms.txt` for the format. Other AIs use the copy-and-paste route. |
+| **Copy the prompt**  | Any model, including one with no network. Carries the whole contract plus your gym, profile and health context.                                                     |
+| **Paste anywhere**   | When the model could not manage a link. A paste event needs no permission in any browser, so Ctrl-V on the page — or long-press and Paste — opens review.           |
+| **Open a plan file** | Whatever the model handed you as a download. On Android this covers Google Drive too, since Drive mounts in the system file picker.                                 |
 
 Everything but the launchers works offline, and none of it involves a third
 party: the prompt is assembled on the device, and the survey answers that go
@@ -279,7 +231,7 @@ first attempt. Base64 and gzip are out, since a model cannot do either by hand.
 A positional CSV is out too: one field in the wrong slot shifts a whole day
 invisibly. So it is two positional fields and then `key=value` pairs — a key
 left out takes its default, a key invented is ignored, order does not matter.
-What it cannot carry is the prose that describes a *defined* movement, which is
+What it cannot carry is the prose that describes a _defined_ movement, which is
 most of the bytes; `/llms.txt` says to send JSON as well when a week leans on
 movements the catalogue does not have.
 
@@ -511,15 +463,7 @@ and a server. Paste and file import work on a phone in a basement gym. And on
 Android, Drive appears in the system file picker anyway, so the file route
 already covers the case the integration was meant to serve.
 
-## Keeping the free tiers awake
-
-Two services here go to sleep, for different reasons and on different clocks.
-
-**Render** spins a free web service down after ~15 minutes idle, and the next
-request waits ~50 seconds. `keepalive.js` self-pings between 8am and 8pm New
-York time — the window exists because free instance hours are capped at 750/month
-and a month is ~730. A self-ping cannot wake a service that is already asleep, so
-`.github/workflows/keepalive.yml` is the external cron that actually matters.
+## Keeping Supabase awake
 
 **Supabase** pauses a free project after about a week of inactivity, and this
 app is unusually exposed to it: Supabase is used for identity and nothing else,

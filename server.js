@@ -65,8 +65,8 @@ if (serveStatic && !existsSync(indexFile)) {
 
 const app = express();
 
-// Render terminates TLS upstream; trusting its proxy makes req.secure and the
-// client IP accurate for redirects and logging.
+// CloudFront and API Gateway terminate TLS upstream; trusting the proxy makes
+// req.secure and the client IP accurate for redirects and logging.
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
@@ -535,8 +535,8 @@ const stopHeartbeat = startSupabaseHeartbeat(
   Object.assign({ anonKey: process.env.SUPABASE_ANON_KEY ?? '' }, auth.info()),
 );
 
-// Render sends SIGTERM on deploy and on scale-down; closing cleanly avoids
-// dropping in-flight responses.
+// Lambda sends SIGTERM before recycling the environment; closing cleanly
+// avoids dropping in-flight responses.
 for (const signal of ['SIGTERM', 'SIGINT']) {
   process.on(signal, () => {
     stopHeartbeat?.();
